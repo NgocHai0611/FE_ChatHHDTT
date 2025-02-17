@@ -5,6 +5,8 @@ import Login from "./screens/Login";
 import SignUp from "./screens/SignUp";
 import ForgetPassScreen from "./screens/ForgetPassScreen";
 import AccessListPhone from "./screens/AccessListPhone";
+import ChatListScreen from './screens/ChatListScreen';
+import ChatScreen from './screens/ChatScreen';
 
 const Stack = createStackNavigator();
 
@@ -32,6 +34,8 @@ export default function App() {
           component={AccessListPhone}
           options={{ headerShown: false }}
         />
+        <Stack.Screen name="ChatListScreen" component={ChatListScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="ChatScreen" component={ChatScreen} options={{ headerShown: false }} />
       </Stack.Navigator>
     </NavigationContainer>
   );
