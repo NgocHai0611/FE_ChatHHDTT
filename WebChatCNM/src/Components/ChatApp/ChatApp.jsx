@@ -273,22 +273,29 @@ export default function ChatApp() {
 
                 {/* Input Box */}
 
-                <div className="input-box">
+                <div className="input-box-chat">
+                    <div className="input-icon-container">
+                        <button className="icon-input">
+                            <FaSmile />
+                        </button>
+                        <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: "none" }} id="imageUpload" />
+                        <label htmlFor="imageUpload" className="icon-input">
+                            <FaImage />
+                        </label>
 
-                    <button className="icon-button">
-                        <FaSmile />
-                    </button>
-                    <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: "none" }} id="imageUpload" />
-                    <label htmlFor="imageUpload" className="icon-button">
-                        <FaImage />
-                    </label>
+                        <button className="icon-input">
+                            <FaPaperclip />
+                        </button>
+                        <button className="icon-input">
+                            <FaMicrophone />
+                        </button>
 
-                    <button className="icon-button">
-                        <FaPaperclip />
-                    </button>
-                    <button className="icon-button">
-                        <FaMicrophone />
-                    </button>
+                    </div>
+               
+                  
+
+              
+                   
 
 
                     <input

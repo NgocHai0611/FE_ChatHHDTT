@@ -3,6 +3,7 @@
   display: flex;
   height: 100vh;
   background-color: #f3f4f6;
+  width: 100%;
 }
 
 /* Sidebar */
@@ -69,7 +70,7 @@
 .chat-message {
   font-size: 0.9rem;
   color: #6b7280;
-  margin-top: -10px;
+  margin-top: -5px;
   
 }
 
@@ -149,6 +150,7 @@
   padding: 12px;
   background-color: white;
   border-top: 1px solid #ddd;
+  
 }
 
 .message-input {
@@ -157,6 +159,7 @@
   border: 1px solid #ddd;
   border-radius: 20px;
   outline: none;
+
 }
 
 .send-button {
@@ -234,14 +237,13 @@
     background-color: #6852D6;
     color: white;
     font-size: 12px;
-   
-    padding: 3px 8px;
+    padding: 4px 8px;
     border-radius: 12px;
     min-width: 20px;
     text-align: center;
     position: relative;
-    top: -10px;
-    right: -28px;
+    top: -3px;
+    right: -22px;
 }
 .icon-container {
   display: flex;
@@ -303,15 +305,19 @@
   background: #fff;
   border-radius: 10px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  width: 70%; /* Đảm bảo input-box không bị co lại */
 }
+
 
 .message-input {
   flex: 1;
-  padding: 8px;
-  border: none;
+  min-width: 800px; /* Đảm bảo input không bị mất */
+  padding: 15px;
+  border: 1px solid #ccc;
   border-radius: 5px;
   outline: none;
 }
+
 
 .icon-button {
   background: none;
@@ -417,7 +423,7 @@
   color: #00dd42;
 }
 
-.input-box {
+.input-box-chat {
   display: flex;
     align-items: center;
     gap: 8px;
@@ -426,7 +432,7 @@
     border-radius: 10px;
     position: fixed;
     bottom: 0;
-    width: 66%;
+    width: 70%;
     padding: 20px;
 }
 
@@ -438,12 +444,21 @@
   outline: none;
 }
 
-.icon-button {
+.icon-input {
   background: none;
   border: none;
   cursor: pointer;
   font-size: 18px;
   color: #555;
+  margin-left: 10px;
+
+
+}
+.input-icon-container{
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
 }
 
 .send-button {
