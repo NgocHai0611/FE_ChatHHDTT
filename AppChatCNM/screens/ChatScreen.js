@@ -183,7 +183,7 @@ export default function ChatScreen({ navigation }) {
                 <View style={styles.iconContainer}>
                     <MaterialIcons name="call" size={24} color="black" style={styles.icon} />
                     <MaterialIcons name="videocam" size={24} color="black" style={styles.icon} />
-                    <MaterialIcons name="info-outline" size={24} color="black" />
+                    <MaterialIcons name="info-outline" size={24} color="black" style={styles.icon}  />
                 </View>
             </View>
 
@@ -286,7 +286,7 @@ const styles = StyleSheet.create({
     name: { fontSize: 16, fontWeight: "bold" },
     online: { fontSize: 14, color: "green" },
     iconContainer: { flexDirection: "row" },
-    icon: { marginLeft: 10 },
+    icon: { marginLeft: 15 },
     actionContainer: {
         flexDirection: "row",
         alignItems: "center",
