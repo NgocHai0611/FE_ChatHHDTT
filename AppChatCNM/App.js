@@ -13,7 +13,7 @@ const Stack = createStackNavigator();
 export default function App() {
   return (
     <NavigationContainer>
-      <Stack.Navigator initialRouteName="PhoneContact">
+      <Stack.Navigator initialRouteName="ChatListScreen">
         <Stack.Screen
           name="Login"
           component={Login}
