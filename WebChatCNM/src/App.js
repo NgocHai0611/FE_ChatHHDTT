@@ -11,7 +11,7 @@ import ChatApp from "./Components/ChatApp/ChatApp";
 // Component để kiểm tra và hiển thị NavBar
 const Layout = ({ children }) => {
   const location = useLocation();
-  const hideNavBarPaths = ["/login", "/register", "/recover","/reset-password","/verify-email", "chat-app"];
+  const hideNavBarPaths = ["/login", "/register", "/recover","/reset-password","/verify-email", "/chat-app"];
    // Kiểm tra xem đường dẫn hiện tại có bắt đầu với các path trong hideNavBarPaths không
    const shouldHideNavBar = hideNavBarPaths.some(path => location.pathname.startsWith(path));
   return (

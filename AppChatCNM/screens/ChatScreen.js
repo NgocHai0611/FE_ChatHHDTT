@@ -1,47 +1,172 @@
-import React, { useState, useCallback } from "react";
-import { View, Text, Image, TouchableOpacity, StyleSheet } from "react-native";
-import { GiftedChat, Bubble, Actions, Send } from "react-native-gifted-chat";
-import { Ionicons, MaterialIcons, FontAwesome } from "@expo/vector-icons";
+import React, { useState } from "react";
+import { View, Text, TouchableOpacity, Image, StyleSheet, Modal, KeyboardAvoidingView, Platform } from "react-native";
+import { GiftedChat, Bubble, Send } from "react-native-gifted-chat";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
+import { Video, Audio } from "expo-av";
+import EmojiSelector from "react-native-emoji-selector";
+import Lightbox from "react-native-lightbox";
 
 export default function ChatScreen({ navigation }) {
-    const [messages, setMessages] = useState([
-        {
-            _id: 1,
-            text: "Sure! Sending them over now.",
-            createdAt: new Date(),
-            user: { _id: 2, name: "George Alan", avatar: "https://randomuser.me/api/portraits/men/1.jpg" },
-        },
-        {
-            _id: 2,
-            text: "I'll take it. Can you ship it?",
-            createdAt: new Date(),
-            user: { _id: 1 },
-        },
-        {
-            _id: 3,
-            text: "Thanks! Looks good.",
-            createdAt: new Date(),
-            user: { _id: 1 },
-        },
-    ]);
-
-
+    const [messages, setMessages] = useState([]);
+    const [preview, setPreview] = useState(null);
+    const [text, setText] = useState("");
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false); // State để hiển thị emoji picker
+   
     const onSend = (newMessages = []) => {
         setMessages((prevMessages) => GiftedChat.append(prevMessages, newMessages));
+        setText(""); // Xóa nội dung tin nhắn sau khi gửi
+        setPreview(null);
+    }; 
+    const handleEmojiSelect = (emoji) => {
+        setText((prevText) => prevText + emoji);
     };
 
-    // Hàm xử lý gửi hình ảnh, file, voice
-    const handleImagePick = () => {
-        console.log("Gửi hình ảnh");
+
+    const handleImagePick = async () => {
+        let result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            quality: 1,
+          
+        });
+
+        if (!result.canceled) {
+            setPreview({ type: "image", uri: result.assets[0].uri });
+            sendMediaMessage(result.assets[0].uri, "image");
+        }
     };
 
-    const handleFilePick = () => {
-        console.log("Gửi file");
+    const handleVideoPick = async () => {
+        let result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+            allowsEditing: true,
+            quality: 1,
+        });
+
+        if (!result.canceled) {
+            setPreview({ type: "video", uri: result.assets[0].uri });
+
+            // Gửi tin nhắn chứa video
+            const videoMessage = {
+                _id: Math.random().toString(),
+                createdAt: new Date(),
+                user: { _id: 1 },
+                video: result.assets[0].uri, // Gửi video qua tin nhắn
+            };
+
+            onSend([videoMessage]);
+        }
     };
 
-    const handleVoiceRecord = () => {
-        console.log("Ghi âm");
+
+    const handleFilePick = async () => {
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: "*/*",
+                copyToCacheDirectory: false,
+            });
+
+            if (result.canceled) return; // Người dùng hủy chọn file
+
+            let fileUri = "";
+            let fileName = "Unknown File";
+
+            // Kiểm tra định dạng mới của Expo Document Picker
+            if (result.assets && result.assets.length > 0) {
+                fileUri = result.assets[0].uri;
+                fileName = result.assets[0].name || fileUri.split("/").pop();
+            } else if (result.uri) {
+                // Cách cũ: fallback nếu assets không tồn tại
+                fileUri = result.uri;
+                fileName = result.name || fileUri.split("/").pop();
+            }
+
+            console.log("Selected file:", fileUri, "Name:", fileName);
+
+            setPreview({ type: "file", uri: fileUri, name: fileName });
+            sendMediaMessage(fileUri, "file", fileName);
+        } catch (error) {
+            console.error("Error picking document:", error);
+        }
     };
+
+
+    const pickDocument = async () => {
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: "*/*", // Chọn tất cả các loại file
+                copyToCacheDirectory: false, // Đảm bảo không lưu vào cache
+            });
+
+            if (result.canceled) return; // Người dùng hủy chọn file
+
+            console.log("Selected file:", result); // Kiểm tra dữ liệu trả về
+
+            // Kiểm tra nếu `result.assets` tồn tại (định dạng mới của Expo)
+            if (result.assets && result.assets.length > 0) {
+                const fileUri = result.assets[0].uri;
+                const fileName = result.assets[0].name || "Unknown file";
+                sendMediaMessage(fileUri, "file", fileName);
+            } else if (result.uri) {
+                // Cách cũ (trong trường hợp `result.uri` có giá trị)
+                const fileName = result.name || result.uri.split("/").pop(); // Lấy tên file từ đường dẫn
+                sendMediaMessage(result.uri, "file", fileName);
+            } else {
+                console.log("Không tìm thấy file name.");
+            }
+        } catch (error) {
+            console.error("Error picking document:", error);
+        }
+    };
+
+    const sendMediaMessage = (uri, type, fileName = "") => {
+        let fileTypeText = fileName ? `📄 ${fileName}` : "📄 Unknown File";
+
+        const mediaMessage = {
+            _id: Math.random().toString(),
+            createdAt: new Date(),
+            user: { _id: 1 },
+            image: type === "image" ? uri : undefined,
+            video: type === "video" ? uri : undefined,
+            text: type === "file" ? fileTypeText : "",
+        };
+
+        onSend([mediaMessage]);
+    };
+    // render tin nhắn video and audio khi gửi tin nhắn
+    const renderMessageVideo = (props) => {
+        const { currentMessage } = props;
+        return (
+            <View style={{ padding: 10 }}>
+                <Video
+                    source={{ uri: currentMessage.video }}
+                    style={{ width: 150, height: 100 }}
+                    useNativeControls
+                    resizeMode="contain"
+                />
+            </View>
+        );
+    };
+
+    // render xem ảnh 
+    const renderMessageImage = (props) => {
+        return (
+            <Lightbox activeProps={{ resizeMode: "contain" }}>
+                <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                    <Image
+                        source={{ uri: props.currentMessage.image }}
+                        style={{ width: 200, height: 200, borderRadius: 10 }}
+                        resizeMode="cover"
+                    />
+                </View>
+            </Lightbox>
+        );
+    };
+
+
+ 
 
     return (
         <View style={styles.container}>
@@ -58,15 +183,34 @@ export default function ChatScreen({ navigation }) {
                 <View style={styles.iconContainer}>
                     <MaterialIcons name="call" size={24} color="black" style={styles.icon} />
                     <MaterialIcons name="videocam" size={24} color="black" style={styles.icon} />
-                    <MaterialIcons name="info-outline" size={24} color="black" />
+                    <MaterialIcons name="info-outline" size={24} color="black" style={styles.icon}  />
                 </View>
             </View>
 
+            {/* Xem trước file */}
+            {preview && (
+                <View style={styles.previewContainer}>
+                    {preview.type === "image" && <Image source={{ uri: preview.uri }} style={styles.previewImage} />}
+                    {preview.type === "video" && (
+                        <Video source={{ uri: preview.uri }} style={styles.previewVideo} useNativeControls />
+                    )}
+                    {preview.type === "file" && <Text style={styles.previewText}>📄 {preview.name}</Text>}
+                    <TouchableOpacity onPress={() => setPreview(null)}>
+                        <Ionicons name="close-circle" size={24} color="red" />
+                    </TouchableOpacity>
+                </View>
+            )}
+
             {/* Chat */}
+            
             <GiftedChat
                 messages={messages}
                 onSend={(newMessages) => onSend(newMessages)}
                 user={{ _id: 1 }}
+                text={text} // Gán text vào GiftedChat
+                onInputTextChanged={setText} // Cập nhật text khi nhập
+                renderMessageVideo={renderMessageVideo} // Thêm renderMessageVideo
+                renderMessageImage={renderMessageImage}
                 renderBubble={(props) => (
                     <Bubble
                         {...props}
@@ -78,45 +222,52 @@ export default function ChatScreen({ navigation }) {
                             right: { color: "#fff" },
                             left: { color: "#000" },
                         }}
-                        renderTicks={() => (
-                            <View style={{ flexDirection: "row", alignSelf: "flex-end", marginRight: 5 }}>
-                                <Ionicons name="checkmark-done" size={14} color="white" />
-                            </View>
-                        )}
                     />
                 )}
-                renderActions={(props) => (
-                    <View style={{ flexDirection: "row", alignItems: "center", marginLeft: 5, backgroundColor: "#fff", padding: 10 }}>
-                        {/* Gửi hình ảnh */}
-                        <TouchableOpacity onPress={handleImagePick} style={{ marginHorizontal: 5 }}>
+                renderActions={() => (
+                    <View style={styles.actionContainer}>
+                        <TouchableOpacity onPress={handleImagePick} style={styles.actionButton}>
                             <MaterialIcons name="image" size={24} color="#7B61FF" />
                         </TouchableOpacity>
-
-                        {/* Gửi file */}
-                        <TouchableOpacity onPress={handleFilePick} style={{ marginHorizontal: 5 }}>
+                        <TouchableOpacity onPress={handleVideoPick} style={styles.actionButton}>
+                            <MaterialIcons name="videocam" size={24} color="#7B61FF" />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={handleFilePick} style={styles.actionButton}>
                             <MaterialIcons name="attach-file" size={24} color="#7B61FF" />
                         </TouchableOpacity>
-
-                        {/* Ghi âm */}
-                        <TouchableOpacity onPress={handleVoiceRecord} style={{ marginHorizontal: 5 }}>
-                            <FontAwesome name="microphone" size={24} color="#7B61FF" />
+                        
+                        <TouchableOpacity
+                            style={styles.actionButton}
+                            onPress={() => setShowEmojiPicker(!showEmojiPicker)}
+                        >
+                            <MaterialIcons name="insert-emoticon" size={24} color="#7B61FF" />
                         </TouchableOpacity>
 
-                        {/* Gửi icon */}
-                        <TouchableOpacity onPress={() => console.log("Chọn icon")} style={{ marginHorizontal: 5 }}>
-                            <Ionicons name="happy-outline" size={24} color="#7B61FF" />
-                        </TouchableOpacity>
+                     
                     </View>
                 )}
                 renderSend={(props) => (
                     <Send {...props}>
-                        <View style={{ marginRight: 10, marginBottom: 5 }}>
+                        <View style={styles.sendButton}>
                             <Ionicons name="send" size={24} color="#7B61FF" />
                         </View>
                     </Send>
                 )}
             />
-
+            {/* Emoji Picker */}
+            {showEmojiPicker && (
+                <Modal animationType="slide" transparent={true} visible={showEmojiPicker}>
+                    <View style={styles.emojiContainer}>
+                        <EmojiSelector onEmojiSelected={handleEmojiSelect} />
+                        <TouchableOpacity
+                            style={styles.closeButton}
+                            onPress={() => setShowEmojiPicker(false)}
+                        >
+                            <Ionicons name="close-circle" size={30} color="red" />
+                        </TouchableOpacity>
+                    </View>
+                </Modal>
+            )}
         </View>
     );
 }
@@ -127,16 +278,44 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         padding: 10,
-        backgroundColor: "#fff",
         borderBottomWidth: 1,
         borderBottomColor: "#ddd",
     },
     avatar: { width: 40, height: 40, borderRadius: 20, marginLeft: 10 },
+    nameContainer: { flex: 1, marginLeft: 10 },
     name: { fontSize: 16, fontWeight: "bold" },
-    online: { fontSize: 12, color: "green" },
-    iconContainer: { flexDirection: "row", marginLeft: "auto" },
-    icon: { marginHorizontal: 10 },
-    nameContainer: {
-        marginLeft: 10,
-    }
+    online: { fontSize: 14, color: "green" },
+    iconContainer: { flexDirection: "row" },
+    icon: { marginLeft: 15 },
+    actionContainer: {
+        flexDirection: "row",
+        alignItems: "center",
+        padding: 10,
+        backgroundColor: "#fff",
+    },
+    actionButton: { marginHorizontal: 5 },
+    sendButton: { marginRight: 10, marginBottom: 5 },
+    previewContainer: {
+        flexDirection: "row",
+        alignItems: "center",
+        padding: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: "#ddd",
+    },
+    previewImage: { width: 100, height: 100, borderRadius: 10 },
+    previewVideo: { width: 100, height: 100, borderRadius: 10 },
+    previewText: { marginLeft: 10, fontSize: 16 },
+    emojiContainer: {
+        position: "absolute",
+        bottom: 0,
+        width: 250,
+        backgroundColor: "#fff",
+        height: 250,
+    },
+    closeButton: {
+        position: "absolute",
+        top: 10,
+        right: 10,
+    },
 });
+

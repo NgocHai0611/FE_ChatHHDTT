@@ -29,7 +29,8 @@ const navigate =useNavigate();
       ) : (    
         <>
       <Link to="/login" className="navbar-login"> Login </Link>
-      <Link to="/register" className="navbar-register"> Register</Link>
+            <Link to="/register" className="navbar-register"> Register</Link>
+            <Link to="/chat-app" className="navbar-chatapp"> ChatApp</Link>
       </>
 )}
     </nav>
