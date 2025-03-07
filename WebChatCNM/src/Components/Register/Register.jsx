@@ -8,7 +8,8 @@ import { registerUser } from "../../redux/apiRequest";
 const Register = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [username, setUsername] = useState("");
+  // const [username, setUsername] = useState("");
+  const [phone, setPhone] = useState("");
   const [feedbackMessage, setFeedbackMessage] = useState(""); 
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -18,7 +19,7 @@ const Register = () => {
 
   const handleRegister = (e) => {
     e.preventDefault();
-    const newUser = { email, password, username };
+    const newUser = { email, password,phone };
 
     
     registerUser(newUser, dispatch, navigate, setFeedbackMessage); 
@@ -41,9 +42,9 @@ const Register = () => {
         <form onSubmit={handleRegister}>
           <input
             type="text"
-            placeholder="Enter your username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
+            placeholder="Enter your Phone number"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
           />
           <input
             type="email"
