@@ -7,10 +7,11 @@ import NavBar from "./Components/NavBar/NavBar";
 import Recover from "./Components/Recover/Recover";
 import VerifyEmail from "./Components/Register/verifyMail";
 import ForgotPassword from "./Components/ForgotPassword/ForgotPassword";
+import ChatApp from "./Components/ChatApp/ChatApp";
 // Component để kiểm tra và hiển thị NavBar
 const Layout = ({ children }) => {
   const location = useLocation();
-  const hideNavBarPaths = ["/login", "/register", "/recover","/reset-password","/verify-email"];
+  const hideNavBarPaths = ["/login", "/register", "/recover","/reset-password","/verify-email", "/chat-app"];
    // Kiểm tra xem đường dẫn hiện tại có bắt đầu với các path trong hideNavBarPaths không
    const shouldHideNavBar = hideNavBarPaths.some(path => location.pathname.startsWith(path));
   return (
@@ -34,6 +35,8 @@ function App() {
             <Route path="/reset-password/:token" element={<Recover />} />
             <Route path="/recover" element={<ForgotPassword />} />
             <Route path="/verify-email/:token" element={<VerifyEmail />} />
+            <Route path="/verify-email/:token" element={<VerifyEmail />} />
+            <Route path="/chat-app" element={<ChatApp />} />
           </Routes>
         </div>
       </Layout>
