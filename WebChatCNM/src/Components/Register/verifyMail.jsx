@@ -9,7 +9,8 @@ const VerifyEmail = () => {
   useEffect(() => {
     const verifyEmail = async () => {
       try {
-        const response = await fetch(`http://localhost:3000/v1/auth/verify/${token}`);
+        const baseURL = `${window.location.protocol}//${window.location.hostname}:${window.location.port}/v1/auth`;
+      const response = await fetch(`${baseURL}/verify/${token}`);
         const data = await response.json();
 
         if (response.ok) {
