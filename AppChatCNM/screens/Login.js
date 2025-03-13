@@ -38,6 +38,29 @@ export default function Login() {
     navigation.navigate("SignUp");
   };
 
+  const handleLogin = async () => {
+    try {
+        const response = await axios.post("http://localhost:8004/v1/auth/login", { email, password });
+
+        if (response.data.accessToken) {
+            await AsyncStorage.setItem("user", JSON.stringify(response.data));
+            setModalMessage("Đăng nhập thành công");
+            setModalVisible(true);
+            setTimeout(() => navigation.navigate("ChatListScreen"), 1000);
+        } else {
+            setModalMessage("Đăng nhập thất bại. Vui lòng thử lại.");
+            setModalVisible(true);
+        }
+    } catch (error) {
+        if (error.message.includes("Network Error")) {
+            setModalMessage("Lỗi kết nối đến server. Kiểm tra CORS hoặc API đang chạy.");
+        } else {
+            setModalMessage(error.response?.data?.message || "Đăng nhập thất bại.");
+        }
+        setModalVisible(true);
+    }
+  };
+
   return (
     <LinearGradient
       colors={["#9AB9F5", "#FFFFFF"]}
@@ -114,7 +137,7 @@ export default function Login() {
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity style={styles.loginButton}>
+      <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
         <Text style={styles.buttonText}>Login</Text>
       </TouchableOpacity>
 
@@ -127,7 +150,7 @@ export default function Login() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalMessage}>{modalMessage}</Text>
-            <TouchableOpacity style={styles.modalButton}>
+            <TouchableOpacity style={styles.modalButton} onPress={() => setModalVisible(false)}>
               <Text style={styles.modalButtonText}>Close</Text>
             </TouchableOpacity>
           </View>

@@ -11,21 +11,16 @@ export default function SignUp() {
     const navigation = useNavigation();
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
     const [isPhoneFocused, setIsPhoneFocused] = useState(false);
-    const [isNameFocused, setIsNameFocused] = useState(false);
     const [isEmailFocused, setIsEmailFocused] = useState(false);
     const [isPasswordFocused, setIsPasswordFocused] = useState(false);
     const [phone, setPhone] = useState('');
     const [password, setPassword] = useState('');
-    const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [errorMessage, setErrorMessage] = useState('');
     const [isModalVisible, setModalVisible] = useState(false);
     // const [imageUri, setImageUri] = useState(null);
     // const [imageFile, setImageFile] = useState(null);
     
-    const validateSpecialChars = (text) => /^[a-zA-Z0-9_]+$/.test(text); // Chỉ cho phép chữ, số và _
-    const validateEmailFormat = (text) => /^[a-zA-Z0-9._%+-]+@gmail\.com$/.test(text);
-    const validateNameFormat = (text) => /^[a-zA-ZÀ-ỹ\s]+$/.test(text);
 
     const togglePasswordVisibility = () => {
         setIsPasswordVisible(!isPasswordVisible);
@@ -63,70 +58,80 @@ export default function SignUp() {
     //   }
     // };
 
-  const handleRegister = async () => {
-        setErrorMessage('');
-
-        // if (!username || !password || !name || !email || !imageUri) {
-        //     setErrorMessage("Vui lòng nhập đầy đủ thông tin.");
-        //     setModalVisible(true);
-        //     return;
-        // }
-
-        if (!phone || !password || !name || !email) {
-            setErrorMessage("Vui lòng nhập đầy đủ thông tin.");
-            setModalVisible(true);
-            return;
-        }
-
-        if (!validateSpecialChars(phone)) {
-            setErrorMessage("Phone không được chứa ký tự đặc biệt.");
-            setModalVisible(true);
-            return;
-        }
-
-        if (!validateNameFormat(name)) {
-            setErrorMessage("Name không được chứa ký tự đặc biệt.");
-            setModalVisible(true);
-            return;
-        }
-
-        if (!validateEmailFormat(email)) {
-            setErrorMessage("Email sai định dạng.");
-            setModalVisible(true);
-            return;
-        }
-
-        const formData = new FormData();
-        formData.append('phone', phone);
-        formData.append('password', password);
-        formData.append('name', name);
-        formData.append('email', email);
-        // if (Platform.OS === 'web') {
-        //     formData.append('avatar', imageFile);
-        // } else {
-        //     formData.append('avatar', imageFile);
-        // }
-
-        try {
-            const response = await axios.post('http://localhost:3000/register', formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                },
-            });
-
-            if (response.status === 201) {
-                setErrorMessage(""); // Registration successful
-                setModalVisible(true);
-            }
-        } catch (error) {
-            if (error.response && error.response.status === 409) {
-              setErrorMessage('Username hoặc email đã tồn tại.');
-            } else {
-              setErrorMessage('Đăng ký thất bại, vui lòng thử lại.');
-            }
-            setModalVisible(true);
-        }
-    };
+    const handleRegister = async () => {
+      setErrorMessage('');
+  
+      // Kiểm tra các trường bắt buộc
+      if (!phone || !password || !email) {
+          setErrorMessage("Vui lòng nhập đầy đủ thông tin.");
+          setModalVisible(true);
+          return;
+      }
+  
+      // Kiểm tra định dạng phone (chỉ chứa số)
+      if (!/^\d+$/.test(phone)) {
+          setErrorMessage("Số điện thoại chỉ được chứa chữ số.");
+          setModalVisible(true);
+          return;
+      }
+  
+      // Kiểm tra độ dài phone (10-11 số)
+      if (phone.length < 10 || phone.length > 11) {
+          setErrorMessage("Số điện thoại phải từ 10 đến 11 số.");
+          setModalVisible(true);
+          return;
+      }
+  
+      // Kiểm tra định dạng email
+      if (!validateEmailFormat(email)) {
+          setErrorMessage("Email sai định dạng.");
+          setModalVisible(true);
+          return;
+      }
+  
+      // Tạo object dữ liệu để gửi lên server
+      const userData = {
+          phone,
+          email,
+          password,
+      };
+  
+      try {
+          const response = await axios.post('http://localhost:8004/v1/auth/register', userData, {
+              headers: {
+                  'Content-Type': 'application/json',
+              },
+          });
+  
+          if (response.status === 200) {
+              setErrorMessage("Đăng ký thành công! Vui lòng kiểm tra email để xác minh tài khoản.");
+              setModalVisible(true);
+              // Sau khi đăng ký thành công, có thể điều hướng về trang đăng nhập sau khi đóng modal
+              setTimeout(() => {
+                  navigation.navigate("Login");
+              }, 2000); // Chuyển hướng sau 2 giây
+          }
+      } catch (error) {
+          if (error.response) {
+              if (error.response.status === 400) {
+                  setErrorMessage(error.response.data.message || "Email hoặc số điện thoại đã tồn tại.");
+              } else if (error.response.status === 500) {
+                  setErrorMessage("Gửi email xác minh thất bại. Vui lòng thử lại.");
+              } else {
+                  setErrorMessage("Đăng ký thất bại. Vui lòng thử lại.");
+              }
+          } else {
+              setErrorMessage("Không thể kết nối đến server. Vui lòng kiểm tra lại.");
+          }
+          setModalVisible(true);
+      }
+  };
+  
+  // Hàm kiểm tra định dạng email
+  const validateEmailFormat = (email) => {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      return emailRegex.test(email);
+  };
 
     return (
         <LinearGradient
@@ -149,19 +154,6 @@ export default function SignUp() {
                 onBlur={() => setIsPhoneFocused(false)}
                 value={phone}
                 onChangeText={setPhone}
-            />
-
-            {/* Name Input */}
-            <TextInput
-                style={[styles.input, { borderColor: isNameFocused ? "#007AFF" : "#E8E8E8" }]}
-                placeholder="Name"
-                keyboardType="default"
-                autoCapitalize="none"
-                placeholderTextColor="#A9A9A9"
-                onFocus={() => setIsNameFocused(true)}
-                onBlur={() => setIsNameFocused(false)}
-                value={name}
-                onChangeText={setName}
             />
 
             {/* Email Input */}
@@ -201,7 +193,7 @@ export default function SignUp() {
                 <Image source={{ uri: imageUri }} style={styles.previewImage} />
             )} */}
 
-            <TouchableOpacity style={styles.registerButton}>
+            <TouchableOpacity style={styles.registerButton} onPress={handleRegister}>
                 <Text style={styles.buttonText}>Register</Text>
             </TouchableOpacity>
 
@@ -221,7 +213,7 @@ export default function SignUp() {
                 <View style={styles.modalContainer}>
                     <View style={styles.modalContent}>
                         <Text style={styles.modalText}>{errorMessage || "Đăng ký thành công"}</Text>
-                        <TouchableOpacity style={styles.modalButton}>
+                        <TouchableOpacity style={styles.modalButton} onPress={() => setModalVisible(false)}>
                             <Text style={styles.buttonText}>Close</Text>
                         </TouchableOpacity>
                     </View>
