@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import EmojiPicker from 'emoji-picker-react';
+import { useLocation } from "react-router-dom";
 import {
     FaPaperPlane,
     FaSearch,
@@ -102,9 +103,9 @@ export default function ChatApp() {
     const [input, setInput] = useState("");
     const [selectedImage, setSelectedImage] = useState([]);
     const [selectedVideo, setSelectedVideo] = useState(null);
-  
-
-    // Xử lý gửi tin nhắn hoặc ảnh/video
+    const location = useLocation();
+    const user = location.state?.user; // Lấy user truyền từ navigate
+    console.log(user);
     const sendMessage = () => {
         if (input.trim() || selectedImage || selectedVideo) {
             const newMessage = {
