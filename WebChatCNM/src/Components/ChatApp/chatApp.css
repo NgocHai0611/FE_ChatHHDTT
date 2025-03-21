@@ -8,10 +8,12 @@
 
 /* Sidebar */
 .sidebar {
-  width: 30%;
+  width: 27%;
   background-color: white;
   padding: 16px;
   border-right: 1px solid #ddd;
+  height: 100vh;
+  margin-left: 70px;
 }
 
 .sidebar-title {
@@ -43,10 +45,7 @@
 }
 
 /* Danh sách chat */
-.chat-list {
-  display: flex;
-  flex-direction: column;
-}
+
 
 .chat-item {
   padding: 12px;
@@ -106,6 +105,7 @@
   cursor: pointer;
   transition: color 0.3s;
   margin-left: 12px;
+  align-items: center;
 }
 
 .icon:hover {
@@ -243,11 +243,20 @@
 }
 .icon-container-left {
   display: flex;
-  justify-content: space-around;
-  align-items: center;
+  flex-direction: column; /* Xếp theo chiều dọc */
+  align-items: center; /* Căn giữa theo chiều ngang */
+  justify-content: flex-start; /* Bắt đầu từ trên xuống */
   padding: 10px;
+  height: 100vh; /* Chiều cao toàn màn hình */
+  position: fixed; /* Giữ cố định bên trái */
+  left: 0;
+  top: 0;
+  background-color: #f0f0f0; /* Màu nền tùy chỉnh */
+  width: 70px; /* Điều chỉnh độ rộng nếu cần */
   
+ 
 }
+
 
 .icon {
   font-size: 24px;
@@ -275,11 +284,18 @@
     width: 29%;
 }
 .icon-item{
-   
+   margin-right: 5px;
     display: flex;
     flex-direction: column;
     align-items: center;
+    margin-top: 25px;
    
+}
+.icon-item img {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  margin-left: 5px;
 }
 .chat-icon-text{
     font-size: 14px;
@@ -312,6 +328,7 @@
   border: 1px solid #ccc;
   border-radius: 5px;
   outline: none;
+  margin-left: -50px;
 }
 
 
@@ -431,7 +448,7 @@
     border-radius: 10px;
     position: fixed;
     bottom: 0;
-    width: 70%;
+    width: 68%;
     /* padding: 20px; */
 }
 
@@ -483,7 +500,7 @@
 }
 
 .chat-list {
-    max-height: 470px; /* Giới hạn chiều cao */
+   flex-grow: 1;
     overflow-y: auto; /* Hiển thị thanh cuộn dọc khi cần */
     scrollbar-width: thin; /* Tùy chỉnh thanh cuộn trên Firefox */
     scrollbar-color: #ccc transparent; /* Màu thanh cuộn */
@@ -588,3 +605,61 @@
     background-color: rgba(255, 255, 255, 0.8);
 }
 
+.welcome-message {
+    text-align: center;
+    padding: 20px;
+    font-size: 18px;
+    color: #666;
+    margin-left: 200px;
+    margin-top: 20px;
+}
+.contacts-list {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start; /* Căn trái */
+    gap: 10px; /* Khoảng cách giữa các mục */
+    padding: 10px;
+    width: 100%;
+}
+.contacts-header {
+    display: flex;
+    align-items: center; /* Căn giữa icon và text */
+    gap: 8px; /* Khoảng cách giữa icon và text */
+    padding: 8px;
+    width: 100%;
+}
+.icon-contacts {
+    font-size: 20px; /* Điều chỉnh kích thước icon */
+}
+.contacts-header span{
+  font-size: 16px;
+}
+.header-chat-window-item p{
+ margin-left: 10px;
+ padding: 10px 10px;
+}
+/* CSS MENU ĐĂNG XUẤT */
+.settings-menu {
+    position: absolute;
+   top: 295px;
+    right: -100px;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+    padding: 10px;
+}
+
+.logout-btn {
+    background: red;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    cursor: pointer;
+    width: 100%;
+    border-radius: 4px;
+}
+
+.logout-btn:hover {
+    background: darkred;
+}

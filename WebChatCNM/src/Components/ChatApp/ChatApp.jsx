@@ -12,7 +12,7 @@ import {
     FaUserFriends,   // Icon User
     FaPhoneAlt,      // Icon Call
     FaUsers,
-    FaPaperclip, FaMicrophone, FaImage, FaSmile, FaClock, FaCheck, FaTimes // Icon Groups
+    FaPaperclip, FaMicrophone, FaImage, FaSmile, FaClock, FaCheck, FaTimes, FaAddressBook, FaCog, FaUser, FaUserPlus, FaUserCheck // Icon Groups
 } from "react-icons/fa";
 
 import "./chatApp.css"; // Import file CSS'
@@ -86,6 +86,20 @@ const chats = [
         image: "https://randomuser.me/api/portraits/men/3.jpg",
         timestamp: "Yesterday",
         unreadMessages: 1
+    }, {
+        name: "Robert Allen",
+        lastMessage: "Thanks for the update.",
+        active: false,
+        image: "https://randomuser.me/api/portraits/men/3.jpg",
+        timestamp: "Yesterday",
+        unreadMessages: 1
+    }, {
+        name: "Robert Allen",
+        lastMessage: "Thanks for the update.",
+        active: false,
+        image: "https://randomuser.me/api/portraits/men/3.jpg",
+        timestamp: "Yesterday",
+        unreadMessages: 1
     }
 ];
 
@@ -102,7 +116,41 @@ export default function ChatApp() {
     const [input, setInput] = useState("");
     const [selectedImage, setSelectedImage] = useState([]);
     const [selectedVideo, setSelectedVideo] = useState(null);
-  
+    const [selectedUser, setSelectedUser] = useState(null);
+    const [selectedChat, setSelectedChat] = useState(null);
+    const [sidebarView, setSidebarView] = useState("chat-list"); // Mặc định hiển thị danh sách chat
+    const [selectedHeader, setSelectedHeader] = useState("");
+    const [selectedtitle, setSelectedTitle] = useState("Chào mừng bạn đến với ứng dụng chat! ");
+    const [selectedtitle2, setSelectedTitle2] = useState("Chào mừng bạn đến với ứng dụng chat! ");
+    const [showMenu, setShowMenu] = useState(false);
+
+    const showContacts = () => {
+        setSidebarView("contacts");
+        setSelectedChat("");
+    };
+    const showChatlists = () => {
+        setSidebarView("chat-list");
+        setSelectedTitle("Chào mừng bạn đến với ứng dụng chat! ");
+        setSelectedTitle2("Chào mừng bạn đến với ứng dụng chat! ");
+        setSelectedHeader("");
+    };
+
+    const handleClick = (header) => {
+        setSelectedHeader(header);
+        setSelectedTitle("");
+        setSelectedTitle2("");
+    };
+
+    // Hàm bật/tắt menu
+    const toggleMenu = () => {
+        setShowMenu(!showMenu);
+    };
+
+    // Hàm xử lý đăng xuất
+    const handleLogout = () => {
+        console.log("Logging out...");
+        // Thêm logic đăng xuất, ví dụ: xóa token, điều hướng về trang login
+    };
 
     // Xử lý gửi tin nhắn hoặc ảnh/video
     const sendMessage = () => {
@@ -238,9 +286,11 @@ export default function ChatApp() {
                     <FaSearch className="search-icon" />
                     <input type="text" placeholder="Search" className="search-input" />
                 </div>
+                {sidebarView === "chat-list" && (
                 <div className="chat-list">
                     {chats.map((chat, index) => (
-                        <div key={index} className="chat-left">
+                        <div key={index} className="chat-left"
+                            onClick={() => setSelectedChat(chat)} >
                             <div className="avatar-container">
                                 <img src={chat.image} alt={chat.name} className="avatar" />
                                 {chat.active && <span className="active-dot"></span>}
@@ -262,48 +312,73 @@ export default function ChatApp() {
                                 )}
                             </div>
 
-
-
-
-
                         </div>
                     ))}
                 </div>
-                <hr></hr>
-                <div className="icon-container-left">
-                    <div className="icon-item">
-                        <FaComments className="icon chat-icon" title="Chat" />
-                        <span className="chat-icon-text">Chats</span>
+                )}
+                {sidebarView === "contacts" && (
+                    <div className="contacts-list">
+                        <div className="contacts-header" onClick={() => handleClick("Danh sách bạn bè")}>
+                            <FaUser className="icon-contacts" />
+                            <span>Danh sách bạn bè</span>
+                        </div>
 
+                        <div className="contacts-header" onClick={() => handleClick("Danh sách nhóm và cộng đồng")}>
+                            <FaUsers className="icon-contacts" />
+                            <span>Danh sách nhóm và cộng đồng</span>
+                        </div>
+                        <div className="contacts-header" onClick={() => handleClick("Lời mời kết bạn")}>
+                            <FaUserPlus className="icon-contacts" />
+                            <span>Lời mời kết bạn</span>
+                        </div>
+
+                        <div className="contacts-header" onClick={() => handleClick("Lời mời vào nhóm và bạn bè")}>
+                            <FaUserCheck className="icon-contacts" />
+                            <span>Lời mời vào nhóm và bạn bè</span>
+                        </div>
+                        
+                       
+                       
+                       
                     </div>
+                )}
+             
 
-                    <div className="icon-item">
-                        <FaPhoneAlt className="icon call-icon" title="Calls" />
-                        <span className="chat-icon-text">Calls</span>
-
-                    </div>
-
-                    <div className="icon-item">
-
-                        <FaUserFriends className="icon user-icon" title="Users" />
-                        <span className="chat-icon-text">Users</span>
-
-                    </div>
-
-                    <div className="icon-item">
-
-
-                        <FaUsers className="icon group-icon" title="Groups" />
-                        <span className="chat-icon-text">Groups</span>
-
-                    </div>
-
+            </div>
+            <div className="icon-container-left">
+                <div className="icon-item">
+                    <img src="https://imgur.com/DMvT5D1.png" alt="" />
+                </div>
+                <div className="icon-item" onClick={showChatlists} > 
+                    <FaComments className="icon chat-icon" title="Chat" />
+                    <span className="chat-icon-text">Chats</span>
 
                 </div>
+                <div className="icon-item" onClick={showContacts}>
+                    <FaAddressBook className="icon group-icon" title="Contacts" />
+                    <span className="chat-icon-text">Contacts</span>
+
+                </div>
+
+
+                <div className="icon-item" onClick={toggleMenu}>
+                    <FaCog className="icon user-icon" title="Settings" />
+                    <span className="chat-icon-text">Setting</span>
+
+                    {showMenu && (
+                        <div className="settings-menu">
+                            <button onClick={handleLogout} className="logout-btn">Đăng xuất</button>
+                        </div>
+                    )}
+                </div>
+
+              
+
 
             </div>
 
             {/* Chat Window */}
+            {selectedChat ? (
             <div className="chat-window">
                 {/* Header */}
                 <div className="chat-header">
@@ -375,13 +450,7 @@ export default function ChatApp() {
                             </div>
                         </div>
                     ))}
-                </div>
-
-
-
-
-
-             
+                </div>        
 
                 {/* Input Box */}
                 <div className="input-box-chat">
@@ -418,12 +487,6 @@ export default function ChatApp() {
                             <FaMicrophone />
                         </button>
                     </div>
-               
-                  
-
-              
-                   
-                  
 
                     <div style={{
                         position: "relative",
@@ -504,7 +567,20 @@ export default function ChatApp() {
                         <FaPaperPlane />
                     </button>
                 </div>
-            </div>
+                </div>
+            ) : (
+                    <>
+                    <div className="header-chat-window-item"><p>{selectedHeader}</p></div>
+                    <div className="welcome-message">
+                      
+                        <div className="header-chat-window">
+                           
+                        </div>
+                        <h2>{selectedtitle}</h2>
+                        <p>{selectedtitle2}</p>
+                    </div>
+                    </>
+            )}
 
             {/* Modal for image/video preview */}
             {isOpen && (
