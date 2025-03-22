@@ -14,7 +14,7 @@ export const loginUser = async (user, dispatch, navigate, setError) => {
         }
 
         dispatch(loginSuccess(res.data));
-        navigate("/"); // Redirect to homepage
+        navigate("/chat-app", { state: { user: res.data } });
     } catch (error) {
         console.log(error);
          // Kiểm tra lỗi trả về từ API
