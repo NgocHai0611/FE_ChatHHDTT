@@ -113,22 +113,47 @@
 }
 
 /* Tin nhắn */
-.messages {
-  flex: 1;
-  padding: 16px;
-  overflow-y: auto;
+.message-row {
   display: flex;
-  flex-direction: column;
+  margin-bottom: 10px;
 }
 
-/* Tin nhắn của người gửi */
-.message {
-  max-width: 60%;
-  padding: 10px;
-  border-radius: 10px;
-  margin-bottom: 8px;
-  word-wrap: break-word;
+.message-row.them {
+  justify-content: flex-start;
+  flex-direction: row;
 }
+
+.message-row.me {
+  justify-content: flex-start;
+  flex-direction: row-reverse; /* quan trọng để avatar và nội dung đảo bên */
+}
+
+.message-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  margin: 0 8px;
+}
+
+.message-content {
+  max-width: 60%;
+  padding: 10px 14px;
+  border-radius: 15px;
+  position: relative;
+  background-color: #f1f0f0;
+  word-break: break-word;
+}
+
+.message-content.them {
+  background-color: #ffffff;
+  border: 1px solid #e0e0e0;
+}
+
+.message-content.me {
+  background-color: #d1f4d3;
+  border: 1px solid #c0e4c1;
+}
+
 
 .sent {
   background-color: #6852D6;
@@ -414,9 +439,16 @@
 }
 
 .message.them {
-  align-self: flex-start; /* Tin nhắn của người khác nằm bên trái */
-  background-color: #dcf8c6;
+  align-self: flex-start; /* Căn bên trái */
+  background-color: #e5e7eb; /* Màu nền nhẹ trung tính */
+  color: #000; /* Màu chữ đen */
   text-align: left;
+  border-radius: 10px 10px 10px 0px; /* Góc bo mềm mại (trên trái và dưới trái không bo tròn để giống "bong bóng") */
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  max-width: 60%;
+  word-wrap: break-word;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05); /* Bóng nhẹ cho nổi bật */
 }
 
 .message-info {
@@ -494,9 +526,21 @@
   cursor: pointer;
   margin-top: 0px;
 }
-.timestamp-received{
+.timestamp {
+  font-size: 11px;
+  color: #151515;
+  text-align: right;
+  margin-top: 4px;
+}
+.unread-message {
+  font-weight: bold;
   color: #000;
-  font-size: 10px;
+}
+.unread-dot {
+  color: red;
+  margin-left: 4px;
+  font-size: 20px;
+  vertical-align: middle;
 }
 
 .chat-list {
@@ -578,6 +622,23 @@
     z-index: 9999;
 }
 
+.date-divider {
+  display: flex;
+  align-items: center;
+  margin: 20px 0;
+  color: #666;
+  font-weight: 500;
+  font-size: 14px;
+}
+.date-divider::before,
+.date-divider::after {
+  content: "";
+  flex: 1;
+  border-bottom: 1px solid #ccc;
+}
+.date-divider span {
+  margin: 0 10px;
+}
 
 
 /* Modal */
