@@ -70,8 +70,62 @@
   font-size: 0.9rem;
   color: #6b7280;
   margin-top: -5px;
-  
 }
+.chat-left {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 10px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.chat-left:hover {
+  background-color: #f0f0f0;
+}
+
+.chat-more-options {
+  position: absolute;
+  right: 70px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 22px; /* Tăng size nhẹ */
+  color: #555; /* Đậm hơn */
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s, color 0.2s;
+  font-weight: bold;
+}
+
+.chat-left:hover .chat-more-options {
+  opacity: 1;
+  color: #333; /* Đậm hơn khi hover */
+}
+
+.chat-popup-menu {
+  position: fixed;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  z-index: 9999;
+  width: 120px;
+  padding: 4px 0;
+  width: auto; /* Tự động theo nội dung */
+  white-space: nowrap; /* Không xuống dòng */
+}
+
+.chat-popup-menu div {
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background-color 0.2s;
+}
+
+.chat-popup-menu div:hover {
+  background-color: #f0f0f0;
+}
+
 
 /* Cửa sổ chat */
 .chat-window {
@@ -116,6 +170,8 @@
 .message-row {
   display: flex;
   margin-bottom: 10px;
+  position: relative;
+  align-items: flex-end;
 }
 
 .message-row.them {
@@ -124,8 +180,8 @@
 }
 
 .message-row.me {
-  justify-content: flex-start;
-  flex-direction: row-reverse; /* quan trọng để avatar và nội dung đảo bên */
+  justify-content: flex-end;
+  flex-direction: row; /* quan trọng để avatar và nội dung đảo bên */
 }
 
 .message-avatar {
@@ -134,9 +190,47 @@
   border-radius: 50%;
   margin: 0 8px;
 }
+.recalled-message {
+  font-style: italic;
+  color: gray;
+}
+.reply-preview {
+  background-color: rgba(0, 0, 0, 0.05);
+  border-left: 3px solid #007bff;
+  padding: 8px;
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.close-reply-icon {
+  cursor: pointer;
+}
+.reply-to {
+  background-color: rgba(0, 123, 255, 0.1); /* Màu xanh nhạt gợi ý */
+  border-left: 3px solid #007bff;
+  padding: 4px 8px;
+  margin-bottom: 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #333;
+  max-width: 80%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reply-preview-text {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 
 .message-content {
-  max-width: 60%;
+  max-width: 50ch;
   padding: 10px 14px;
   border-radius: 15px;
   position: relative;
@@ -153,6 +247,113 @@
   background-color: #d1f4d3;
   border: 1px solid #c0e4c1;
 }
+.message-container {
+  position: relative;
+  max-width: 70%;
+}
+.message-content-wrapper {
+  display: flex;
+  align-items: center;
+  max-width: 500px;
+  position: relative;
+}
+
+.message-row.me .message-content {
+  background-color: #d1f5d3;
+}
+
+.three-dots-icon {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  margin-right: 10px;
+  position: relative;
+}
+.three-dots-icon .icon {
+  font-size: 16px; /* nhỏ hơn, tinh tế */
+  color: #555;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.three-dots-icon.left {
+  order: -1; /* để nằm trước nội dung */
+}
+
+.three-dots-icon.right {
+  order: 1; /* nằm sau nội dung */
+}
+
+
+.message-row:hover .three-dots-icon {
+  opacity: 1;
+}
+
+.three-dots-icon:hover {
+  opacity: 1;
+}
+
+.unread-timestamp {
+  font-weight: bold;
+  color: #000;
+}
+
+.pinned-message {
+  position: sticky;
+  top: 65px;
+  z-index: 10;
+  width: 100%;
+  background-color: #fffbe6;
+  border-left: 4px solid #fadb14;
+  padding: 10px 16px;
+  margin-bottom: 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+  animation: slideDown 0.3s ease;
+}
+
+.pinned-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #d48806;
+  display: flex;
+  align-items: center;
+  margin-right: 10px;
+}
+
+.pinned-content {
+  flex: 1;
+  font-size: 13.5px;
+  color: #333;
+  word-break: break-word;
+  margin-right: 10px;
+}
+
+.pinned-timestamp {
+  font-size: 12px;
+  color: #888;
+  margin-right: 10px;
+}
+
+.unpin-icon {
+  cursor: pointer;
+  color: #d48806;
+  font-size: 18px;
+  transition: all 0.2s;
+}
+
+.unpin-icon:hover {
+  color: #ff4d4f;
+  transform: scale(1.3);
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 
 
 .sent {
@@ -355,6 +556,41 @@
   outline: none;
   margin-left: -50px;
 }
+.message-menu {
+  position: absolute;
+  top: 0;
+  background-color: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 4px 0;
+  width: fit-content;
+  min-width: 140px; /* thu nhỏ chiều ngang */
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  z-index: 10;
+  font-size: 13px; /* chữ nhỏ gọn */
+}
+
+.menu-item {
+  padding: 6px 10px; /* giảm padding để menu nhỏ và thanh thoát hơn */
+  cursor: pointer;
+  transition: background-color 0.2s;
+  white-space: nowrap; /* không ngắt dòng */
+}
+
+.menu-item:hover {
+  background-color: #f5f5f5;
+}
+
+.message-menu.left {
+  right: calc(100% + 5px); /* bên trái dấu ba chấm */
+}
+
+.message-menu.right {
+  left: calc(100% + 5px); /* bên phải dấu ba chấm */
+}
+
+
+
 
 
 .icon-button {
@@ -405,7 +641,6 @@
 }
 
 
-
 /* Ẩn scrollbar trên Chrome, Edge, Safari */
 .chat-box::-webkit-scrollbar {
   display: none;
@@ -414,13 +649,35 @@
 .chat-box {
   overflow-y: auto;
   padding: 10px;
-  width: 96%;
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 10px; /* Khoảng cách giữa các tin nhắn */
   flex-grow: 1;            /* Cho phép hộp chat mở rộng chiếm không gian có sẵn */
   max-height: calc(100vh - 150px); /* Đảm bảo hộp chat không vượt quá chiều cao màn hình */
+  padding-bottom: 50px; /* Để tin nhắn cuối cùng không bị che bởi thanh cuộn */
 }
+@keyframes highlightFlash {
+  0% {
+    box-shadow: 0 0 10px rgba(255, 200, 0, 0.8);
+    background-color: rgba(255, 255, 150, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+    background-color: rgba(255, 255, 255, 0);
+  }
+  100% {
+    box-shadow: 0 0 10px rgba(255, 200, 0, 0.8);
+    background-color: rgba(255, 255, 150, 0.4);
+  }
+}
+
+.message-row.highlight {
+  animation: highlightFlash 1.2s ease-in-out 2;
+  border-radius: 10px;
+  transition: all 0.3s;
+}
+
 
 .message {
   max-width: 60%;
@@ -483,7 +740,52 @@
     width: 68%;
     /* padding: 20px; */
 }
+.reply-preview {
+  position: fixed;
+  bottom: 93px; /* Cách ô input một khoảng */
+  width: 68%;
+  background-color: rgba(0, 0, 0, 0.05);
+  border-left: 3px solid #007bff;
+  padding: 8px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-radius: 8px;
+  margin: 0 auto;
+  left: 65%;
+  transform: translateX(-50%);
+}
+.reply-info {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
 
+.reply-info strong {
+  font-size: 13px;
+  color: #007bff;
+  margin-bottom: 2px;
+}
+
+.reply-text {
+  font-size: 13px;
+  color: #555;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  max-width: 250px;
+}
+
+.close-reply-icon {
+  cursor: pointer;
+  margin-left: 10px;
+  color: #888;
+  transition: color 0.2s;
+}
+
+.close-reply-icon:hover {
+  color: red;
+}
 
 .icon-input {
   background: none;
@@ -536,12 +838,24 @@
   font-weight: bold;
   color: #000;
 }
-.unread-dot {
-  color: red;
-  margin-left: 4px;
-  font-size: 20px;
-  vertical-align: middle;
+.unread-badge {
+  background-color: #ff3b30;
+  color: #fff;
+  font-size: 10px;
+  border-radius: 50px;
+  padding: 2px 6px;
+  margin-left: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  line-height: 1;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.15);
+  font-weight: bold;
 }
+
+
 
 .chat-list {
    flex-grow: 1;
@@ -625,20 +939,31 @@
 .date-divider {
   display: flex;
   align-items: center;
+  text-align: center;
   margin: 20px 0;
-  color: #666;
-  font-weight: 500;
-  font-size: 14px;
+  width: 100%;
+  position: relative;
+  clear: both; /* đảm bảo xuống hàng */
 }
+
 .date-divider::before,
 .date-divider::after {
   content: "";
   flex: 1;
   border-bottom: 1px solid #ccc;
-}
-.date-divider span {
+  height: 1px;
   margin: 0 10px;
 }
+
+.date-divider span {
+  font-size: 12px;
+  color: #666;
+  padding: 4px 12px;
+  background-color: #f5f5f5; /* hoặc #fff nếu nền trắng */
+  border-radius: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
 
 
 /* Modal */

@@ -23,15 +23,24 @@ import {
   FaUser,
   FaUserPlus,
   FaUserCheck, // Icon Groups
+  FaEllipsisH, // Icon More
 } from "react-icons/fa";
 
 import "./chatApp.css";
+import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
+import "dayjs/locale/vi";
+import { toast } from "react-toastify";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import { FiTrash2 } from "react-icons/fi"; // Thùng rác nét mảnh, hiện đại
 
 import Modal from "react-modal";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useLocation } from "react-router-dom";
 const socket = io("http://localhost:8004", { transports: ["websocket"] });
+
 Modal.setAppElement("#root");
 
 export default function ChatApp() {
@@ -43,6 +52,9 @@ export default function ChatApp() {
   const [sidebarView, setSidebarView] = useState("chat-list"); // Mặc định hiển thị danh sách chat
   const [selectedHeader, setSelectedHeader] = useState("");
   const navigate = useNavigate();
+  const messageRefs = useRef({});
+  dayjs.extend(relativeTime);
+  dayjs.locale("vi");
   const [selectedtitle, setSelectedTitle] = useState(
     "Chào mừng bạn đến với ứng dụng chat! "
   );
@@ -62,10 +74,12 @@ export default function ChatApp() {
   const location = useLocation();
   const user = location.state?.user; // Lấy user truyền từ navigate
   const [inputText, setInputText] = useState("");
+  const inputRef = useRef(null);
   console.log(user);
 
   const [chats, setChats] = useState([]);
-
+  
+  { /* Lấy danh sách conversation từ server và cập nhật vào state */ }
   useEffect(() => {
     const fetchConversations = async () => {
       try {
@@ -78,6 +92,11 @@ export default function ChatApp() {
         const chatPromises = conversations.map(async (conv) => {
           // Bước 2: Lấy userId từ members (trừ currentUser)
           const otherUserId = conv.members.find((_id) => _id !== user._id);
+          const unreadCountForUser =
+            conv.unreadCounts.find(
+              (item) => item.userId.toString() === user._id.toString()
+            )?.count || 0;
+          console.log("unreadCountForUser", unreadCountForUser);
 
           // Bước 3: Gọi API lấy thông tin user
           const userRes = await axios.get(
@@ -93,6 +112,8 @@ export default function ChatApp() {
             lastMessage: conv.latestmessage || "",
             timestamp: conv.updatedAt,
             active: otherUser.isOnline,
+            unreadCount: unreadCountForUser,
+            lastMessageTime: conv.lastMessageTime,
           };
         });
         console.log("message", messages);
@@ -106,11 +127,17 @@ export default function ChatApp() {
     };
 
     fetchConversations();
-    const interval = setInterval(fetchConversations, 1000);
+    socket.on("conversationUpdated", (data) => {
+      console.log("Conversation updated:", data);
+      fetchConversations(); // Chỉ fetch lại khi có sự thay đổi
+    });
 
-    return () => clearInterval(interval);
+    return () => {
+      socket.off("conversationUpdated");
+    };
   }, [user._id]);
 
+  { /* Lắng nghe sự kiện nhận tin nhắn từ server */ }
   useEffect(() => {
     if (selectedChat) {
       const conversationId = selectedChat.conversationId;
@@ -127,6 +154,7 @@ export default function ChatApp() {
     }
   }, [selectedChat]);
 
+  { /* Nhắn tin */ }
   const sendMessage = () => {
     if (!inputText.trim()) return;
     const messageData = {
@@ -134,33 +162,68 @@ export default function ChatApp() {
       senderId: user._id,
       messageType: "text",
       text: inputText,
+      replyTo: replyingMessage ? replyingMessage._id : null,
     };
 
     // Gửi lên socket
     socket.emit("sendMessage", messageData);
-
+    setReplyingMessage(null); // clear sau khi gửi
     setInputText("");
   };
 
+  { /* Pin tin nhắn */ }
+  const [pinnedMessage, setPinnedMessage] = useState(null);
+  const [highlightedMessageId, setHighlightedMessageId] = useState(null);
+  const scrollToPinnedMessage = () => {
+    const pinnedElement = messageRefs.current[pinnedMessage._id];
+    if (pinnedElement) {
+      pinnedElement.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    setHighlightedMessageId(pinnedMessage._id);
+    // Bỏ highlight sau 2 giây
+    setTimeout(() => setHighlightedMessageId(null), 2000);
+  };
+
+  { /* Cuộn tới tin nhắn */ }
+  const scrollToMessage = (messageId) => {
+    const messageElement = messageRefs.current[messageId];
+    if (messageElement) {
+      messageElement.scrollIntoView({ behavior: "smooth", block: "center" });
+
+      // Highlight tin nhắn được cuộn tới
+      setHighlightedMessageId(messageId);
+      setTimeout(() => setHighlightedMessageId(null), 2000); // xóa highlight sau 2s
+    }
+  };
+
+  { /* Lấy tin nhắn theo conversationId */ }
   const fetchMessagesByConversationId = async (conversationId) => {
     try {
       const response = await fetch(
         `http://localhost:8004/messages/get/${conversationId}`
       );
       const data = await response.json();
+      const pinnedMessage = data.find((msg) => msg.isPinned === true);
+      setPinnedMessage(pinnedMessage);
       return data; // data sẽ là mảng messages
     } catch (error) {
       console.error("Lỗi khi lấy messages:", error);
       return [];
     }
   };
+
+  { /* Lắng nghe sự kiện khi chọn chat */ }
   const handleSelectChat = async (chat) => {
     const messages = await fetchMessagesByConversationId(chat.conversationId);
     console.log("mess", messages);
     setSelectedChat({
       ...chat,
     });
-
+    socket.emit("markAsSeen", {
+      conversationId: chat.conversationId,
+      userId: user._id,
+    });
+    console.log("chat", chat);
     if (chat.lastMessageSenderId !== user._id) {
       socket.emit("messageSeen", {
         messageId: chat.lastMessageId,
@@ -198,6 +261,128 @@ export default function ChatApp() {
     console.log("Logging out...");
     navigate("/");
   };
+
+  // Hàm xử lý format thời gian tin nhắn
+  const formatTimeMessage = (timestamp) => {
+    const now = dayjs();
+    const messageTime = dayjs(timestamp);
+    const diffMinutes = now.diff(messageTime, "minute");
+    const diffHours = now.diff(messageTime, "hour");
+    const diffDays = now.diff(messageTime, "day");
+
+    if (diffMinutes < 1) {
+      return "Vừa xong";
+    } else if (diffMinutes < 60) {
+      return `${diffMinutes} phút`;
+    } else if (diffHours < 24) {
+      return `${diffHours} giờ`;
+    } else if (diffDays === 1) {
+      return "Hôm qua";
+    } else if (diffDays <= 7) {
+      return `${diffDays} ngày`;
+    } else {
+      return messageTime.format("DD/MM/YYYY");
+    }
+  };
+
+  { /* Hover vào menu tin nhắn và menu chat */ }
+  const [hoveredMessageId, setHoveredMessageId] = useState(null);
+  const [menuMessageId, setMenuMessageId] = useState(null);
+  const [hoveredChatId, setHoveredChatId] = useState(null);
+  const [menuChatId, setMenuChatId] = useState(null);
+  const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (
+        !e.target.closest(".message-menu") &&
+        !e.target.closest(".three-dots-icon") &&
+        !e.target.closest(".chat-popup-menu") &&
+        !e.target.closest(".chat-three-dots-icon")
+      ) {
+        setMenuMessageId(null);
+        setMenuChatId(null);
+      }
+    };
+
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
+
+  { /* Xử lý pin tin nhắn */ }
+  const handlePinMessage = async (messageId, isPinned) => {
+    await fetch(`http://localhost:8004/messages/pin/${messageId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isPinned }),
+    });
+    handleSelectChat(selectedChat);
+    setMenuMessageId(null);
+  };
+
+  { /* Xử lý xóa tin nhắn phía tôi */ }
+  const handleDeleteMessageFrom = async (messageId) => {
+    await fetch(`http://localhost:8004/messages/deletefrom/${messageId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: user._id }),
+    });
+    handleSelectChat(selectedChat);
+    setMenuMessageId(null);
+  };
+
+  { /* Xử lý thu hồi tin nhắn */ }
+  const handleRecallMessage = async (messageId) => {
+    try {
+      const response = await fetch(
+        `http://localhost:8004/messages/recall/${messageId}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast.warning(data.message || "Không thể thu hồi tin nhắn");
+        return;
+      }
+      await handleSelectChat(selectedChat); // Refresh messages
+    } catch (error) {
+      console.error("Recall error:", error);
+      toast.error("Đã có lỗi xảy ra khi thu hồi tin nhắn");
+    } finally {
+      setMenuMessageId(null);
+    }
+  };
+
+  { /* Xử lý trả lời tin nhắn */ }
+  const [replyingMessage, setReplyingMessage] = useState(null);
+  const handleReplyMessage = (msg) => {
+    setReplyingMessage(msg);
+    inputRef.current?.focus();
+  };
+
+  const handleDeleteChat = async (chatId) => {
+    if (window.confirm("Bạn có chắc muốn xoá đoạn chat này?")) {
+      socket.emit("deleteChat", { conversationId: chatId });
+    }
+  };
+  useEffect(() => {
+    socket.on("chatDeleted", ({ conversationId }) => {
+      setChats((prevChats) =>
+        prevChats.filter((chat) => chat.conversationId !== conversationId)
+      );
+      // Nếu đang ở đoạn chat bị xóa thì điều hướng về trang chat-list
+      if (selectedChat && selectedChat._id === conversationId) {
+        setSelectedChat(null);
+      }
+    });
+
+    return () => {
+      socket.off("chatDeleted");
+    };
+  }, [selectedChat]);
 
   // // Xử lý gửi tin nhắn hoặc ảnh/video
   // const sendMessage = () => {
@@ -296,8 +481,17 @@ export default function ChatApp() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const handleEmojiClick = (emojiData) => {
-    setInput((prevInput) => prevInput + emojiData.emoji);
+  const handleEmojiClick = (emojiObject) => {
+    const emoji = emojiObject.emoji;
+    if (inputText.trim() === "") {
+      // Gửi emoji riêng nếu không có text
+      setInputText(emoji);
+    } else {
+      // Thêm emoji vào input nếu đang gõ text
+      setInputText((prev) => prev + emoji);
+    }
+    setShowEmojiPicker(false);
+    inputRef.current?.focus();
   };
 
   const toggleEmojiPicker = () => {
@@ -332,6 +526,7 @@ export default function ChatApp() {
 
   return (
     <div className="chat-app">
+      <ToastContainer position="top-right" autoClose={3000} />
       {/* Sidebar */}
       <div className="sidebar">
         <div className="sidebar-item">
@@ -357,12 +552,16 @@ export default function ChatApp() {
                 chat.name.toLowerCase().includes(searchTerm.toLowerCase())
               )
               .slice()
-              .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+              .sort(
+                (a, b) =>
+                  new Date(b.lastMessageTime) - new Date(a.lastMessageTime)
+              )
               .map((chat, index) => (
                 <div
                   key={index}
                   className="chat-left"
                   onClick={() => handleSelectChat(chat)}
+                  onMouseEnter={() => setHoveredChatId(chat._id)}
                 >
                   <div className="avatar-container">
                     <img src={chat.image} alt={chat.name} className="avatar" />
@@ -373,10 +572,7 @@ export default function ChatApp() {
                     <p className="chat-name">{chat.name}</p>
                     <p
                       className={`chat-message ${
-                        chat.lastMessageSenderId?.toString() !==
-                        user._id.toString()
-                          ? "unread-message"
-                          : ""
+                        chat.unreadCount > 0 ? "unread-message" : ""
                       }`}
                     >
                       {chat.lastMessageSenderId?.toString() ===
@@ -389,29 +585,57 @@ export default function ChatApp() {
                         : chat.lastMessage.length > 10
                         ? chat.lastMessage.slice(0, 10) + "..."
                         : chat.lastMessage}
-                      {chat.lastMessageSenderId?.toString() !==
-                        user._id.toString() && (
-                        <span className="unread-dot">•</span>
+
+                      {chat.unreadCount > 0 && (
+                        <span className="unread-badge">
+                          • {chat.unreadCount}
+                        </span>
                       )}
                     </p>
                   </div>
                   <div className="chat-timestamp">
-                    <p className="chat-timestamp-item">
-                      {new Date(chat.timestamp).toLocaleString("vi-VN", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        year: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                    <p
+                      className={`chat-timestamp-item ${
+                        chat.unreadCount > 0 ? "unread-timestamp" : ""
+                      }`}
+                    >
+                      {formatTimeMessage(chat.lastMessageTime)}
                     </p>
-
-                    {chat.unreadMessages > 0 && (
-                      <span className="unread-badge">
-                        {chat.unreadMessages}
-                      </span>
-                    )}
                   </div>
+                  {hoveredChatId === chat._id && (
+                    <div
+                      className="chat-more-options"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMenuChatId(chat._id); // Mở menu popup cho đoạn chat này
+                        setMenuPosition({ x: e.clientX, y: e.clientY });
+                      }}
+                    >
+                      <span>⋮</span>
+                    </div>
+                  )}
+
+                  {menuChatId === chat._id && (
+                    <div
+                      className="chat-popup-menu"
+                      style={{ top: menuPosition.y, left: menuPosition.x }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div
+                        style={{
+                          color: "red",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          cursor: "pointer",
+                        }}
+                        onClick={() => handleDeleteChat(chat.conversationId)}
+                      >
+                        <FiTrash2 size={18} color="red" />
+                        Xóa đoạn chat
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
           </div>
@@ -498,108 +722,251 @@ export default function ChatApp() {
               <FaExclamationCircle className="icon" />
             </div>
           </div>
+          {pinnedMessage && (
+            <div className="pinned-message" onClick={scrollToPinnedMessage}>
+              <div className="pinned-label">📌 Đã ghim</div>
+              <div className="pinned-content">{pinnedMessage.text}</div>
+              <div className="pinned-timestamp">
+                {new Date(pinnedMessage.createdAt).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </div>
+              <FaTimes
+                className="unpin-icon"
+                onClick={(e) => {
+                  handlePinMessage(pinnedMessage._id, false);
+                  e.stopPropagation();
+                }}
+              />
+            </div>
+          )}
 
           {/* Messages */}
           <div className="chat-box">
-            {messages.map((msg, index) => {
-              const currentDate = new Date(msg.createdAt).toDateString();
-              const prevDate =
-                index > 0
-                  ? new Date(messages[index - 1].createdAt).toDateString()
-                  : null;
-              const showDateDivider = currentDate !== prevDate;
+            {messages
+              .filter((msg) => !msg.deletedFrom?.includes(user._id))
+              .map((msg, index) => {
+                const currentDate = new Date(
+                  msg.createdAt
+                ).toLocaleDateString();
+                const prevDate =
+                  index > 0
+                    ? new Date(
+                        messages[index - 1].createdAt
+                      ).toLocaleDateString()
+                    : null;
+                const showDateDivider = currentDate !== prevDate;
 
-              const isMe =
-                (msg.sender?._id || msg.senderId?._id || msg.senderId) ===
-                user._id;
+                const isMe =
+                  (msg.sender?._id || msg.senderId?._id || msg.senderId) ===
+                  user._id;
 
-              return (
-                <div key={index}>
-                  {showDateDivider && (
-                    <div className="date-divider">
-                      <span>
-                        {new Date(msg.createdAt).toLocaleDateString("vi-VN", {
-                          weekday: "long",
-                          day: "2-digit",
-                          month: "2-digit",
-                          year: "numeric",
-                        })}
-                      </span>
-                    </div>
-                  )}
-
-                  <div className={`message-row ${isMe ? "me" : "them"}`}>
-                    {/* Avatar bên trái nếu là 'them' */}
-                    {!isMe && (
-                      <img
-                        src={selectedChat.image || "/default-avatar.png"}
-                        alt="avatar"
-                        className="message-avatar"
-                      />
+                return (
+                  <>
+                    {showDateDivider && (
+                      <div className="date-divider">
+                        <span>
+                          {new Date(msg.createdAt).toLocaleDateString("vi-VN", {
+                            weekday: "long",
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                          })}
+                        </span>
+                      </div>
                     )}
 
-                    <div className={`message-content ${isMe ? "me" : "them"}`}>
-                      {msg.text && <p>{msg.text}</p>}
-                      {msg.image && (
-                        <img
-                          src={msg.image}
-                          alt="sent"
-                          className="chat-image"
-                          onClick={() => openModal(msg.image, "image")}
-                        />
-                      )}
-                      {msg.video && (
-                        <video
-                          controls
-                          className="chat-video"
-                          onClick={() => openModal(msg.video, "video")}
+                    <div
+                      key={index}
+                      ref={(el) => (messageRefs.current[msg._id] = el)}
+                      className={`message-row ${isMe ? "me" : "them"} ${
+                        highlightedMessageId === msg._id ? "highlight" : ""
+                      }`}
+                    >
+                      <div
+                        className={`message-row ${isMe ? "me" : "them"}`}
+                        onMouseEnter={() => setHoveredMessageId(msg._id)}
+                      >
+                        {/* Avatar bên trái nếu là 'them' */}
+                        {!isMe && (
+                          <img
+                            src={selectedChat.image || "/default-avatar.png"}
+                            alt="avatar"
+                            className="message-avatar"
+                          />
+                        )}
+
+                        <div
+                          className={`message-content ${isMe ? "me" : "them"}`}
                         >
-                          <source src={msg.video} type="video/mp4" />
-                        </video>
-                      )}
-                      {msg.file && (
-                        <div className="file-message">
-                          <a
-                            href={msg.file}
-                            download={msg.fileName}
-                            className="file-link"
-                          >
-                            {msg.fileName}
-                          </a>
+                          {msg.isRecalled ? (
+                            <p className="recalled-message">
+                              Tin nhắn đã bị thu hồi
+                            </p>
+                          ) : (
+                            <>
+                              {msg.replyTo && (
+                                <div
+                                  className="reply-to clickable"
+                                  onClick={() =>
+                                    scrollToMessage(msg.replyTo._id)
+                                  }
+                                >
+                                  <span className="reply-preview-text">
+                                    {msg.replyTo.text ||
+                                      msg.replyTo.fileName ||
+                                      (msg.replyTo.image && "Ảnh") ||
+                                      (msg.replyTo.video && "Video")}
+                                  </span>
+                                </div>
+                              )}
+
+                              {msg.text && <p>{msg.text}</p>}
+                              {msg.image && (
+                                <img
+                                  src={msg.image}
+                                  alt="sent"
+                                  className="chat-image"
+                                  onClick={() => openModal(msg.image, "image")}
+                                />
+                              )}
+                              {msg.video && (
+                                <video
+                                  controls
+                                  className="chat-video"
+                                  onClick={() => openModal(msg.video, "video")}
+                                >
+                                  <source src={msg.video} type="video/mp4" />
+                                </video>
+                              )}
+                              {msg.file && (
+                                <div className="file-message">
+                                  <a
+                                    href={msg.file}
+                                    download={msg.fileName}
+                                    className="file-link"
+                                  >
+                                    {msg.fileName}
+                                  </a>
+                                </div>
+                              )}
+                            </>
+                          )}
+
+                          <div className="message-info">
+                            <span className="timestamp">
+                              {msg.createdAt
+                                ? new Date(msg.createdAt).toLocaleTimeString(
+                                    [],
+                                    {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    }
+                                  )
+                                : ""}
+                            </span>
+                            {msg.status === "sending" ? (
+                              <FaClock className="status-icon" />
+                            ) : (
+                              <FaCheck className="status-icon" />
+                            )}
+                          </div>
                         </div>
-                      )}
-                      <div className="message-info">
-                        <span className="timestamp">
-                          {msg.createdAt
-                            ? new Date(msg.createdAt).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })
-                            : ""}
-                        </span>
-                        {msg.status === "sending" ? (
-                          <FaClock className="status-icon" />
-                        ) : (
-                          <FaCheck className="status-icon" />
+                        {/* Nút ba chấm khi hover */}
+                        {hoveredMessageId === msg._id && (
+                          <div
+                            className={`three-dots-icon ${
+                              isMe ? "left" : "right"
+                            }`}
+                          >
+                            <FaEllipsisH
+                              className="icon"
+                              onClick={(e) => {
+                                setMenuMessageId(msg._id);
+                                e.stopPropagation(); // chặn click propagation
+                              }}
+                            />
+                            {menuMessageId === msg._id && (
+                              <div
+                                className={`message-menu ${
+                                  isMe ? "left" : "right"
+                                }`}
+                              >
+                                {!msg.isRecalled && (
+                                  <div
+                                    className="menu-item"
+                                    onClick={() =>
+                                      handlePinMessage(msg._id, true)
+                                    }
+                                  >
+                                    📌 Ghim tin nhắn
+                                  </div>
+                                )}
+
+                                <div
+                                  className="menu-item"
+                                  onClick={() =>
+                                    handleDeleteMessageFrom(msg._id)
+                                  }
+                                  style={{ color: "red" }}
+                                >
+                                  ❌ Xóa phía tôi
+                                </div>
+                                {isMe && !msg.isRecalled && (
+                                  <div
+                                    className="menu-item"
+                                    onClick={() => handleRecallMessage(msg._id)}
+                                    style={{ color: "red" }}
+                                  >
+                                    🔄 Thu hồi
+                                  </div>
+                                )}
+                                {!msg.isRecalled && (
+                                  <div
+                                    className="menu-item"
+                                    onClick={() => handleReplyMessage(msg)}
+                                  >
+                                    💬 Trả lời
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Avatar bên phải nếu là 'me' */}
+                        {isMe && (
+                          <img
+                            src={user.avatar || "/default-avatar.png"}
+                            alt="avatar"
+                            className="message-avatar"
+                          />
                         )}
                       </div>
                     </div>
-
-                    {/* Avatar bên phải nếu là 'me' */}
-                    {isMe && (
-                      <img
-                        src={user.avatar || "/default-avatar.png"}
-                        alt="avatar"
-                        className="message-avatar"
-                      />
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+                  </>
+                );
+              })}
             <div ref={messagesEndRef} />
           </div>
-
+          {replyingMessage && (
+            <div className="reply-preview">
+              <div className="reply-info">
+                <strong>Đang trả lời:</strong>
+                <span className="reply-text">
+                  {replyingMessage.text ||
+                    replyingMessage.fileName ||
+                    (replyingMessage.image && "Ảnh") ||
+                    (replyingMessage.video && "Video")}
+                </span>
+              </div>
+              <FaTimes
+                className="close-reply-icon"
+                onClick={() => setReplyingMessage(null)}
+              />
+            </div>
+          )}
           {/* Input Box */}
           <div className="input-box-chat">
             <div className="input-icon-container">
@@ -679,6 +1046,7 @@ export default function ChatApp() {
             )}
             {/* Text input */}
             <input
+              ref={inputRef}
               type="text"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
