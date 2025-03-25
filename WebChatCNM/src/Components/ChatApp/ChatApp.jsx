@@ -1,5 +1,7 @@
 import { React, useState, useEffect, useRef } from "react";
 import EmojiPicker from "emoji-picker-react";
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import io from "socket.io-client";
 import {
   FaPaperPlane,
@@ -26,11 +28,11 @@ import {
   FaEllipsisH, // Icon More
 } from "react-icons/fa";
 
+
 import "./chatApp.css";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/vi";
-import { toast } from "react-toastify";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { FiTrash2 } from "react-icons/fi"; // Thùng rác nét mảnh, hiện đại
@@ -75,6 +77,11 @@ export default function ChatApp() {
   const user = location.state?.user; // Lấy user truyền từ navigate
   const [inputText, setInputText] = useState("");
   const inputRef = useRef(null);
+  const [isFriendRequestSent, setIsFriendRequestSent] = useState(false);
+
+  const [friendRequests, setFriendRequests] = useState([]); //Lưu danh sách lời mời kết bạn
+  const [showFriendRequests, setShowFriendRequests] = useState(false); // Hiển thị ds lời mời kết bạn
+
   console.log(user);
 
   const [chats, setChats] = useState([]);
@@ -232,6 +239,7 @@ export default function ChatApp() {
       console.log("chat", chat);
     }
     setMessages(messages);
+    setShowFriendRequests(false); // Ẩn danh sách lời mời kết bạn
   };
 
   const showContacts = () => {
@@ -245,11 +253,6 @@ export default function ChatApp() {
     setSelectedHeader("");
   };
 
-  const handleClick = (header) => {
-    setSelectedHeader(header);
-    setSelectedTitle("");
-    setSelectedTitle2("");
-  };
 
   // Hàm bật/tắt menu
   const toggleMenu = () => {
@@ -461,13 +464,13 @@ export default function ChatApp() {
           prevMessages.map((msg, index) =>
             index === prevMessages.length - 1
               ? {
-                  ...msg,
-                  status: "sent",
-                  receivedTime: new Date().toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  }),
-                }
+                ...msg,
+                status: "sent",
+                receivedTime: new Date().toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
+              }
               : msg
           )
         );
@@ -480,6 +483,8 @@ export default function ChatApp() {
   const [mediaType, setMediaType] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [searchResult, setSearchResult] = useState(null);
+
 
   const handleEmojiClick = (emojiObject) => {
     const emoji = emojiObject.emoji;
@@ -524,6 +529,169 @@ export default function ChatApp() {
     setMediaType("");
   };
 
+  //CHECK LỜI MỜI KB
+  useEffect(() => {
+    const checkFriendRequestStatus = async () => {
+      if (!user || !searchResult || !user._id || !searchResult._id) return;
+
+      try {
+        const response = await fetch(`http://localhost:8004/friends/checkfriend/${user._id}/${searchResult._id}`);
+        const data = await response.json();
+
+        if (data.status === "pending") {
+          setIsFriendRequestSent(true);
+        } else {
+          setIsFriendRequestSent(false);
+        }
+      } catch (error) {
+        console.error("Lỗi khi kiểm tra lời mời kết bạn:", error);
+      }
+    };
+
+    checkFriendRequestStatus();
+  }, [searchResult?._id, user?._id]); // Chạy khi searchResult hoặc user thay đổi
+
+
+  // Tìm kiếm user theo sđt
+  const handleSearchUser = async () => {
+    try {
+      const response = await fetch(`http://localhost:8004/friends/search?phone=${searchTerm}`);
+      const data = await response.json();
+      console.log('KQ Search: ', data);
+      if (response.ok) {
+        setSearchResult(data);
+        toast.success(data.message); // Hiển thị thông báo thành công
+      } else {
+
+        toast.error(data.message); // Hiển thị thông báo lỗi
+      }
+    } catch (error) {
+      console.error("Lỗi khi tìm kiếm:", error);
+    }
+  };
+  //Gửi lời mời kết bạn
+  const handleSendFriendRequest = async (receiverId) => {
+    try {
+      const response = await fetch("http://localhost:8004/friends/send-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ senderId: user._id, receiverId }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+
+        toast.success("Đã gửi lời mời kết bạn!"); // Hiển thị thông báo thành công
+      } else {
+        toast.error(data.message); // Hiển thị thông báo lỗi
+      }
+    } catch (error) {
+      console.error("Lỗi khi gửi lời mời:", error);
+    }
+  };
+
+
+  const loadFriendRequests = async () => {
+    if (!user || !user._id) return;
+
+    try {
+      const response = await fetch(`http://localhost:8004/friends/friend-requests/${user._id}`);
+      const data = await response.json();
+      setFriendRequests(data); // Lưu danh sách vào state
+    } catch (error) {
+      console.error("Lỗi khi tải danh sách lời mời kết bạn:", error);
+    }
+  };
+
+  const handleClick = (tab) => {
+    console.log("Clicked:", tab); // Debug xem tab có nhận đúng không
+    setSelectedChat(null);
+    setSelectedHeader(tab);
+    setSelectedTitle("");
+    setSelectedTitle2("");
+
+    if (tab === "Lời mời kết bạn") {
+      setSelectedChat(null);
+      setShowFriendRequests(false); // Ẩn đi trước để React re-render
+      setTimeout(() => {
+        setShowFriendRequests(true);
+        if (friendRequests.length === 0) {
+          console.log("Loading friend requests...");
+          loadFriendRequests();
+        }
+      }, 0); // Có thể tăng lên 200 nếu vẫn lỗi
+    } else {
+      setShowFriendRequests(false);
+    }
+  };
+
+
+  useEffect(() => {
+    if (selectedChat?.name === "Lời mời kết bạn") {
+      setShowFriendRequests(true);
+    } else {
+      setShowFriendRequests(false);
+    }
+  }, [selectedChat]);
+
+
+
+
+
+
+
+
+
+  const acceptRequest = async (requestId) => {
+    try {
+      const response = await fetch("http://localhost:8004/friends/accept-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setFriendRequests((prevRequests) =>
+          prevRequests.filter((request) => request._id !== requestId)
+        );
+        alert(data.message); // Hiển thị thông báo thành công
+      } else {
+        alert(data.message || "Có lỗi xảy ra!");
+      }
+    } catch (error) {
+      console.error("Lỗi:", error);
+      alert("Lỗi kết nối server!");
+    }
+  };
+
+  const rejectRequest = async (requestId) => {
+    try {
+      const response = await fetch("http://localhost:8004/friends/reject-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setFriendRequests((prevRequests) =>
+          prevRequests.filter((request) => request._id !== requestId)
+        );
+        alert(data.message); // Hiển thị thông báo thành công
+      } else {
+        alert(data.message || "Có lỗi xảy ra!");
+      }
+    } catch (error) {
+      console.error("Lỗi:", error);
+      alert("Lỗi kết nối server!");
+    }
+  };
+
+
+
+
+
   return (
     <div className="chat-app">
       <ToastContainer position="top-right" autoClose={3000} />
@@ -542,8 +710,59 @@ export default function ChatApp() {
             className="search-input"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                if (searchTerm.trim() !== "") {
+                  handleSearchUser();
+                }
+              }
+            }}
+
           />
+
+          {/* Sử dụng FaTimes thay vì FaSearch */}
+          {searchTerm && (
+            <FaTimes
+              className="search-icon"
+              onClick={(e) => {
+                setSearchTerm("");   // Xóa nội dung ô tìm kiếm
+                setSearchResult(null); // Xóa kết quả tìm kiếm
+              }}
+            />
+          )}
+
+
         </div>
+
+        {searchResult && (
+          <>
+            <div className="title-search">
+              {searchResult.username && <p>Tìm bạn qua số điện thoại</p>}
+            </div>
+
+            <div className="search-user-info">
+              <div className="img-user-search">
+                <img src={searchResult.avatar} alt={searchResult.username} className="avatar" />
+              </div>
+              <div className="info-user-search">
+                <p className="search-username">{searchResult.username}</p>
+                <p className="search-phone">Số điện thoại: <span>{searchResult.phone}</span></p>
+
+                {searchResult._id !== user._id && (
+                  isFriendRequestSent ? (
+                    <span className="added-request">Đã gửi lời mời kết bạn</span>
+                  ) : (
+                    <button onClick={() => handleSendFriendRequest(searchResult._id)}>Kết bạn</button>
+                  )
+                )}
+              </div>
+            </div>
+          </>
+        )}
+
+
+
 
         {sidebarView === "chat-list" && (
           <div className="chat-list">
@@ -576,12 +795,11 @@ export default function ChatApp() {
                       }`}
                     >
                       {chat.lastMessageSenderId?.toString() ===
-                      user._id.toString()
-                        ? `Bạn: ${
-                            chat.lastMessage.length > 10
-                              ? chat.lastMessage.slice(0, 10) + "..."
-                              : chat.lastMessage
-                          }`
+                        user._id.toString()
+                        ? `Bạn: ${chat.lastMessage.length > 10
+                          ? chat.lastMessage.slice(0, 10) + "..."
+                          : chat.lastMessage
+                        }`
                         : chat.lastMessage.length > 10
                         ? chat.lastMessage.slice(0, 10) + "..."
                         : chat.lastMessage}
@@ -702,9 +920,27 @@ export default function ChatApp() {
         </div>
       </div>
 
-      {selectedChat ? (
+      {selectedHeader === "Lời mời kết bạn" ? (
+        <div className="friend-requests">
+          <h2>Lời mời kết bạn</h2>
+          {friendRequests.length > 0 ? (
+            friendRequests.map((request) => (
+              <div key={request.id} className="friend-request-item">
+                <img src={request.avatar} alt={request.name} className="avatar" />
+                <p>{request.name}</p>
+                <button onClick={() => acceptRequest(request.id)}>Chấp nhận</button>
+                <button onClick={() => rejectRequest(request.id)}>Từ chối</button>
+              </div>
+            ))
+          ) : (
+            <p>Không có lời mời kết bạn nào.</p>
+          )}
+        </div>
+      ) : selectedChat ? (
+     
         <div className="chat-window">
           {/* Header */}
+         
           <div className="chat-header">
             <div className="avatar-container-main">
               <img src={selectedChat.image} alt="img" className="avatar" />
@@ -1065,7 +1301,8 @@ export default function ChatApp() {
               <FaPaperPlane />
             </button>
           </div>
-        </div>
+            </div>
+        
       ) : (
         <>
           <div className="header-chat-window-item">

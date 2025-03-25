@@ -1020,6 +1020,9 @@
 .contacts-header span{
   font-size: 16px;
 }
+.contacts-header span:hover{
+  cursor: pointer;
+}
 .header-chat-window-item p{
  margin-left: 10px;
  padding: 10px 10px;
@@ -1048,4 +1051,108 @@
 
 .logout-btn:hover {
     background: darkred;
+}
+
+.search-user-info {
+    display: flex;
+    align-items: flex-start;
+    flex-direction: row;
+    gap: 10px;
+    padding: 10px 10px;
+    
+    border-bottom: 1px solid #ccc;
+}
+
+.info-user-search {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+}
+.search-phone span{
+  color: #3b82f6;
+}
+.search-phone {
+    margin: 0;
+    font-size: 16px;
+}
+.title-search{
+  display: flex;
+  align-items: center;
+  font-weight: bold;
+  font-size: 16px;
+}
+.added-request{
+  color: #3b82f6;
+}
+.friend-avatar{
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+}
+.friend-name{
+  font-size: 16px;
+  margin-left: 10px;
+}
+.friend-info{
+  
+  display: flex;
+  align-items: center;
+  flex-direction: row;
+
+  
+}
+.friend-request-item{
+  background-color: #ccc;
+  border-radius: 10px;
+  padding: 20px 20px;
+  margin-left: 30px;
+  margin-bottom: 20px;
+ 
+ 
+ 
+}
+.friend-actions{
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.friend-actions {
+  display: flex;
+  gap: 10px; /* Tạo khoảng cách giữa hai nút */
+}
+
+.friend-actions button {
+ 
+  padding: 8px 15px; /* Giảm padding để nút nhỏ gọn hơn */
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-align: center;
+}
+
+.friend-actions button:first-child {
+  font-weight: bold;
+  background-color: #4caf50; /* Màu xanh cho nút Chấp nhận */
+  width: 100px;
+  color: white;
+}
+
+.friend-actions button:first-child:hover {
+  background-color: #388e3c;
+}
+
+.friend-actions button:last-child {
+  background-color: #f44336; /* Màu đỏ cho nút Từ chối */
+  width: 100px;
+  font-weight: bold;
+  color: white;
+}
+
+.friend-actions button:last-child:hover {
+  background-color: #d32f2f;
 }

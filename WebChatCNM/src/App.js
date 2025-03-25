@@ -7,9 +7,25 @@ import Recover from "./Components/Recover/Recover";
 import VerifyEmail from "./Components/Register/verifyMail";
 import ForgotPassword from "./Components/ForgotPassword/ForgotPassword";
 import ChatApp from "./Components/ChatApp/ChatApp";
+import { ToastContainer } from "react-toastify";
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 function App() {
   return (
+    <>
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={true}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+      />
+
     <Router>
       <div className="App">
         <Routes>
@@ -23,7 +39,8 @@ function App() {
           <Route path="/chat-app" element={<ChatApp />} />
         </Routes>
       </div>
-    </Router>
+      </Router>
+    </>
   );
 }
 

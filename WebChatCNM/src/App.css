@@ -22,3 +22,12 @@ body,
   font-family: "Inter", sans-serif;
   background-color: #ffffff;
 }
+.Toastify__toast {
+  position: relative;
+}
+
+.Toastify__close-button {
+  position: absolute !important;
+  top: -15px !important;
+  right: -147px !important;
+}
