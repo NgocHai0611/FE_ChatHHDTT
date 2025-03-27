@@ -341,11 +341,11 @@ export default function ChatApp() {
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({conversationId: selectedChat.conversationId}),
         }
       );
 
       const data = await response.json();
-
       if (!response.ok) {
         toast.warning(data.message || "Không thể thu hồi tin nhắn");
         return;
@@ -358,6 +358,7 @@ export default function ChatApp() {
       setMenuMessageId(null);
     }
   };
+
 
   { /* Xử lý trả lời tin nhắn */ }
   const [replyingMessage, setReplyingMessage] = useState(null);
@@ -624,8 +625,6 @@ export default function ChatApp() {
       setShowFriendRequests(false);
     }
   };
-
-
   useEffect(() => {
     if (selectedChat?.name === "Lời mời kết bạn") {
       setShowFriendRequests(true);
@@ -633,14 +632,6 @@ export default function ChatApp() {
       setShowFriendRequests(false);
     }
   }, [selectedChat]);
-
-
-
-
-
-
-
-
 
   const acceptRequest = async (requestId) => {
     try {
@@ -687,10 +678,6 @@ export default function ChatApp() {
       alert("Lỗi kết nối server!");
     }
   };
-
-
-
-
 
   return (
     <div className="chat-app">
@@ -761,9 +748,6 @@ export default function ChatApp() {
           </>
         )}
 
-
-
-
         {sidebarView === "chat-list" && (
           <div className="chat-list">
             {chats
@@ -820,12 +804,12 @@ export default function ChatApp() {
                       {formatTimeMessage(chat.lastMessageTime)}
                     </p>
                   </div>
-                  {hoveredChatId === chat._id && (
+                  {(
                     <div
                       className="chat-more-options"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setMenuChatId(chat._id); // Mở menu popup cho đoạn chat này
+                        setMenuChatId(chat.conversationId); // Mở menu popup cho đoạn chat này
                         setMenuPosition({ x: e.clientX, y: e.clientY });
                       }}
                     >
@@ -833,7 +817,7 @@ export default function ChatApp() {
                     </div>
                   )}
 
-                  {menuChatId === chat._id && (
+                  {menuChatId === chat.conversationId && (
                     <div
                       className="chat-popup-menu"
                       style={{ top: menuPosition.y, left: menuPosition.x }}
