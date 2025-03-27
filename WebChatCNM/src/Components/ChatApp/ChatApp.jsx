@@ -41,6 +41,7 @@ import Modal from "react-modal";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useLocation } from "react-router-dom";
+import { set } from "mongoose";
 const socket = io("http://localhost:8004", { transports: ["websocket"] });
 
 Modal.setAppElement("#root");
@@ -73,6 +74,8 @@ export default function ChatApp() {
     scrollToBottom();
   }, [messages]);
   const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef(null); // Tham chiếu đến menu
+
   const location = useLocation();
   const user = location.state?.user; // Lấy user truyền từ navigate
   const [inputText, setInputText] = useState("");
@@ -81,11 +84,14 @@ export default function ChatApp() {
 
   const [friendRequests, setFriendRequests] = useState([]); //Lưu danh sách lời mời kết bạn
   const [showFriendRequests, setShowFriendRequests] = useState(false); // Hiển thị ds lời mời kết bạn
+  const [friends, setFriends] = useState([]); // Lưu danh sách bạn bè
+  const [selectedFriend, setSelectedFriend] = useState(null);// xóa bạn bè
+  const [chatSearch, setChatSearch] = useState([]);
 
   console.log(user);
 
   const [chats, setChats] = useState([]);
-  
+
   { /* Lấy danh sách conversation từ server và cập nhật vào state */ }
   useEffect(() => {
     const fetchConversations = async () => {
@@ -94,8 +100,12 @@ export default function ChatApp() {
         const res = await axios.get(
           `http://localhost:8004/conversations/${user._id}`
         );
-        const conversations = res.data;
-        console.log(conversations);
+        let conversations = res.data;
+        console.log(`conversations trc khi lọc`, conversations);
+        // Bước 2: Lọc bỏ conversations có messages rỗng
+        conversations = conversations.filter(conv => conv.messages.length > 0);
+        console.log(`conversations sau khi lọc`, conversations);
+    
         const chatPromises = conversations.map(async (conv) => {
           // Bước 2: Lấy userId từ members (trừ currentUser)
           const otherUserId = conv.members.find((_id) => _id !== user._id);
@@ -243,10 +253,14 @@ export default function ChatApp() {
   };
 
   const showContacts = () => {
+    setSearchTerm("");   // Xóa nội dung ô tìm kiếm
+    setSearchResult(null);
     setSidebarView("contacts");
     setSelectedChat("");
   };
   const showChatlists = () => {
+    setSearchResult(null);
+    setSearchTerm("");   // Xóa nội dung ô tìm kiếm
     setSidebarView("chat-list");
     setSelectedTitle("Chào mừng bạn đến với ứng dụng chat! ");
     setSelectedTitle2("Chào mừng bạn đến với ứng dụng chat! ");
@@ -256,8 +270,22 @@ export default function ChatApp() {
 
   // Hàm bật/tắt menu
   const toggleMenu = () => {
-    setShowMenu(!showMenu);
+    setShowMenu((prev) => !prev);
   };
+
+  // Đóng menu khi click ra ngoài
+  useEffect(() => {
+    const handleClickOutsideMenu = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setShowMenu(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutsideMenu);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutsideMenu);
+    };
+  }, []);
 
   // Hàm xử lý đăng xuất
   const handleLogout = () => {
@@ -604,8 +632,56 @@ export default function ChatApp() {
     }
   };
 
+  const loadFriends = async () => {
+    try {
+      const response = await fetch(`http://localhost:8004/friends/getfriend/${user._id}`, { // Gửi userId để lấy danh sách bạn bè
+        method: "GET",
+      });
+
+      if (!response.ok) {
+        throw new Error("Lỗi khi tải danh sách bạn bè");
+      }
+
+      const data = await response.json();
+      console.log("Danh sách bạn bè:", data);
+      setFriends(data);
+    } catch (error) {
+      console.error("Lỗi khi tải danh sách bạn bè:", error);
+    }
+  };
+
+  // Gọi API để hủy kết bạn
+  const handleRemoveFriend = async (friendId) => {
+    if (!user || !user._id) {
+      console.error("Không tìm thấy thông tin người dùng.");
+      return;
+    }
+
+    // Hiển thị hộp thoại xác nhận
+    const isConfirmed = window.confirm("Bạn có chắc chắn muốn hủy kết bạn?");
+    if (!isConfirmed) return; // Nếu người dùng chọn "Hủy", thoát khỏi hàm
+
+    try {
+      const response = await fetch("http://localhost:8004/friends/unfriend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user._id, friendId }),
+      });
+
+      if (!response.ok) throw new Error("Lỗi khi hủy kết bạn");
+
+      // Cập nhật danh sách bạn bè
+      setFriends(friends.filter((friend) => friend._id !== friendId));
+      setSelectedFriend(null);
+    } catch (error) {
+      console.error("Lỗi khi hủy kết bạn:", error);
+    }
+  };
+
+
   const handleClick = (tab) => {
-    console.log("Clicked:", tab); // Debug xem tab có nhận đúng không
+    console.log("Clicked:", tab);
+    setSearchResult(null); // Xóa kết quả tìm kiếm
     setSelectedChat(null);
     setSelectedHeader(tab);
     setSelectedTitle("");
@@ -621,7 +697,10 @@ export default function ChatApp() {
           loadFriendRequests();
         }
       }, 0); // Có thể tăng lên 200 nếu vẫn lỗi
-    } else {
+    } else if (tab === "Danh sách bạn bè") {
+      loadFriends(); // Gọi API danh sách bạn bè
+    }
+    else {
       setShowFriendRequests(false);
     }
   };
@@ -646,13 +725,16 @@ export default function ChatApp() {
         setFriendRequests((prevRequests) =>
           prevRequests.filter((request) => request._id !== requestId)
         );
-        alert(data.message); // Hiển thị thông báo thành công
+
+        toast.success(data.message);
       } else {
-        alert(data.message || "Có lỗi xảy ra!");
+        toast.error(data.message || "Có lỗi xảy ra!");
+
       }
     } catch (error) {
       console.error("Lỗi:", error);
-      alert("Lỗi kết nối server!");
+      toast.error("Lỗi kết nối server!");
+
     }
   };
 
@@ -669,13 +751,98 @@ export default function ChatApp() {
         setFriendRequests((prevRequests) =>
           prevRequests.filter((request) => request._id !== requestId)
         );
-        alert(data.message); // Hiển thị thông báo thành công
+        toast.success(data.message);
       } else {
-        alert(data.message || "Có lỗi xảy ra!");
+        toast.error(data.message || "Có lỗi xảy ra!");
       }
     } catch (error) {
       console.error("Lỗi:", error);
-      alert("Lỗi kết nối server!");
+      toast.error("Lỗi kết nối server!");
+    }
+  };
+  // Toggle menu ba chấm
+  const toggleMenuXoa = (friendId) => {
+    setSelectedFriend(selectedFriend === friendId ? null : friendId);
+  };
+
+  // Xử lý tìm kiếm chat
+  useEffect(() => {
+    if (chatSearch && chatSearch.conversationId) {
+      handleSelectChat(chatSearch);
+    }
+  }, [chatSearch]);
+  //Tạo cuộc hội thoại từ kết quả tìm kiếm
+  const createNewChat = async (receiverId) => {
+    setSelectedHeader("");
+
+    try {
+      // 1️⃣ Gọi API để lấy danh sách cuộc trò chuyện
+      const response = await fetch(`http://localhost:8004/conversations/${user._id}/search`);
+      const conversations = await response.json();
+
+      // 2️⃣ Kiểm tra xem cuộc trò chuyện với receiverId đã tồn tại chưa
+      const existingConversation = conversations.find(conv =>
+        conv.members.length === 2 && // Chỉ kiểm tra chat 1-1
+        conv.members.some(member => member._id === user._id) &&
+        conv.members.some(member => member._id === receiverId)
+      );
+      console.log("receiverId nhận được từ friend", receiverId);
+      const userreciver = await fetch(`http://localhost:8004/users/get/${receiverId}`);
+      const data = await userreciver.json();
+      console.log("data", data);
+
+
+      console.log("Cuộc trò chuyện đã tồn tại:", existingConversation);
+
+      console.log("Selected chat đã set:", selectedChat);
+      if (existingConversation) {
+        setChatSearch(prevState => ({
+          ...prevState,
+          conversationId: existingConversation._id,
+          name: data.username,
+          image: data.avatar,
+          active: data.isOnline
+        }));
+
+        console.log("chatSearch", chatSearch);
+   
+
+        return;
+      }
+
+
+      // 3️⃣ Nếu chưa có, tạo mới cuộc trò chuyện
+      const createResponse = await fetch("http://localhost:8004/conversations/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          members: [user._id, receiverId],
+          isGroup: false
+        })
+      });
+
+      const newConversation = await createResponse.json();
+      if (createResponse.ok) {
+        console.log("Tạo cuộc trò chuyện mới thành công:", newConversation);
+       
+        console.log("newConversation", newConversation);
+        setChatSearch(prevState => ({
+          ...prevState,
+          conversationId: newConversation._id,
+          name: data.username,
+          image: data.avatar,
+          active: data.isOnline,
+          lastMessage: "",
+          lastMessageTime: Date.now()
+        }));
+
+        console.log("chatSearch", chatSearch);
+      
+      } else {
+        console.error("Lỗi khi tạo cuộc trò chuyện:", newConversation.message);
+      }
+    } catch (error) {
+      console.error("Lỗi kết nối server:", error);
     }
   };
 
@@ -728,7 +895,7 @@ export default function ChatApp() {
               {searchResult.username && <p>Tìm bạn qua số điện thoại</p>}
             </div>
 
-            <div className="search-user-info">
+            <div className="search-user-info" onClick={() => createNewChat(searchResult._id)}>
               <div className="img-user-search">
                 <img src={searchResult.avatar} alt={searchResult.username} className="avatar" />
               </div>
@@ -774,9 +941,8 @@ export default function ChatApp() {
                   <div className="chat-container">
                     <p className="chat-name">{chat.name}</p>
                     <p
-                      className={`chat-message ${
-                        chat.unreadCount > 0 ? "unread-message" : ""
-                      }`}
+                      className={`chat-message ${chat.unreadCount > 0 ? "unread-message" : ""
+                        }`}
                     >
                       {chat.lastMessageSenderId?.toString() ===
                         user._id.toString()
@@ -785,8 +951,8 @@ export default function ChatApp() {
                           : chat.lastMessage
                         }`
                         : chat.lastMessage.length > 10
-                        ? chat.lastMessage.slice(0, 10) + "..."
-                        : chat.lastMessage}
+                          ? chat.lastMessage.slice(0, 10) + "..."
+                          : chat.lastMessage}
 
                       {chat.unreadCount > 0 && (
                         <span className="unread-badge">
@@ -797,9 +963,8 @@ export default function ChatApp() {
                   </div>
                   <div className="chat-timestamp">
                     <p
-                      className={`chat-timestamp-item ${
-                        chat.unreadCount > 0 ? "unread-timestamp" : ""
-                      }`}
+                      className={`chat-timestamp-item ${chat.unreadCount > 0 ? "unread-timestamp" : ""
+                        }`}
                     >
                       {formatTimeMessage(chat.lastMessageTime)}
                     </p>
@@ -890,15 +1055,16 @@ export default function ChatApp() {
           <span className="chat-icon-text">Contacts</span>
         </div>
 
-        <div className="icon-item" onClick={toggleMenu}>
+        <div className="icon-item" onClick={toggleMenu} ref={menuRef}>
           <FaCog className="icon user-icon" title="Settings" />
           <span className="chat-icon-text">Setting</span>
 
           {showMenu && (
             <div className="settings-menu">
-              <button onClick={handleLogout} className="logout-btn">
+              <button onClick={() => handleLogout()} className="logout-btn">
                 Đăng xuất
               </button>
+
             </div>
           )}
         </div>
@@ -909,22 +1075,63 @@ export default function ChatApp() {
           <h2>Lời mời kết bạn</h2>
           {friendRequests.length > 0 ? (
             friendRequests.map((request) => (
+              console.log("request nhận được", request),
               <div key={request.id} className="friend-request-item">
-                <img src={request.avatar} alt={request.name} className="avatar" />
-                <p>{request.name}</p>
-                <button onClick={() => acceptRequest(request.id)}>Chấp nhận</button>
-                <button onClick={() => rejectRequest(request.id)}>Từ chối</button>
+
+                <div className="friend-info">
+                  <img src={request.senderId.avatar} alt="avatar" className="friend-avatar" />
+                  <p className="friend-name">{request.senderId.username}</p>
+                </div>
+                <div className="friend-actions">
+                  <button onClick={() => acceptRequest(request._id)}>Chấp nhận</button>
+                  <button onClick={() => rejectRequest(request._id)}>Từ chối</button>
+                </div>
+
               </div>
             ))
           ) : (
-            <p>Không có lời mời kết bạn nào.</p>
+            <p className="not-requestfriend">Không có lời mời kết bạn nào.</p>
           )}
         </div>
+      ) : selectedHeader === "Danh sách bạn bè" ? ( // Thêm điều kiện này
+          <div className="friends-list">
+          <h2>Danh sách bạn bè</h2>
+          {friends.length > 0 ? (
+              friends.map((friend) => (
+                console.log("friend nhận được", friend._id),
+                
+                <div key={friend._id} className="friend-item">
+                  <div className="friend-info">
+                  <img src={friend.avatar} alt="avatar" className="friend-avatar" onClick={() => {
+                    if (friend._id) {
+                      createNewChat(friend._id);
+                    } else {
+                      console.error("friend._id bị undefined:", friend);
+                    }
+                  }}/>
+                  <p className="friend-name">{friend.username}</p>
+                  <FaEllipsisV className="bacham-banbe" onClick={() => toggleMenuXoa(friend._id)} />
+                </div>
+                {selectedFriend === friend._id && (
+                  <div className="dropdown-menu">
+                    <button onClick={() => handleRemoveFriend(friend._id)}>Xóa bạn</button>
+                  </div>
+                )}
+
+                <br /><hr />
+              </div>
+
+            ))
+          ) : (
+            <p className="not-friend">Bạn chưa có bạn bè nào.</p>
+          )}
+        </div>
+
       ) : selectedChat ? (
-     
+
         <div className="chat-window">
           {/* Header */}
-         
+
           <div className="chat-header">
             <div className="avatar-container-main">
               <img src={selectedChat.image} alt="img" className="avatar" />
@@ -973,8 +1180,8 @@ export default function ChatApp() {
                 const prevDate =
                   index > 0
                     ? new Date(
-                        messages[index - 1].createdAt
-                      ).toLocaleDateString()
+                      messages[index - 1].createdAt
+                    ).toLocaleDateString()
                     : null;
                 const showDateDivider = currentDate !== prevDate;
 
@@ -1000,9 +1207,8 @@ export default function ChatApp() {
                     <div
                       key={index}
                       ref={(el) => (messageRefs.current[msg._id] = el)}
-                      className={`message-row ${isMe ? "me" : "them"} ${
-                        highlightedMessageId === msg._id ? "highlight" : ""
-                      }`}
+                      className={`message-row ${isMe ? "me" : "them"} ${highlightedMessageId === msg._id ? "highlight" : ""
+                        }`}
                     >
                       <div
                         className={`message-row ${isMe ? "me" : "them"}`}
@@ -1078,12 +1284,12 @@ export default function ChatApp() {
                             <span className="timestamp">
                               {msg.createdAt
                                 ? new Date(msg.createdAt).toLocaleTimeString(
-                                    [],
-                                    {
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    }
-                                  )
+                                  [],
+                                  {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  }
+                                )
                                 : ""}
                             </span>
                             {msg.status === "sending" ? (
@@ -1096,9 +1302,8 @@ export default function ChatApp() {
                         {/* Nút ba chấm khi hover */}
                         {hoveredMessageId === msg._id && (
                           <div
-                            className={`three-dots-icon ${
-                              isMe ? "left" : "right"
-                            }`}
+                            className={`three-dots-icon ${isMe ? "left" : "right"
+                              }`}
                           >
                             <FaEllipsisH
                               className="icon"
@@ -1109,9 +1314,8 @@ export default function ChatApp() {
                             />
                             {menuMessageId === msg._id && (
                               <div
-                                className={`message-menu ${
-                                  isMe ? "left" : "right"
-                                }`}
+                                className={`message-menu ${isMe ? "left" : "right"
+                                  }`}
                               >
                                 {!msg.isRecalled && (
                                   <div
@@ -1285,8 +1489,8 @@ export default function ChatApp() {
               <FaPaperPlane />
             </button>
           </div>
-            </div>
-        
+        </div>
+
       ) : (
         <>
           <div className="header-chat-window-item">
