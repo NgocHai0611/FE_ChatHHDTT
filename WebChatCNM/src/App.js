@@ -8,16 +8,19 @@ import Recover from "./Components/Recover/Recover";
 import VerifyEmail from "./Components/Register/verifyMail";
 import ForgotPassword from "./Components/ForgotPassword/ForgotPassword";
 import ChatApp from "./Components/ChatApp/ChatApp";
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css'; // Import CSS
+
 // Component để kiểm tra và hiển thị NavBar
 const Layout = ({ children }) => {
   const location = useLocation();
-  const hideNavBarPaths = ["/login", "/register", "/recover","/reset-password","/verify-email", "/chat-app"];
-   // Kiểm tra xem đường dẫn hiện tại có bắt đầu với các path trong hideNavBarPaths không
-   const shouldHideNavBar = hideNavBarPaths.some(path => location.pathname.startsWith(path));
+  const hideNavBarPaths = ["/login", "/register", "/recover", "/reset-password", "/verify-email", "/chat-app"];
+  // Kiểm tra xem đường dẫn hiện tại có bắt đầu với các path trong hideNavBarPaths không
+  const shouldHideNavBar = hideNavBarPaths.some(path => location.pathname.startsWith(path));
   return (
     <>
-     {/* Chỉ hiển thị NavBar nếu không nằm trong danh sách ẩn */}
-     {!shouldHideNavBar && <NavBar />}
+      {/* Chỉ hiển thị NavBar nếu không nằm trong danh sách ẩn */}
+      {!shouldHideNavBar && <NavBar />}
       {children}
     </>
   );
@@ -26,6 +29,8 @@ const Layout = ({ children }) => {
 function App() {
   return (
     <Router>
+      {/* Thêm ToastContainer vào đây để hiển thị thông báo toàn cục */}
+      <ToastContainer position="top-center"/>
       <Layout>
         <div className="App">
           <Routes>
@@ -34,7 +39,6 @@ function App() {
             <Route path="/register" element={<Register />} />
             <Route path="/reset-password/:token" element={<Recover />} />
             <Route path="/recover" element={<ForgotPassword />} />
-            <Route path="/verify-email/:token" element={<VerifyEmail />} />
             <Route path="/verify-email/:token" element={<VerifyEmail />} />
             <Route path="/chat-app" element={<ChatApp />} />
           </Routes>

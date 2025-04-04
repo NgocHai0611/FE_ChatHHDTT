@@ -21,20 +21,20 @@ const Recover = () => {
     // State để lưu mật khẩu và thông báo lỗi/success
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
-    const [feedbackMessage, setFeedbackMessage] = useState("");
-    const [error, setError] = useState("");
+   
+    
  
     const handleSubmit = async (e) => {
       e.preventDefault();
       
       // Kiểm tra xem mật khẩu và xác nhận mật khẩu có trùng khớp không
-      if (password !== confirmPassword) {
-          setError("Mật khẩu và xác nhận mật khẩu không khớp.");
-          return;
-      }
+      // if (password !== confirmPassword) {
+      //     setError("Mật khẩu và xác nhận mật khẩu không khớp.");
+      //     return;
+      // }
 
       // Gọi phương thức resetPassword
-      await resetPassword(token, password,confirmPassword, dispatch, navigate, setFeedbackMessage);
+      await resetPassword(token, password,confirmPassword, dispatch, navigate);
   };
 
  return (
@@ -54,8 +54,8 @@ const Recover = () => {
 
       {/* Right section */}
       <div className="recover-right">
-      {feedbackMessage && <div>{feedbackMessage}</div>}
-      {error && <div>{error}</div>}
+      
+     
         <form onSubmit={handleSubmit}>
           
           <div className="input-container">
@@ -85,7 +85,8 @@ const Recover = () => {
           </div>
           <button type="submit">Confirm</button>
         </form>
-
+      
+        
         <div className="or">or continue with</div>
         <div className="social-icons">
           <img src="/Google.png" alt="Google" className="icon" />

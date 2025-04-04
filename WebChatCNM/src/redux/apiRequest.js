@@ -1,100 +1,111 @@
-import axios  from "axios";
-import { forgotPasswordFailed, forgotPasswordStart, forgotPasswordSuccess, loginFailed, loginStart, loginSuccess, logoutFailed, logoutStart, logoutSuccess, registerFailed, registerStart, registerSuccess, resetPasswordFailed, resetPasswordStart, resetPasswordSuccess } from "./authSlice";
+import axios from "axios";
+import { 
+    forgotPasswordFailed, forgotPasswordStart, forgotPasswordSuccess, 
+    loginFailed, loginStart, loginSuccess, 
+    logoutFailed, logoutStart, logoutSuccess, 
+    registerFailed, registerStart, registerSuccess, 
+    resetPasswordFailed, resetPasswordStart, resetPasswordSuccess 
+} from "./authSlice";
 
-export const loginUser = async (user, dispatch, navigate, setError) => {
+import {  toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css'; // Import CSS
+
+
+export const loginUser = async (user, dispatch, navigate) => {
     dispatch(loginStart());
     try {
         const res = await axios.post("/v1/auth/login", user);
 
-        // Check if there is any error message from the backend
         if (res.data.message) {
-            setError(res.data.message); // Set error message
+            toast.error(res.data.message); // Hiển thị thông báo lỗi
             dispatch(loginFailed());
             return;
         }
 
         dispatch(loginSuccess(res.data));
-        navigate("/"); // Redirect to homepage
+        navigate("/");
+        toast.success("Đăng nhập thành công! Chào mừng bạn đến với hệ thống!"); // Thông báo thành công
+
     } catch (error) {
-        console.log(error);
-         // Kiểm tra lỗi trả về từ API
-         if (error.response) {
-            // Lỗi trả về từ server
-            const errorMessage = error.response.data?.message || "Đăng nhập thất bại. Vui lòng thử lại.";
-            setError(errorMessage);
+        console.log("Error caught:", error);
+
+        if (error.response) {
+            const errorMessage = error.response?.data?.message || "Đã có lỗi từ server, vui lòng thử lại!";
+            toast.error(errorMessage); // Hiển thị thông báo lỗi từ server
         } else if (error.request) {
-            // Lỗi không nhận được phản hồi từ server
-            setError("Không nhận được phản hồi từ server. Vui lòng thử lại.");
+            toast.error("Không nhận được phản hồi từ máy chủ. Vui lòng thử lại.");
         } else {
-            // Lỗi khác
-            setError("Đã xảy ra lỗi. Vui lòng thử lại.");
+            toast.error("Đã xảy ra lỗi. Vui lòng thử lại.");
         }
 
         dispatch(loginFailed());
-    
     }
 };
 
 
-export const registerUser = async (user, dispatch, navigate, setFeedbackMessage) => {
+
+export const registerUser = async (user, dispatch, navigate) => {
     dispatch(registerStart());
     try {
         await axios.post("/v1/auth/register", user);
         dispatch(registerSuccess());
-        setFeedbackMessage("Registration successful! Please check your email for verification.");
         navigate("/login");
+        toast.success("Đăng ký thành công! Vui lòng kiểm tra email để xác minh tài khoản."); // Thông báo thành công
     } catch (error) {
         dispatch(registerFailed());
-        setFeedbackMessage(error.response?.data?.message || "Registration failed. Please try again.");
+        const errorMessage = error.response?.data?.message || "Đăng ký thất bại. Vui lòng thử lại.";
+        toast.error(errorMessage); // Thông báo lỗi
     }
 };
 
 
-
-export const logout= async(dispatch,id,navigate,accessToken,axiosJWT) =>{
-
+export const logout = async (dispatch, id, navigate, accessToken, axiosJWT) => {
     dispatch(logoutStart());
     try {
-         await axiosJWT.post("/v1/auth/logout",id,{
-            headers: {token: `Bearer ${accessToken}`}
-
-         })
+        await axiosJWT.post("/v1/auth/logout", id, {
+            headers: { token: `Bearer ${accessToken}` }
+        });
         dispatch(logoutSuccess());
-        navigate("/login")
-    
+        navigate("/login");
+        toast.success("Đăng xuất thành công!"); // Thông báo thành công
     } catch (error) {
         dispatch(logoutFailed());
+        toast.error("Đã có lỗi khi đăng xuất. Vui lòng thử lại."); // Thông báo lỗi
     }
-}
+};
 
-export const forgotPassword = async (email, dispatch, setFeedbackMessage) => {
+
+export const forgotPassword = async (email, dispatch) => {
     dispatch(forgotPasswordStart());
     try {
         const res = await axios.post("/v1/auth/forgot-password", { email });
 
         dispatch(forgotPasswordSuccess(res.data.message));
-        setFeedbackMessage(res.data.message);  // You can set a success message to display to the user
+        
+        toast.success("Chúng tôi đã gửi hướng dẫn đặt lại mật khẩu đến email của bạn."); // Thông báo thành công
     } catch (error) {
-        const errorMessage = error.response?.data?.message || "Something went wrong, please try again.";
+        const errorMessage = error.response?.data?.message || "Đã xảy ra lỗi, vui lòng thử lại.";
         dispatch(forgotPasswordFailed(errorMessage));
-        setFeedbackMessage(errorMessage);  // Set the error message to display to the user
+       
+        toast.error(errorMessage); // Thông báo lỗi
     }
 };
 
-export const resetPassword = async (token, newPassword, confirmPassword, dispatch, navigate, setFeedbackMessage) => {
+
+export const resetPassword = async (token, newPassword, confirmPassword, dispatch, navigate) => {
     dispatch(resetPasswordStart());
     try {
-        // Gửi yêu cầu POST tới API reset mật khẩu với token trong URL và mật khẩu mới trong body
-        const res = await axios.post(`/v1/auth/reset-password/${token}`, { newPassword,confirmPassword  });
+        const res = await axios.post(`/v1/auth/reset-password/${token}`, { newPassword, confirmPassword });
 
-        // Nếu thành công, dispatch action thành công và hiển thị thông báo thành công
         dispatch(resetPasswordSuccess(res.data.message));
-        setFeedbackMessage(res.data.message);  // Hiển thị thông báo thành công cho người dùng
-        navigate("/login");  // Chuyển hướng đến trang đăng nhập (hoặc trang nào đó bạn muốn)
+       
+        navigate("/login");  // Chuyển hướng đến trang đăng nhập
+        toast.success("Đổi mật khẩu thành công!"); // Thông báo thành công
     } catch (error) {
-        // Nếu có lỗi, dispatch action thất bại và hiển thị thông báo lỗi
-        const errorMessage = error.response?.data?.message || "Something went wrong, please try again.";
+        const errorMessage = error.response?.data?.message || "Đã xảy ra lỗi, vui lòng thử lại.";
         dispatch(resetPasswordFailed(errorMessage));
-        setFeedbackMessage(errorMessage);  // Hiển thị thông báo lỗi cho người dùng
+       
+        toast.error(errorMessage); // Thông báo lỗi
     }
 };
+
