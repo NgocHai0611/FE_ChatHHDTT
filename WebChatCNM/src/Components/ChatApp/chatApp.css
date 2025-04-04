@@ -479,7 +479,7 @@
   top: 0;
   background-color: #f0f0f0; /* Màu nền tùy chỉnh */
   width: 70px; /* Điều chỉnh độ rộng nếu cần */
-  
+  z-index: 9999;
  
 }
 
@@ -968,8 +968,8 @@
 
 /* Modal */
 .modal-media {
-    max-width: 60%; /* Giới hạn kích thước hình ảnh/video */
-    max-height: 60%; /* Giới hạn chiều cao */
+    max-width: 800px; /* Giới hạn kích thước hình ảnh/video */
+    max-height: 600px; /* Giới hạn chiều cao */
     object-fit: contain; /* Giữ tỷ lệ gốc của hình ảnh/video */
 }
 
@@ -1068,6 +1068,7 @@
     flex-direction: column;
     align-items: flex-start;
     justify-content: center;
+    position: relative;
 }
 .search-phone span{
   color: #3b82f6;
@@ -1186,3 +1187,184 @@
   background-color: #d32f2f;
 }
 
+.friend-label {
+ position: absolute;
+  background-color: #4CAF50; /* Màu xanh lá cây */
+  color: white;
+  font-weight: bold;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 14px;
+  text-align: center;
+  margin-top: 5px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  top: 10px;
+  right: -100px;
+  
+}
+.cancel-button{
+  position: absolute;
+  background-color: #fb4343; /* Màu xanh lá cây */
+  color: white;
+  font-weight: bold;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 14px;
+  text-align: center;
+  margin-top: 5px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  top: 0;
+  right: -100px;
+  width: 80px;
+}
+.chat-image {
+  max-width: 100%;
+  max-height: 100%;
+  width: 200px;
+  height: 200px; /* Giữ tỷ lệ ảnh */
+  border-radius: 10px;
+  object-fit: cover; /* Giúp ảnh không bị méo */
+  box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.2); /* Đổ bóng nhẹ */
+  cursor: pointer; /* Thêm hiệu ứng khi click */
+  transition: transform 0.3s ease-in-out; /* Hiệu ứng zoom */
+}
+
+.chat-image:hover {
+  transform: scale(1.05); /* Phóng to nhẹ khi hover */
+}
+
+.chat-video {
+  max-width: 100%;
+  max-height: 100%;
+  width: 200px;
+  height: 200px; /* Giữ tỷ lệ ảnh */
+  border-radius: 10px;
+  object-fit: cover; /* Giúp ảnh không bị méo */
+  box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.2); /* Đổ bóng nhẹ */
+  cursor: pointer; /* Thêm hiệu ứng khi click */
+  transition: transform 0.3s ease-in-out; /* Hiệu ứng zoom */
+}
+.chat-video:hover {
+  transform: scale(1.05); /* Phóng to nhẹ khi hover */
+}
+
+/* Modal Overlay */
+.modal-overlayuser {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 99999;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.5); /* Màu nền tối nhẹ */
+}
+
+/* Modal Content */
+.modal-contentuser {
+  background-color: #ecedef;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 500px;
+  padding: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 9999;  /* Đảm bảo modal sẽ ở trên các phần tử khác */
+  animation: modal-show 0.3s ease-in-out;
+  align-items: flex-start;
+  border: 1px solid #ccc; /* Viền nhẹ */
+}
+
+/* Đảm bảo các phần tử khác trên trang không bị ảnh hưởng */
+.chat-container {
+  position: relative;
+  z-index: 1;  /* Đảm bảo các phần tử chat ở dưới modal */
+}
+
+/* Close Button */
+.close-btnuser {
+  position: absolute;
+  top: 0;
+  right: 10px;
+  font-size: 50px;
+  color: #888;
+  cursor: pointer;
+  transition: color 0.3s;
+}
+
+.close-btnuser:hover {
+  color: #ff4d4d;
+}
+
+/* Avatar Style */
+.profile-avataruser {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  margin-bottom: 20px;
+  object-fit: cover;
+  border: 2px solid #f1f1f1;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+ 
+}
+.profile-use{
+ z-index: 1002; /* Đảm bảo avatar ở trên modal */
+ margin-top: -20px;
+ display: flex;
+  flex-direction: row;
+}
+.profile-use p{
+  margin-top: 30px;
+  margin-left: 10px;
+}
+.profile-avataruser-nen{
+  width: 460px;
+  object-fit: cover;
+  height: 200px;
+  border-radius: 10px;
+  position: relative;
+  top: 0;
+  align-items: center;
+  margin-top: 20px;
+}
+.thongtin-canhan{
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.modal-overlayuser p{
+  font-size: 16px;
+}
+.avatar-icon-label{
+  margin-top: 50px;
+  margin-left: -20px;
+
+}
+.username-input{
+  font-weight: bold;
+  font-size: 18px;
+}
+
+.thongtin-canhan p {
+  display: flex;
+  align-items: center; /* Canh giữa theo chiều dọc */
+  margin-bottom: 10px; /* Thêm khoảng cách dưới mỗi dòng */
+}
+
+.thongtin-canhan strong {
+  width: 200px; /* Đặt chiều rộng cố định cho strong để chúng có cùng độ rộng */
+  margin-right: 10px; /* Khoảng cách giữa strong và input */
+  display: flex;
+  align-items: flex-start;
+}
+
+.thongtin-canhan input {
+  flex-grow: 1; /* Để input chiếm hết phần không gian còn lại */
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}

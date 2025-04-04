@@ -26,6 +26,8 @@ import {
   FaUserPlus,
   FaUserCheck, // Icon Groups
   FaEllipsisH, // Icon More
+  FaCamera,
+  FaEye, FaEyeSlash
 } from "react-icons/fa";
 
 
@@ -42,6 +44,7 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useLocation } from "react-router-dom";
 import { set } from "mongoose";
+// import { image } from "../../../../../BE_ChatHHDTT/config/cloudConfig";
 const socket = io("http://localhost:8004", { transports: ["websocket"] });
 
 Modal.setAppElement("#root");
@@ -56,6 +59,7 @@ export default function ChatApp() {
   const [selectedHeader, setSelectedHeader] = useState("");
   const navigate = useNavigate();
   const messageRefs = useRef({});
+  
   dayjs.extend(relativeTime);
   dayjs.locale("vi");
   const [selectedtitle, setSelectedTitle] = useState(
@@ -75,9 +79,25 @@ export default function ChatApp() {
   }, [messages]);
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef(null); // Tham chiếu đến menu
+  const friendMenuRef = useRef(null); // Tham chiếu đến menu xóa bạn
+  const friendRef = useRef(null); // Tham chiếu đến phần tử bạn
+  
 
   const location = useLocation();
   const user = location.state?.user; // Lấy user truyền từ navigate
+
+  //Update user
+  const [showModal, setShowModal] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState(null);
+  const [updatedUser, setUpdatedUser] = useState({
+    username: '',
+    phone: '',
+    password: '',
+    avatar: ''
+  });
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+
   const [inputText, setInputText] = useState("");
   const inputRef = useRef(null);
   const [isFriendRequestSent, setIsFriendRequestSent] = useState(false);
@@ -87,6 +107,8 @@ export default function ChatApp() {
   const [friends, setFriends] = useState([]); // Lưu danh sách bạn bè
   const [selectedFriend, setSelectedFriend] = useState(null);// xóa bạn bè
   const [chatSearch, setChatSearch] = useState([]);
+
+  
 
   console.log(user);
 
@@ -172,21 +194,54 @@ export default function ChatApp() {
   }, [selectedChat]);
 
   { /* Nhắn tin */ }
-  const sendMessage = () => {
-    if (!inputText.trim()) return;
-    const messageData = {
+  const sendMessage = (fileUrl = null, fileName = null) => {
+    console.log("fileUrlsendMessage", fileUrl);
+    console.log("fileNamesendMessage", fileName);
+
+    if (!inputText.trim() && !fileUrl) {
+      console.log("❌ Tin nhắn rỗng, không gửi");
+      return;
+    }
+
+    let fileType = "text"; // Mặc định là tin nhắn văn bản
+    let messageData = {
       conversationId: selectedChat.conversationId,
       senderId: user._id,
       messageType: "text",
-      text: inputText,
+      text: inputText || "",
       replyTo: replyingMessage ? replyingMessage._id : null,
     };
 
+    if (fileUrl) {
+      const imageExtensions = ["jpg", "jpeg", "png", "gif"];
+      const videoExtensions = ["mp4", "mov"];
+      const fileExtensions = ["pdf", "docx", "xlsx", "doc", "pptx"];
+
+      const fileExtension = fileName.split(".").pop().toLowerCase();
+
+      if (imageExtensions.includes(fileExtension)) {
+        fileType = "image";
+        messageData.imageUrl = fileUrl;
+      } else if (videoExtensions.includes(fileExtension)) {
+        fileType = "video";
+        messageData.videoUrl = fileUrl;
+      } else if (fileExtensions.includes(fileExtension)) {
+        fileType = "file";
+        messageData.fileUrl = fileUrl;
+      }
+
+      messageData.messageType = fileType;
+      messageData.fileName = fileName;
+    }
+
+    console.log("Dữ liệu tin nhắn gửi qua socket:", messageData); // Debug
+
     // Gửi lên socket
     socket.emit("sendMessage", messageData);
-    setReplyingMessage(null); // clear sau khi gửi
+    setReplyingMessage(null); // Clear sau khi gửi
     setInputText("");
   };
+
 
   { /* Pin tin nhắn */ }
   const [pinnedMessage, setPinnedMessage] = useState(null);
@@ -232,7 +287,6 @@ export default function ChatApp() {
   { /* Lắng nghe sự kiện khi chọn chat */ }
   const handleSelectChat = async (chat) => {
     const messages = await fetchMessagesByConversationId(chat.conversationId);
-    console.log("mess", messages);
     setSelectedChat({
       ...chat,
     });
@@ -276,8 +330,12 @@ export default function ChatApp() {
   // Đóng menu khi click ra ngoài
   useEffect(() => {
     const handleClickOutsideMenu = (event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        setShowMenu(false);
+      // Đóng cả menu đăng xuất và menu xóa bạn khi click ra ngoài
+      if ((menuRef.current && !menuRef.current.contains(event.target))) {
+        setShowMenu(false); // Đóng menu đăng xuất
+      }
+        if ((friendRef.current && !friendRef.current.contains(event.target)) ) {
+        setSelectedFriend(null); // Đóng menu "Xóa bạn"
       }
     };
 
@@ -285,7 +343,7 @@ export default function ChatApp() {
     return () => {
       document.removeEventListener("mousedown", handleClickOutsideMenu);
     };
-  }, []);
+  }, []); // Chạy khi component mount và unmount
 
   // Hàm xử lý đăng xuất
   const handleLogout = () => {
@@ -459,6 +517,9 @@ export default function ChatApp() {
     });
   };
 
+
+
+
   // Xử lý chọn video
   const handleVideoUpload = (e) => {
     const file = e.target.files[0];
@@ -468,44 +529,79 @@ export default function ChatApp() {
     }
   };
 
-  // Xử lý chọn file
-  const handleFileUpload = (e) => {
+  useEffect(() => {
+    socket.on("newMessage", (message) => {
+      setChats((prevChats) =>
+        prevChats.map((chat) =>
+          chat.conversationId === message.conversationId
+            ? {
+              ...chat,
+              lastMessage: message.lastMessage,
+              unreadCount: chat.unreadCount + 1 // ✅ Tăng số tin chưa đọc ngay
+            }
+            : chat
+        )
+      );
+
+      // Nếu tin nhắn thuộc cuộc trò chuyện hiện tại, cập nhật tin nhắn mới ngay
+      if (selectedChat?.conversationId === message.conversationId) {
+        setMessages((prevMessages) => [...prevMessages, message]); // ✅ Thêm tin nhắn mới vào danh sách
+      }
+    });
+
+    return () => {
+      socket.off("newMessage");
+    };
+  }, [selectedChat]);
+
+
+  //Xử lý upload ảnh
+
+  const handleFileUpload = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const fileUrl = URL.createObjectURL(file); // Tạo URL tạm cho file
-      const newMessage = {
-        text: "File attached",
-        sender: "me",
-        sentTime: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        receivedTime: null,
-        status: "sending",
-        file: fileUrl,
-        fileName: file.name,
-      };
+    console.log("file handleFileUpload", file);
+    if (!file) return;
 
-      setMessages([...messages, newMessage]);
+    // Reset input file để kích hoạt sự kiện onChange khi chọn lại cùng file
+    e.target.value = ""; 
 
-      setTimeout(() => {
-        setMessages((prevMessages) =>
-          prevMessages.map((msg, index) =>
-            index === prevMessages.length - 1
-              ? {
-                ...msg,
-                status: "sent",
-                receivedTime: new Date().toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                }),
-              }
-              : msg
-          )
-        );
-      }, 1000);
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("conversationId", selectedChat.conversationId);
+    formData.append("senderId", user._id);
+
+    console.log("formData", formData);
+    console.log("Các key trong FormData:");
+    for (let key of formData.keys()) {
+      console.log(key);
+    }
+    
+
+    const fileUrl = URL.createObjectURL(file) + `#${Math.random()}`;
+    console.log("fileUrl", fileUrl);
+    try {
+      const response = await fetch("http://localhost:8004/messages/upload", {
+        method: "POST",
+        body: formData,
+      });
+      console.log("Raw response:", response);
+
+
+      if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+
+      const data = await response.json();
+      console.log("Response data:", data);
+      const uploadedFileUrl = data.fileUrl || data.imageUrl || data.videoUrl; // URL Cloudinary\
+      console.log("Uploaded file URL:", uploadedFileUrl);
+      sendMessage(uploadedFileUrl, file.name); // Gửi tin nhắn với URL đã upload
+
+    } catch (error) {
+      console.error("Upload error:", error);
     }
   };
+
+
+
 
   const [isOpen, setIsOpen] = useState(false);
   const [mediaUrl, setMediaUrl] = useState("");
@@ -583,6 +679,7 @@ export default function ChatApp() {
 
   // Tìm kiếm user theo sđt
   const handleSearchUser = async () => {
+    loadFriends();
     try {
       const response = await fetch(`http://localhost:8004/friends/search?phone=${searchTerm}`);
       const data = await response.json();
@@ -600,6 +697,7 @@ export default function ChatApp() {
   };
   //Gửi lời mời kết bạn
   const handleSendFriendRequest = async (receiverId) => {
+   
     try {
       const response = await fetch("http://localhost:8004/friends/send-request", {
         method: "POST",
@@ -610,7 +708,13 @@ export default function ChatApp() {
       const data = await response.json();
       if (response.ok) {
 
+        // Cập nhật trạng thái ngay lập tức để giao diện thay đổi
+        setIsFriendRequestSent(true);
+
+        // Gọi lại loadFriends để cập nhật danh sách bạn bè nếu API cập nhật ngay
+        loadFriends();
         toast.success("Đã gửi lời mời kết bạn!"); // Hiển thị thông báo thành công
+       
       } else {
         toast.error(data.message); // Hiển thị thông báo lỗi
       }
@@ -618,6 +722,31 @@ export default function ChatApp() {
       console.error("Lỗi khi gửi lời mời:", error);
     }
   };
+
+  //Thu hồi lời mời kết bạn 
+  const handleCancelFriendRequest = async (friendId) => {
+    try {
+      const response = await fetch("http://localhost:8004/friends/cancel-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ senderId: user._id, receiverId: friendId }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Lỗi khi thu hồi lời mời kết bạn");
+      }
+
+      setIsFriendRequestSent(false); // Cập nhật lại trạng thái
+      toast.success("Đã thu hồi lời mời kết bạn!");
+    } catch (error) {
+      console.error("Lỗi khi thu hồi lời mời kết bạn:", error);
+      toast.error("Không thể thu hồi lời mời!");
+    }
+  };
+  // Gọi hàm loadFriendRequests khi component được render
+  useEffect(() => {
+    loadFriendRequests();
+  }, []);
 
 
   const loadFriendRequests = async () => {
@@ -649,6 +778,13 @@ export default function ChatApp() {
       console.error("Lỗi khi tải danh sách bạn bè:", error);
     }
   };
+
+  // useEffect để load danh sách bạn bè khi component mount hoặc user._id thay đổi
+  useEffect(() => {
+    if (user._id) {
+      loadFriends();
+    }
+  }, [user._id]);
 
   // Gọi API để hủy kết bạn
   const handleRemoveFriend = async (friendId) => {
@@ -727,6 +863,7 @@ export default function ChatApp() {
         );
 
         toast.success(data.message);
+        loadFriendRequests(); // Cập nhật lại danh sách sau khi chấp nhận
       } else {
         toast.error(data.message || "Có lỗi xảy ra!");
 
@@ -752,6 +889,7 @@ export default function ChatApp() {
           prevRequests.filter((request) => request._id !== requestId)
         );
         toast.success(data.message);
+        loadFriendRequests(); // Cập nhật lại danh sách sau khi từ chối
       } else {
         toast.error(data.message || "Có lỗi xảy ra!");
       }
@@ -846,6 +984,74 @@ export default function ChatApp() {
     }
   };
 
+  //Hàm xử lý cập nhật thông tin user
+  useEffect(() => {
+    if (user) {
+      setUpdatedUser({
+        username: user.username,
+        phone: user.phone,
+        password: '',
+        avatar: user.avatar,
+      });
+    }
+  }, [user]); // Chạy lại mỗi khi user thay đổi (nếu có)
+
+  const handleChange = (e) => {
+    setPassword(e.target.value);
+    setUpdatedUser({
+      ...updatedUser,
+      [e.target.name]: e.target.value
+    });
+   
+  };
+
+  const handleAvatarChange = (e) => {
+    const file = e.target.files[0];
+    setAvatarPreview(URL.createObjectURL(file));
+    setUpdatedUser({
+      ...updatedUser,
+      avatar: file
+    });
+  };
+
+  const handleUpdate = async () => {
+    console.log("Response trước khi:", updatedUser);
+    try {
+      const formData = new FormData();
+      formData.append('username', updatedUser.username);
+      formData.append('phone', updatedUser.phone);
+      formData.append('password', updatedUser.password);
+      if (updatedUser.avatar) {
+        formData.append('avatar', updatedUser.avatar);
+      }
+
+      const response = await axios.put(`http://localhost:8004/users/update/${user._id}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      
+
+      // Sau khi cập nhật thành công, cập nhật lại user với thông tin mới
+      setUpdatedUser({
+        username: response.data.username,
+        phone: response.data.phone,
+        password: '',
+        avatar: response.data.avatar,
+      });
+      console.log("Response updated:", updatedUser);
+      toast.success("Cập nhật thông tin thành công!");
+      setShowModal(false);
+    } catch (error) {
+      console.error("Error updating user:", error);
+    }
+  };
+
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
+  };
+  
+
   return (
     <div className="chat-app">
       <ToastContainer position="top-right" autoClose={3000} />
@@ -895,19 +1101,28 @@ export default function ChatApp() {
               {searchResult.username && <p>Tìm bạn qua số điện thoại</p>}
             </div>
 
-            <div className="search-user-info" onClick={() => createNewChat(searchResult._id)}>
+            <div className="search-user-info" >
               <div className="img-user-search">
-                <img src={searchResult.avatar} alt={searchResult.username} className="avatar" />
+                <img src={searchResult.avatar} alt={searchResult.username} className="avatar" onClick={() => createNewChat(searchResult._id)} />
               </div>
               <div className="info-user-search">
                 <p className="search-username">{searchResult.username}</p>
                 <p className="search-phone">Số điện thoại: <span>{searchResult.phone}</span></p>
 
                 {searchResult._id !== user._id && (
-                  isFriendRequestSent ? (
-                    <span className="added-request">Đã gửi lời mời kết bạn</span>
+                  friends.some(friend => friend._id === searchResult._id) ? (
+                    <span className="friend-label">Bạn bè</span>
+                  ) : isFriendRequestSent ? (
+                      <>
+                        <span className="added-request">Đã gửi lời mời kết bạn</span>
+                        <button onClick={() => handleCancelFriendRequest(searchResult._id)} className="cancel-button">
+                          Thu hồi
+                        </button>
+                      </>
                   ) : (
-                    <button onClick={() => handleSendFriendRequest(searchResult._id)}>Kết bạn</button>
+                    <button onClick={() => handleSendFriendRequest(searchResult._id)}>
+                      Kết bạn
+                    </button>
                   )
                 )}
               </div>
@@ -1043,9 +1258,114 @@ export default function ChatApp() {
         )}
       </div>
       <div className="icon-container-left">
-        <div className="icon-item">
-          <img src={user.avatar} alt="" />
-        </div>
+        {/* Avatar nhấn vào để mở modal */}
+        {user && (
+          <div className="icon-item" onClick={() => setShowModal(true)}>
+            <img src={user.avatar} alt="Avatar" className="chat-avatar" />
+          </div>
+        )}
+        {/* Modal hiển thị thông tin user */}
+        {showModal && user && (
+          <div className="modal-overlayuser"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) { // Kiểm tra xem có click vào overlay (ngoài modal)
+                setShowModal(false); // Đóng modal
+              }
+            }}>
+            <div className="modal-contentuser">
+              <span className="close-btnuser" onClick={() => setShowModal(false)}>&times;</span>
+              <h5>Thông tin tài khoản</h5>
+              <img
+                src="https://res-console.cloudinary.com/dapvuniyx/thumbnails/v1/image/upload/v1742811884/Y3ptcjF1bmJwcXh3MXRoMWw4aTI=/drilldown"
+                alt=""
+                className="profile-avataruser-nen"
+              />
+              <div className="profile-use">
+                <img
+                  src={avatarPreview || user.avatar}
+                  alt="Avatar"
+                  className="profile-avataruser"
+                />
+                {/* Thay input bằng icon */}
+                <label htmlFor="avatar-upload" className="avatar-icon-label">
+                  <FaCamera size={25} color="black"/> {/* Thêm icon từ react-icons */}
+                </label>
+                <input
+                  id="avatar-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarChange}
+                  className="avatar-upload"
+                  style={{ display: "none" }}  // Ẩn input mặc định đi
+                />
+                <p>
+                  <input
+                    type="text"
+                    name="username"
+                    value={updatedUser.username}
+                    onChange={handleChange}
+                    placeholder="Nhập tên mới"
+                    className="username-input"
+                  />
+                </p>
+              </div>
+
+              <div className="thongtin-canhan">
+                <h5>Thông tin cá nhân</h5>
+                <p>
+                  <strong>Email:</strong> 
+                  <input
+                    type="text"
+                    name="email"
+                    value={user.email}
+                    // onChange={handleChange}
+                    readOnly // Chỉ xem, không chỉnh sửa được
+                    placeholder="Nhập email mới"
+                   
+                  />
+                </p>
+                <p>
+                  <strong>Số điện thoại:</strong>
+                  <input
+                    type="text"
+                    name="phone"
+                    value={updatedUser.phone}
+                    onChange={handleChange}
+                    placeholder="Nhập số điện thoại mới"
+                  />
+                </p>
+                <p>
+                  <strong>Mật khẩu:</strong>
+                  <input
+                    type={showPassword ? "text" : "password"} // Đổi loại input giữa text và password
+                    name="password"
+                    value={updatedUser.password}
+                    onChange={handleChange}
+                    placeholder="Nhập mật khẩu mới"
+                    style={{ paddingRight: "30px" }} // Dành không gian cho icon
+                  />
+                  <span
+                    onClick={togglePasswordVisibility}
+                    style={{
+                      position: "absolute",
+                      right: "30px",
+                      top: "82.5%",
+                      transform: "translateY(-50%)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {showPassword ? <FaEyeSlash /> : <FaEye />}
+                  </span>
+                </p>
+              </div>
+
+              <button onClick={handleUpdate} className="update-btn">
+                Cập nhật
+              </button>
+            </div>
+          </div>
+        )}
+        
         <div className="icon-item" onClick={showChatlists}>
           <FaComments className="icon chat-icon" title="Chat" />
           <span className="chat-icon-text">Chats</span>
@@ -1100,7 +1420,7 @@ export default function ChatApp() {
               friends.map((friend) => (
                 console.log("friend nhận được", friend._id),
                 
-                <div key={friend._id} className="friend-item">
+                <div key={friend._id} className="friend-item" ref={friendRef}>
                   <div className="friend-info">
                   <img src={friend.avatar} alt="avatar" className="friend-avatar" onClick={() => {
                     if (friend._id) {
@@ -1110,10 +1430,10 @@ export default function ChatApp() {
                     }
                   }}/>
                   <p className="friend-name">{friend.username}</p>
-                  <FaEllipsisV className="bacham-banbe" onClick={() => toggleMenuXoa(friend._id)} />
+                      <FaEllipsisV className="bacham-banbe" onClick={() => toggleMenuXoa(friend._id)}  />
                 </div>
                 {selectedFriend === friend._id && (
-                  <div className="dropdown-menu">
+                      <div className="dropdown-menu" ref={friendMenuRef} >
                     <button onClick={() => handleRemoveFriend(friend._id)}>Xóa bạn</button>
                   </div>
                 )}
@@ -1188,7 +1508,6 @@ export default function ChatApp() {
                 const isMe =
                   (msg.sender?._id || msg.senderId?._id || msg.senderId) ===
                   user._id;
-
                 return (
                   <>
                     {showDateDivider && (
@@ -1242,34 +1561,35 @@ export default function ChatApp() {
                                   <span className="reply-preview-text">
                                     {msg.replyTo.text ||
                                       msg.replyTo.fileName ||
-                                      (msg.replyTo.image && "Ảnh") ||
+                                        (msg.replyTo.imageUrl && "Ảnh") ||
                                       (msg.replyTo.video && "Video")}
                                   </span>
                                 </div>
                               )}
 
                               {msg.text && <p>{msg.text}</p>}
-                              {msg.image && (
+                                {msg.imageUrl && (
                                 <img
-                                  src={msg.image}
+                                    src={msg.imageUrl}
                                   alt="sent"
                                   className="chat-image"
-                                  onClick={() => openModal(msg.image, "image")}
-                                />
+                                    onClick={() => openModal(msg.imageUrl, "image")}
+                                  />
+                                  
                               )}
-                              {msg.video && (
+                                {msg.videoUrl && (
                                 <video
                                   controls
                                   className="chat-video"
-                                  onClick={() => openModal(msg.video, "video")}
+                                    onClick={() => openModal(msg.videoUrl, "video")}
                                 >
-                                  <source src={msg.video} type="video/mp4" />
+                                    <source src={msg.videoUrl} type="video/mp4" />
                                 </video>
                               )}
-                              {msg.file && (
+                              {msg.fileUrl && (
                                 <div className="file-message">
                                   <a
-                                    href={msg.file}
+                                      href={msg.fileUrl}
                                     download={msg.fileName}
                                     className="file-link"
                                   >
@@ -1407,7 +1727,7 @@ export default function ChatApp() {
                 type="file"
                 accept="image/*"
                 multiple
-                onChange={handleImageUpload}
+                onChange={(e) => handleFileUpload(e, "image")}
                 style={{ display: "none" }}
                 id="imageUpload"
               />
@@ -1418,7 +1738,7 @@ export default function ChatApp() {
               <input
                 type="file"
                 accept="video/*"
-                onChange={handleVideoUpload}
+                onChange={(e) => handleFileUpload(e, "video")}
                 style={{ display: "none" }}
                 id="videoUpload"
               />
@@ -1428,7 +1748,7 @@ export default function ChatApp() {
 
               <input
                 type="file"
-                onChange={handleFileUpload}
+                onChange={(e) => handleFileUpload(e, "file")}
                 style={{ display: "none" }}
                 id="fileUpload"
               />
