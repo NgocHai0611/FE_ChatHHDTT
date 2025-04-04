@@ -10,7 +10,7 @@ const Register = () => {
   const [password, setPassword] = useState("");
   // const [username, setUsername] = useState("");
   const [phone, setPhone] = useState("");
-  const [feedbackMessage, setFeedbackMessage] = useState(""); 
+ 
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
@@ -22,7 +22,7 @@ const Register = () => {
     const newUser = { email, password,phone };
 
     
-    registerUser(newUser, dispatch, navigate, setFeedbackMessage); 
+    registerUser(newUser, dispatch, navigate); 
   };
 
   return (
@@ -45,19 +45,23 @@ const Register = () => {
             placeholder="Enter your Phone number"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
+            required
           />
           <input
-            type="email"
+            type="text"
             placeholder="Enter your email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            required
           />
+
           <div className="input-container">
             <input
               type={showPassword ? "text" : "password"}
               placeholder="Enter your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              required
             />
             <span className="password-toggle" onClick={togglePassword}>
               <i className={`fas ${showPassword ? "fa-eye-slash" : "fa-eye"}`}></i>
@@ -65,7 +69,7 @@ const Register = () => {
           </div>
           <button type="submit">Sign Up</button>
          
-        {feedbackMessage && <div className="feedback-message">{feedbackMessage}</div>}
+       
         </form>
 
         

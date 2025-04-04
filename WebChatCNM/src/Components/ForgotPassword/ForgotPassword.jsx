@@ -11,7 +11,7 @@ const ForgotPassword = () => {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        forgotPassword(email, dispatch, setFeedbackMessage);
+        forgotPassword(email, dispatch);
     };
 
 
@@ -42,7 +42,7 @@ const ForgotPassword = () => {
           />
           <button type="submit">Send Reset Link</button>
         </form>
-        {feedbackMessage && <div className="feedback-message">{feedbackMessage}</div>}
+        
 
         <div className="or">or continue with</div>
         <div className="social-icons">
