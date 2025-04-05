@@ -27,7 +27,7 @@ import {
   FaUserCheck, // Icon Groups
   FaEllipsisH, // Icon More
 } from "react-icons/fa";
-
+import { FiLogOut } from "react-icons/fi"; // ✅ Đúng
 
 import "./chatApp.css";
 import dayjs from "dayjs";
@@ -85,15 +85,13 @@ export default function ChatApp() {
   const [friendRequests, setFriendRequests] = useState([]); //Lưu danh sách lời mời kết bạn
   const [showFriendRequests, setShowFriendRequests] = useState(false); // Hiển thị ds lời mời kết bạn
   const [friends, setFriends] = useState([]); // Lưu danh sách bạn bè
-  const [selectedFriend, setSelectedFriend] = useState(null);// xóa bạn bè
+  const [selectedFriend, setSelectedFriend] = useState(null); // xóa bạn bè
   const [chatSearch, setChatSearch] = useState([]);
-
-  console.log(user);
-
   const [chats, setChats] = useState([]);
 
-  { /* Lấy danh sách conversation từ server và cập nhật vào state */ }
-  useEffect(() => {
+  {
+    /* Lấy danh sách conversation từ server và cập nhật vào state */
+  }
     const fetchConversations = async () => {
       try {
         // Bước 1: Lấy danh sách conversation
@@ -101,51 +99,115 @@ export default function ChatApp() {
           `http://localhost:8004/conversations/${user._id}`
         );
         let conversations = res.data;
-        console.log(`conversations trc khi lọc`, conversations);
         // Bước 2: Lọc bỏ conversations có messages rỗng
-        conversations = conversations.filter(conv => conv.messages.length > 0);
-        console.log(`conversations sau khi lọc`, conversations);
-    
+        conversations = conversations.filter(
+          (conv) => conv.messages.length > 0
+        );
+        // Bước 3: Lọc bỏ conversations đã bị xóa bởi tôi
+        conversations = conversations.filter(
+          (conv) =>
+            !conv.deleteBy.some((id) => id.toString() === user._id.toString())
+        );
+
         const chatPromises = conversations.map(async (conv) => {
           // Bước 2: Lấy userId từ members (trừ currentUser)
-          const otherUserId = conv.members.find((_id) => _id !== user._id);
           const unreadCountForUser =
             conv.unreadCounts.find(
               (item) => item.userId.toString() === user._id.toString()
             )?.count || 0;
-          console.log("unreadCountForUser", unreadCountForUser);
+          if (conv.isGroup) {
+            // 🟢 Đây là conversation nhóm
+            const memberIds = conv.members.filter((_id) => _id !== user._id);
 
-          // Bước 3: Gọi API lấy thông tin user
-          const userRes = await axios.get(
-            `http://localhost:8004/users/get/${otherUserId}`
-          );
-          const otherUser = userRes.data;
-          return {
-            conversationId: conv._id,
-            lastMessageSenderId: conv.lastMessageSenderId,
-            lastMessageId: conv.lastMessageId,
-            name: conv.isGroup ? conv.name : otherUser.username,
-            image: conv.isGroup ? conv.groupAvatar : otherUser.avatar,
-            lastMessage: conv.latestmessage || "",
-            timestamp: conv.updatedAt,
-            active: otherUser.isOnline,
-            unreadCount: unreadCountForUser,
-            lastMessageTime: conv.lastMessageTime,
-          };
+            // Gửi yêu cầu API để lấy thông tin của tất cả thành viên trong nhóm
+            const memberDetails = await Promise.all(
+              memberIds.map(async (memberId) => {
+                try {
+                  const res = await axios.get(
+                    `http://localhost:8004/users/get/${memberId}`
+                  );
+                  return res.data; // { _id, username, avatar }
+                } catch (err) {
+                  console.error("Lỗi khi lấy thông tin thành viên:", err);
+                  return {
+                    _id: memberId,
+                    username: "Không xác định",
+                    avatar: "/default-avatar.png",
+                  };
+                }
+              })
+            );
+            const leftMemberDetails = await Promise.all(
+              (conv.leftMembers || []).map(async (member) => {
+                try {
+                  const res = await axios.get(
+                    `http://localhost:8004/users/get/${member.userId}`
+                  );
+                  return {
+                    userId: member.userId,
+                    username: res.data.username, // Lấy username
+                    leftAt: member.leftAt, // Giữ nguyên thời gian rời nhóm
+                    lastMessageId: member.lastMessageId, // Lưu lại ID của tin nhắn cuối cùng
+                  };
+                } catch (err) {
+                  console.error("Lỗi khi lấy thông tin thành viên rời nhóm:", err);
+                  return { userId: member.userId, username: "Không xác định", leftAt: member.leftAt };
+                }
+              })
+            );
+            return {
+              isGroup: conv.isGroup,
+              conversationId: conv._id,
+              lastMessageSenderId: conv.lastMessageSenderId,
+              lastMessageId: conv.lastMessageId,
+              name: conv.name, // Lấy tên nhóm
+              image:
+                conv.groupAvatar ||
+                "https://file.hstatic.net/200000503583/file/tao-dang-chup-anh-nhom-lay-loi__5__34b470841bb840e3b2ce25cbe02533ec.jpg", // Avatar nhóm
+              lastMessage: conv.latestmessage || "",
+              timestamp: conv.updatedAt,
+              active: false, // Nhóm không có trạng thái online
+              unreadCount: unreadCountForUser,
+              lastMessageTime: conv.lastMessageTime,
+              members: memberDetails, // Lưu danh sách thành viên
+              deleteBy: conv.deleteBy, // Lưu danh sách người đã xóa
+              leftMembers: leftMemberDetails, // Lưu danh sách người đã rời nhóm
+            };
+          } else {
+            // 🟢 Đây là conversation giữa 2 người
+            const otherUserId = conv.members.find((_id) => _id !== user._id);
+            const userRes = await axios.get(
+              `http://localhost:8004/users/get/${otherUserId}`
+            );
+            const otherUser = userRes.data;
+
+            return {
+              isGroup: conv.isGroup,
+              conversationId: conv._id,
+              lastMessageSenderId: conv.lastMessageSenderId,
+              lastMessageId: conv.lastMessageId,
+              name: otherUser.username,
+              image: otherUser.avatar,
+              lastMessage: conv.latestmessage || "",
+              timestamp: conv.updatedAt,
+              active: otherUser.isOnline,
+              unreadCount: unreadCountForUser,
+              lastMessageTime: conv.lastMessageTime,
+              deleteBy: conv.deleteBy, // Lưu danh sách người đã xóa
+            };
+          }
         });
-        console.log("message", messages);
         // Chờ tất cả promises hoàn thành
         const chatList = await Promise.all(chatPromises);
         setChats(chatList);
-        console.log(chatList);
       } catch (err) {
         console.error(err);
       }
     };
+    useEffect(() => {
 
     fetchConversations();
     socket.on("conversationUpdated", (data) => {
-      console.log("Conversation updated:", data);
       fetchConversations(); // Chỉ fetch lại khi có sự thay đổi
     });
 
@@ -154,24 +216,24 @@ export default function ChatApp() {
     };
   }, [user._id]);
 
-  { /* Lắng nghe sự kiện nhận tin nhắn từ server */ }
+  {
+    /* Lắng nghe sự kiện nhận tin nhắn từ server */
+  }
   useEffect(() => {
     if (selectedChat) {
       const conversationId = selectedChat.conversationId;
-      console.log("Listening for messages on conversation:", conversationId);
       socket.on(`receiveMessage-${conversationId}`, (msg) => {
-        console.log("Received message from socket:", msg);
         setMessages((prev) => [...prev, msg]);
-        console.log("Messages:", messages);
       });
-
       return () => {
         socket.off(`receiveMessage-${conversationId}`);
       };
     }
   }, [selectedChat]);
 
-  { /* Nhắn tin */ }
+  {
+    /* Nhắn tin */
+  }
   const sendMessage = () => {
     if (!inputText.trim()) return;
     const messageData = {
@@ -188,7 +250,9 @@ export default function ChatApp() {
     setInputText("");
   };
 
-  { /* Pin tin nhắn */ }
+  {
+    /* Pin tin nhắn */
+  }
   const [pinnedMessage, setPinnedMessage] = useState(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState(null);
   const scrollToPinnedMessage = () => {
@@ -201,7 +265,9 @@ export default function ChatApp() {
     setTimeout(() => setHighlightedMessageId(null), 2000);
   };
 
-  { /* Cuộn tới tin nhắn */ }
+  {
+    /* Cuộn tới tin nhắn */
+  }
   const scrollToMessage = (messageId) => {
     const messageElement = messageRefs.current[messageId];
     if (messageElement) {
@@ -213,7 +279,9 @@ export default function ChatApp() {
     }
   };
 
-  { /* Lấy tin nhắn theo conversationId */ }
+  {
+    /* Lấy tin nhắn theo conversationId */
+  }
   const fetchMessagesByConversationId = async (conversationId) => {
     try {
       const response = await fetch(
@@ -229,10 +297,11 @@ export default function ChatApp() {
     }
   };
 
-  { /* Lắng nghe sự kiện khi chọn chat */ }
+  {
+    /* Lắng nghe sự kiện khi chọn chat */
+  }
   const handleSelectChat = async (chat) => {
     const messages = await fetchMessagesByConversationId(chat.conversationId);
-    console.log("mess", messages);
     setSelectedChat({
       ...chat,
     });
@@ -240,33 +309,31 @@ export default function ChatApp() {
       conversationId: chat.conversationId,
       userId: user._id,
     });
-    console.log("chat", chat);
     if (chat.lastMessageSenderId !== user._id) {
       socket.emit("messageSeen", {
         messageId: chat.lastMessageId,
         userId: user._id,
       });
-      console.log("chat", chat);
     }
     setMessages(messages);
+    inputRef.current?.focus(); // Focus vào ô nhập tin nhắn
     setShowFriendRequests(false); // Ẩn danh sách lời mời kết bạn
   };
 
   const showContacts = () => {
-    setSearchTerm("");   // Xóa nội dung ô tìm kiếm
+    setSearchTerm(""); // Xóa nội dung ô tìm kiếm
     setSearchResult(null);
     setSidebarView("contacts");
     setSelectedChat("");
   };
   const showChatlists = () => {
     setSearchResult(null);
-    setSearchTerm("");   // Xóa nội dung ô tìm kiếm
+    setSearchTerm(""); // Xóa nội dung ô tìm kiếm
     setSidebarView("chat-list");
     setSelectedTitle("Chào mừng bạn đến với ứng dụng chat! ");
     setSelectedTitle2("Chào mừng bạn đến với ứng dụng chat! ");
     setSelectedHeader("");
   };
-
 
   // Hàm bật/tắt menu
   const toggleMenu = () => {
@@ -289,7 +356,6 @@ export default function ChatApp() {
 
   // Hàm xử lý đăng xuất
   const handleLogout = () => {
-    console.log("Logging out...");
     navigate("/");
   };
 
@@ -316,7 +382,9 @@ export default function ChatApp() {
     }
   };
 
-  { /* Hover vào menu tin nhắn và menu chat */ }
+  {
+    /* Hover vào menu tin nhắn và menu chat */
+  }
   const [hoveredMessageId, setHoveredMessageId] = useState(null);
   const [menuMessageId, setMenuMessageId] = useState(null);
   const [hoveredChatId, setHoveredChatId] = useState(null);
@@ -339,18 +407,26 @@ export default function ChatApp() {
     return () => document.removeEventListener("click", handleClickOutside);
   }, []);
 
-  { /* Xử lý pin tin nhắn */ }
+  {
+    /* Xử lý pin tin nhắn */
+  }
   const handlePinMessage = async (messageId, isPinned) => {
     await fetch(`http://localhost:8004/messages/pin/${messageId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ isPinned }),
     });
+    // Gửi tín hiệu tới socket để cập nhật tin nhắn bên người nhận
+    socket.emit("messageUpdated", {
+      conversationId: selectedChat.conversationId,
+    });
     handleSelectChat(selectedChat);
     setMenuMessageId(null);
   };
 
-  { /* Xử lý xóa tin nhắn phía tôi */ }
+  {
+    /* Xử lý xóa tin nhắn phía tôi */
+  }
   const handleDeleteMessageFrom = async (messageId) => {
     await fetch(`http://localhost:8004/messages/deletefrom/${messageId}`, {
       method: "PUT",
@@ -361,7 +437,9 @@ export default function ChatApp() {
     setMenuMessageId(null);
   };
 
-  { /* Xử lý thu hồi tin nhắn */ }
+  {
+    /* Xử lý thu hồi tin nhắn */
+  }
   const handleRecallMessage = async (messageId) => {
     try {
       const response = await fetch(
@@ -369,7 +447,7 @@ export default function ChatApp() {
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({conversationId: selectedChat.conversationId}),
+          body: JSON.stringify({ conversationId: selectedChat.conversationId }),
         }
       );
 
@@ -378,6 +456,10 @@ export default function ChatApp() {
         toast.warning(data.message || "Không thể thu hồi tin nhắn");
         return;
       }
+      // Gửi tín hiệu tới socket để cập nhật tin nhắn bên người nhận
+      socket.emit("messageUpdated", {
+        conversationId: selectedChat.conversationId,
+      });
       await handleSelectChat(selectedChat); // Refresh messages
     } catch (error) {
       console.error("Recall error:", error);
@@ -386,9 +468,19 @@ export default function ChatApp() {
       setMenuMessageId(null);
     }
   };
+  useEffect(() => {
+    socket.on("refreshMessages", ({ conversationId }) => {
+      if (selectedChat?.conversationId === conversationId) {
+        handleSelectChat(selectedChat);
+      }
+    });
 
+    return () => socket.off("refreshMessages");
+  }, [selectedChat]);
 
-  { /* Xử lý trả lời tin nhắn */ }
+  {
+    /* Xử lý trả lời tin nhắn */
+  }
   const [replyingMessage, setReplyingMessage] = useState(null);
   const handleReplyMessage = (msg) => {
     setReplyingMessage(msg);
@@ -396,19 +488,17 @@ export default function ChatApp() {
   };
 
   const handleDeleteChat = async (chatId) => {
-    if (window.confirm("Bạn có chắc muốn xoá đoạn chat này?")) {
-      socket.emit("deleteChat", { conversationId: chatId });
+    if (window.confirm("Bạn có chắc muốn ẩn đoạn chat này?")) {
+      socket.emit("deleteChat", { conversationId: chatId, userId: user._id });
+      if (selectedChat && selectedChat.conversationId === chatId) {
+        setSelectedChat(null);
+      }
     }
   };
   useEffect(() => {
-    socket.on("chatDeleted", ({ conversationId }) => {
-      setChats((prevChats) =>
-        prevChats.filter((chat) => chat.conversationId !== conversationId)
-      );
+    socket.on("chatDeleted", ({ conversationId, userId }) => {
+      fetchConversations(); // Cập nhật danh sách cuộc trò chuyện
       // Nếu đang ở đoạn chat bị xóa thì điều hướng về trang chat-list
-      if (selectedChat && selectedChat._id === conversationId) {
-        setSelectedChat(null);
-      }
     });
 
     return () => {
@@ -416,36 +506,32 @@ export default function ChatApp() {
     };
   }, [selectedChat]);
 
-  // // Xử lý gửi tin nhắn hoặc ảnh/video
-  // const sendMessage = () => {
-  //     if (input.trim() || selectedImage || selectedVideo) {
-  //         const newMessage = {
-  //             text: input,
-  //             sender: "me",
-  //             sentTime: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-  //             receivedTime: null,
-  //             status: "sending",
-  //             image: selectedImage,
-  //             video: selectedVideo,
-  //         };
+  {
+    /* Rời nhóm */
+  }
+  const handleLeaveGroup = async (conversationId) => {
+    if (window.confirm("Bạn có chắc muốn rời nhóm này?")) {
+      try {
+        socket.emit("leaveGroup", { conversationId, userId: user._id });
+        setSelectedChat(null); // Đóng nhóm sau khi rời
+      } catch (error) {
+        console.error("Error leaving group:", error);
+      }
+    }
+  };
+  useEffect(() => {
+    socket.on("groupUpdated", ({ conversationId }) => {
+      fetchConversations(); // Cập nhật danh sách cuộc trò chuyện
+      // const fetchMessages = async () => {
+      //   const messages = await fetchMessagesByConversationId(conversationId);
+      //   setMessages(messages);
+      // };
+  
+      // fetchMessages(); // Gọi hàm async
+    });
 
-  //         setMessages([...messages, newMessage]);
-
-  //         setTimeout(() => {
-  //             setMessages((prevMessages) =>
-  //                 prevMessages.map((msg, index) =>
-  //                     index === prevMessages.length - 1
-  //                         ? { ...msg, status: "sent", receivedTime: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }
-  //                         : msg
-  //                 )
-  //             );
-  //         }, 1000);
-
-  //         setInput("");
-  //         setSelectedImage(null);
-  //         setSelectedVideo(null);
-  //     }
-  // };
+    return () => socket.off("groupUpdated");
+  }, []);
 
   // Xử lý chọn nhiều ảnh
   const handleImageUpload = (e) => {
@@ -493,13 +579,13 @@ export default function ChatApp() {
           prevMessages.map((msg, index) =>
             index === prevMessages.length - 1
               ? {
-                ...msg,
-                status: "sent",
-                receivedTime: new Date().toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                }),
-              }
+                  ...msg,
+                  status: "sent",
+                  receivedTime: new Date().toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }),
+                }
               : msg
           )
         );
@@ -513,7 +599,6 @@ export default function ChatApp() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResult, setSearchResult] = useState(null);
-
 
   const handleEmojiClick = (emojiObject) => {
     const emoji = emojiObject.emoji;
@@ -564,7 +649,9 @@ export default function ChatApp() {
       if (!user || !searchResult || !user._id || !searchResult._id) return;
 
       try {
-        const response = await fetch(`http://localhost:8004/friends/checkfriend/${user._id}/${searchResult._id}`);
+        const response = await fetch(
+          `http://localhost:8004/friends/checkfriend/${user._id}/${searchResult._id}`
+        );
         const data = await response.json();
 
         if (data.status === "pending") {
@@ -580,18 +667,17 @@ export default function ChatApp() {
     checkFriendRequestStatus();
   }, [searchResult?._id, user?._id]); // Chạy khi searchResult hoặc user thay đổi
 
-
   // Tìm kiếm user theo sđt
   const handleSearchUser = async () => {
     try {
-      const response = await fetch(`http://localhost:8004/friends/search?phone=${searchTerm}`);
+      const response = await fetch(
+        `http://localhost:8004/friends/search?phone=${searchTerm}`
+      );
       const data = await response.json();
-      console.log('KQ Search: ', data);
       if (response.ok) {
         setSearchResult(data);
         toast.success(data.message); // Hiển thị thông báo thành công
       } else {
-
         toast.error(data.message); // Hiển thị thông báo lỗi
       }
     } catch (error) {
@@ -601,15 +687,17 @@ export default function ChatApp() {
   //Gửi lời mời kết bạn
   const handleSendFriendRequest = async (receiverId) => {
     try {
-      const response = await fetch("http://localhost:8004/friends/send-request", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ senderId: user._id, receiverId }),
-      });
+      const response = await fetch(
+        "http://localhost:8004/friends/send-request",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ senderId: user._id, receiverId }),
+        }
+      );
 
       const data = await response.json();
       if (response.ok) {
-
         toast.success("Đã gửi lời mời kết bạn!"); // Hiển thị thông báo thành công
       } else {
         toast.error(data.message); // Hiển thị thông báo lỗi
@@ -619,12 +707,13 @@ export default function ChatApp() {
     }
   };
 
-
   const loadFriendRequests = async () => {
     if (!user || !user._id) return;
 
     try {
-      const response = await fetch(`http://localhost:8004/friends/friend-requests/${user._id}`);
+      const response = await fetch(
+        `http://localhost:8004/friends/friend-requests/${user._id}`
+      );
       const data = await response.json();
       setFriendRequests(data); // Lưu danh sách vào state
     } catch (error) {
@@ -634,16 +723,19 @@ export default function ChatApp() {
 
   const loadFriends = async () => {
     try {
-      const response = await fetch(`http://localhost:8004/friends/getfriend/${user._id}`, { // Gửi userId để lấy danh sách bạn bè
-        method: "GET",
-      });
+      const response = await fetch(
+        `http://localhost:8004/friends/getfriend/${user._id}`,
+        {
+          // Gửi userId để lấy danh sách bạn bè
+          method: "GET",
+        }
+      );
 
       if (!response.ok) {
         throw new Error("Lỗi khi tải danh sách bạn bè");
       }
 
       const data = await response.json();
-      console.log("Danh sách bạn bè:", data);
       setFriends(data);
     } catch (error) {
       console.error("Lỗi khi tải danh sách bạn bè:", error);
@@ -678,9 +770,7 @@ export default function ChatApp() {
     }
   };
 
-
   const handleClick = (tab) => {
-    console.log("Clicked:", tab);
     setSearchResult(null); // Xóa kết quả tìm kiếm
     setSelectedChat(null);
     setSelectedHeader(tab);
@@ -693,14 +783,12 @@ export default function ChatApp() {
       setTimeout(() => {
         setShowFriendRequests(true);
         if (friendRequests.length === 0) {
-          console.log("Loading friend requests...");
           loadFriendRequests();
         }
       }, 0); // Có thể tăng lên 200 nếu vẫn lỗi
     } else if (tab === "Danh sách bạn bè") {
       loadFriends(); // Gọi API danh sách bạn bè
-    }
-    else {
+    } else {
       setShowFriendRequests(false);
     }
   };
@@ -714,11 +802,14 @@ export default function ChatApp() {
 
   const acceptRequest = async (requestId) => {
     try {
-      const response = await fetch("http://localhost:8004/friends/accept-request", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requestId }),
-      });
+      const response = await fetch(
+        "http://localhost:8004/friends/accept-request",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ requestId }),
+        }
+      );
 
       const data = await response.json();
       if (response.ok) {
@@ -729,22 +820,23 @@ export default function ChatApp() {
         toast.success(data.message);
       } else {
         toast.error(data.message || "Có lỗi xảy ra!");
-
       }
     } catch (error) {
       console.error("Lỗi:", error);
       toast.error("Lỗi kết nối server!");
-
     }
   };
 
   const rejectRequest = async (requestId) => {
     try {
-      const response = await fetch("http://localhost:8004/friends/reject-request", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requestId }),
-      });
+      const response = await fetch(
+        "http://localhost:8004/friends/reject-request",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ requestId }),
+        }
+      );
 
       const data = await response.json();
       if (response.ok) {
@@ -777,67 +869,57 @@ export default function ChatApp() {
 
     try {
       // 1️⃣ Gọi API để lấy danh sách cuộc trò chuyện
-      const response = await fetch(`http://localhost:8004/conversations/${user._id}/search`);
+      const response = await fetch(
+        `http://localhost:8004/conversations/${user._id}/search`
+      );
       const conversations = await response.json();
 
       // 2️⃣ Kiểm tra xem cuộc trò chuyện với receiverId đã tồn tại chưa
-      const existingConversation = conversations.find(conv =>
-        conv.members.length === 2 && // Chỉ kiểm tra chat 1-1
-        conv.members.some(member => member._id === user._id) &&
-        conv.members.some(member => member._id === receiverId)
+      const existingConversation = conversations.find(
+        (conv) =>
+          conv.members.length === 2 && // Chỉ kiểm tra chat 1-1
+          conv.members.some((member) => member._id === user._id) &&
+          conv.members.some((member) => member._id === receiverId)
       );
-      console.log("receiverId nhận được từ friend", receiverId);
-      const userreciver = await fetch(`http://localhost:8004/users/get/${receiverId}`);
+      const userreciver = await fetch(
+        `http://localhost:8004/users/get/${receiverId}`
+      );
       const data = await userreciver.json();
-      console.log("data", data);
-
-
-      console.log("Cuộc trò chuyện đã tồn tại:", existingConversation);
-
-      console.log("Selected chat đã set:", selectedChat);
       if (existingConversation) {
-        setChatSearch(prevState => ({
+        setChatSearch((prevState) => ({
           ...prevState,
           conversationId: existingConversation._id,
           name: data.username,
           image: data.avatar,
-          active: data.isOnline
+          active: data.isOnline,
         }));
-
-        console.log("chatSearch", chatSearch);
-   
-
         return;
       }
 
-
       // 3️⃣ Nếu chưa có, tạo mới cuộc trò chuyện
-      const createResponse = await fetch("http://localhost:8004/conversations/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          members: [user._id, receiverId],
-          isGroup: false
-        })
-      });
+      const createResponse = await fetch(
+        "http://localhost:8004/conversations/create",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            members: [user._id, receiverId],
+            isGroup: false,
+          }),
+        }
+      );
 
       const newConversation = await createResponse.json();
       if (createResponse.ok) {
-        console.log("Tạo cuộc trò chuyện mới thành công:", newConversation);
-       
-        console.log("newConversation", newConversation);
-        setChatSearch(prevState => ({
+        setChatSearch((prevState) => ({
           ...prevState,
           conversationId: newConversation._id,
           name: data.username,
           image: data.avatar,
           active: data.isOnline,
           lastMessage: "",
-          lastMessageTime: Date.now()
+          lastMessageTime: Date.now(),
         }));
-
-        console.log("chatSearch", chatSearch);
-      
       } else {
         console.error("Lỗi khi tạo cuộc trò chuyện:", newConversation.message);
       }
@@ -872,7 +954,6 @@ export default function ChatApp() {
                 }
               }
             }}
-
           />
 
           {/* Sử dụng FaTimes thay vì FaSearch */}
@@ -880,13 +961,11 @@ export default function ChatApp() {
             <FaTimes
               className="search-icon"
               onClick={(e) => {
-                setSearchTerm("");   // Xóa nội dung ô tìm kiếm
+                setSearchTerm(""); // Xóa nội dung ô tìm kiếm
                 setSearchResult(null); // Xóa kết quả tìm kiếm
               }}
             />
           )}
-
-
         </div>
 
         {searchResult && (
@@ -895,21 +974,35 @@ export default function ChatApp() {
               {searchResult.username && <p>Tìm bạn qua số điện thoại</p>}
             </div>
 
-            <div className="search-user-info" onClick={() => createNewChat(searchResult._id)}>
+            <div
+              className="search-user-info"
+              onClick={() => createNewChat(searchResult._id)}
+            >
               <div className="img-user-search">
-                <img src={searchResult.avatar} alt={searchResult.username} className="avatar" />
+                <img
+                  src={searchResult.avatar}
+                  alt={searchResult.username}
+                  className="avatar"
+                />
               </div>
               <div className="info-user-search">
                 <p className="search-username">{searchResult.username}</p>
-                <p className="search-phone">Số điện thoại: <span>{searchResult.phone}</span></p>
+                <p className="search-phone">
+                  Số điện thoại: <span>{searchResult.phone}</span>
+                </p>
 
-                {searchResult._id !== user._id && (
-                  isFriendRequestSent ? (
-                    <span className="added-request">Đã gửi lời mời kết bạn</span>
+                {searchResult._id !== user._id &&
+                  (isFriendRequestSent ? (
+                    <span className="added-request">
+                      Đã gửi lời mời kết bạn
+                    </span>
                   ) : (
-                    <button onClick={() => handleSendFriendRequest(searchResult._id)}>Kết bạn</button>
-                  )
-                )}
+                    <button
+                      onClick={() => handleSendFriendRequest(searchResult._id)}
+                    >
+                      Kết bạn
+                    </button>
+                  ))}
               </div>
             </div>
           </>
@@ -941,18 +1034,20 @@ export default function ChatApp() {
                   <div className="chat-container">
                     <p className="chat-name">{chat.name}</p>
                     <p
-                      className={`chat-message ${chat.unreadCount > 0 ? "unread-message" : ""
-                        }`}
+                      className={`chat-message ${
+                        chat.unreadCount > 0 ? "unread-message" : ""
+                      }`}
                     >
                       {chat.lastMessageSenderId?.toString() ===
-                        user._id.toString()
-                        ? `Bạn: ${chat.lastMessage.length > 10
-                          ? chat.lastMessage.slice(0, 10) + "..."
-                          : chat.lastMessage
-                        }`
+                      user._id.toString()
+                        ? `Bạn: ${
+                            chat.lastMessage.length > 10
+                              ? chat.lastMessage.slice(0, 10) + "..."
+                              : chat.lastMessage
+                          }`
                         : chat.lastMessage.length > 10
-                          ? chat.lastMessage.slice(0, 10) + "..."
-                          : chat.lastMessage}
+                        ? chat.lastMessage.slice(0, 10) + "..."
+                        : chat.lastMessage}
 
                       {chat.unreadCount > 0 && (
                         <span className="unread-badge">
@@ -963,13 +1058,14 @@ export default function ChatApp() {
                   </div>
                   <div className="chat-timestamp">
                     <p
-                      className={`chat-timestamp-item ${chat.unreadCount > 0 ? "unread-timestamp" : ""
-                        }`}
+                      className={`chat-timestamp-item ${
+                        chat.unreadCount > 0 ? "unread-timestamp" : ""
+                      }`}
                     >
                       {formatTimeMessage(chat.lastMessageTime)}
                     </p>
                   </div>
-                  {(
+                  {
                     <div
                       className="chat-more-options"
                       onClick={(e) => {
@@ -980,7 +1076,7 @@ export default function ChatApp() {
                     >
                       <span>⋮</span>
                     </div>
-                  )}
+                  }
 
                   {menuChatId === chat.conversationId && (
                     <div
@@ -999,8 +1095,23 @@ export default function ChatApp() {
                         onClick={() => handleDeleteChat(chat.conversationId)}
                       >
                         <FiTrash2 size={18} color="red" />
-                        Xóa đoạn chat
+                        Ẩn đoạn chat
                       </div>
+                      {chat.isGroup && (
+                        <div
+                          style={{
+                            color: "red",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            cursor: "pointer",
+                          }}
+                          onClick={() => handleLeaveGroup(chat.conversationId)}
+                        >
+                          <FiLogOut size={18} color="red" />
+                          Rời khỏi nhóm
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1064,7 +1175,6 @@ export default function ChatApp() {
               <button onClick={() => handleLogout()} className="logout-btn">
                 Đăng xuất
               </button>
-
             </div>
           )}
         </div>
@@ -1074,61 +1184,80 @@ export default function ChatApp() {
         <div className="friend-requests">
           <h2>Lời mời kết bạn</h2>
           {friendRequests.length > 0 ? (
-            friendRequests.map((request) => (
-              console.log("request nhận được", request),
-              <div key={request.id} className="friend-request-item">
-
-                <div className="friend-info">
-                  <img src={request.senderId.avatar} alt="avatar" className="friend-avatar" />
-                  <p className="friend-name">{request.senderId.username}</p>
-                </div>
-                <div className="friend-actions">
-                  <button onClick={() => acceptRequest(request._id)}>Chấp nhận</button>
-                  <button onClick={() => rejectRequest(request._id)}>Từ chối</button>
-                </div>
-
-              </div>
-            ))
+            friendRequests.map(
+              (request) => (
+                (
+                  <div key={request.id} className="friend-request-item">
+                    <div className="friend-info">
+                      <img
+                        src={request.senderId.avatar}
+                        alt="avatar"
+                        className="friend-avatar"
+                      />
+                      <p className="friend-name">{request.senderId.username}</p>
+                    </div>
+                    <div className="friend-actions">
+                      <button onClick={() => acceptRequest(request._id)}>
+                        Chấp nhận
+                      </button>
+                      <button onClick={() => rejectRequest(request._id)}>
+                        Từ chối
+                      </button>
+                    </div>
+                  </div>
+                )
+              )
+            )
           ) : (
             <p className="not-requestfriend">Không có lời mời kết bạn nào.</p>
           )}
         </div>
       ) : selectedHeader === "Danh sách bạn bè" ? ( // Thêm điều kiện này
-          <div className="friends-list">
+        <div className="friends-list">
           <h2>Danh sách bạn bè</h2>
           {friends.length > 0 ? (
-              friends.map((friend) => (
-                console.log("friend nhận được", friend._id),
-                
-                <div key={friend._id} className="friend-item">
-                  <div className="friend-info">
-                  <img src={friend.avatar} alt="avatar" className="friend-avatar" onClick={() => {
-                    if (friend._id) {
-                      createNewChat(friend._id);
-                    } else {
-                      console.error("friend._id bị undefined:", friend);
-                    }
-                  }}/>
-                  <p className="friend-name">{friend.username}</p>
-                  <FaEllipsisV className="bacham-banbe" onClick={() => toggleMenuXoa(friend._id)} />
-                </div>
-                {selectedFriend === friend._id && (
-                  <div className="dropdown-menu">
-                    <button onClick={() => handleRemoveFriend(friend._id)}>Xóa bạn</button>
+            friends.map(
+              (friend) => (
+                (
+                  <div key={friend._id} className="friend-item">
+                    <div className="friend-info">
+                      <img
+                        src={friend.avatar}
+                        alt="avatar"
+                        className="friend-avatar"
+                        onClick={() => {
+                          if (friend._id) {
+                            createNewChat(friend._id);
+                          } else {
+                            console.error("friend._id bị undefined:", friend);
+                          }
+                        }}
+                      />
+                      <p className="friend-name">{friend.username}</p>
+                      <FaEllipsisV
+                        className="bacham-banbe"
+                        onClick={() => toggleMenuXoa(friend._id)}
+                      />
+                    </div>
+                    {selectedFriend === friend._id && (
+                      <div className="dropdown-menu">
+                        <button onClick={() => handleRemoveFriend(friend._id)}>
+                          Xóa bạn
+                        </button>
+                      </div>
+                    )}
+
+                    <br />
+                    <hr />
                   </div>
-                )}
-
-                <br /><hr />
-              </div>
-
-            ))
+                )
+              )
+            )
           ) : (
             <p className="not-friend">Bạn chưa có bạn bè nào.</p>
           )}
         </div>
-
       ) : selectedChat ? (
-
         <div className="chat-window">
           {/* Header */}
 
@@ -1138,7 +1267,11 @@ export default function ChatApp() {
               <div className="avatar-container-main-item">
                 <p className="chat-title-main">{selectedChat.name}</p>
                 <p className="active-statu-main">
-                  {selectedChat.active ? "Online" : "Offline"}
+                  {selectedChat.isGroup
+                    ? `${selectedChat.members.length + 1} thành viên`
+                    : selectedChat.active
+                    ? "Online"
+                    : "Offline"}
                 </p>
               </div>
             </div>
@@ -1180,15 +1313,17 @@ export default function ChatApp() {
                 const prevDate =
                   index > 0
                     ? new Date(
-                      messages[index - 1].createdAt
-                    ).toLocaleDateString()
+                        messages[index - 1].createdAt
+                      ).toLocaleDateString()
                     : null;
                 const showDateDivider = currentDate !== prevDate;
-
                 const isMe =
                   (msg.sender?._id || msg.senderId?._id || msg.senderId) ===
                   user._id;
-
+                const leftMembersAfterThisMessage =
+                  selectedChat.leftMembers?.filter(
+                    (member) => member.lastMessageId === msg._id
+                  );
                 return (
                   <>
                     {showDateDivider && (
@@ -1203,12 +1338,12 @@ export default function ChatApp() {
                         </span>
                       </div>
                     )}
-
                     <div
                       key={index}
                       ref={(el) => (messageRefs.current[msg._id] = el)}
-                      className={`message-row ${isMe ? "me" : "them"} ${highlightedMessageId === msg._id ? "highlight" : ""
-                        }`}
+                      className={`message-row ${isMe ? "me" : "them"} ${
+                        highlightedMessageId === msg._id ? "highlight" : ""
+                      }`}
                     >
                       <div
                         className={`message-row ${isMe ? "me" : "them"}`}
@@ -1217,7 +1352,11 @@ export default function ChatApp() {
                         {/* Avatar bên trái nếu là 'them' */}
                         {!isMe && (
                           <img
-                            src={selectedChat.image || "/default-avatar.png"}
+                            src={
+                              selectedChat.isGroup === false
+                                ? selectedChat.image || "/default-avatar.png" // Cuộc trò chuyện 1-1
+                                : msg.senderId.avatar || "/default-avatar.png" // Cuộc trò chuyện nhóm
+                            }
                             alt="avatar"
                             className="message-avatar"
                           />
@@ -1247,8 +1386,16 @@ export default function ChatApp() {
                                   </span>
                                 </div>
                               )}
-
-                              {msg.text && <p>{msg.text}</p>}
+                              <div className="sender-info">
+                                <span className="sender-username">
+                                  {selectedChat.isGroup === true
+                                    ? msg.senderId?.username
+                                    : ""}
+                                </span>
+                              </div>
+                              <div className="message-text">
+                                {msg.text && <p>{msg.text}</p>}
+                              </div>
                               {msg.image && (
                                 <img
                                   src={msg.image}
@@ -1284,12 +1431,12 @@ export default function ChatApp() {
                             <span className="timestamp">
                               {msg.createdAt
                                 ? new Date(msg.createdAt).toLocaleTimeString(
-                                  [],
-                                  {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  }
-                                )
+                                    [],
+                                    {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    }
+                                  )
                                 : ""}
                             </span>
                             {msg.status === "sending" ? (
@@ -1302,8 +1449,9 @@ export default function ChatApp() {
                         {/* Nút ba chấm khi hover */}
                         {hoveredMessageId === msg._id && (
                           <div
-                            className={`three-dots-icon ${isMe ? "left" : "right"
-                              }`}
+                            className={`three-dots-icon ${
+                              isMe ? "left" : "right"
+                            }`}
                           >
                             <FaEllipsisH
                               className="icon"
@@ -1314,8 +1462,9 @@ export default function ChatApp() {
                             />
                             {menuMessageId === msg._id && (
                               <div
-                                className={`message-menu ${isMe ? "left" : "right"
-                                  }`}
+                                className={`message-menu ${
+                                  isMe ? "left" : "right"
+                                }`}
                               >
                                 {!msg.isRecalled && (
                                   <div
@@ -1369,6 +1518,17 @@ export default function ChatApp() {
                         )}
                       </div>
                     </div>
+                    {leftMembersAfterThisMessage && (
+                      <div className="system-message">
+                        {leftMembersAfterThisMessage.map((member, index) => (
+                          <div key={index}>
+                            <span>
+                              {member.username} đã rời nhóm
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </>
                 );
               })}
@@ -1490,7 +1650,6 @@ export default function ChatApp() {
             </button>
           </div>
         </div>
-
       ) : (
         <>
           <div className="header-chat-window-item">
