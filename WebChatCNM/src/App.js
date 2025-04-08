@@ -10,6 +10,7 @@ import ChatApp from "./Components/ChatApp/ChatApp";
 import { ToastContainer } from "react-toastify";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+// Import CSS
 
 function App() {
   return (
@@ -26,7 +27,9 @@ function App() {
         pauseOnHover
       />
 
-    <Router>
+      <Router>
+        {/* Thêm ToastContainer vào đây để hiển thị thông báo toàn cục */}
+        <ToastContainer position="top-center" />
       <div className="App">
         <Routes>
           <Route path="/" element={<HomePage />} />

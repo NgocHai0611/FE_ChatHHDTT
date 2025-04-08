@@ -1159,24 +1159,24 @@ export default function ChatApp() {
 
     switch (extension) {
       case 'pdf':
-        return '📕'; // PDF
+        return 'https://res.cloudinary.com/dapvuniyx/image/upload/v1744105116/pdf_tesvni.png'; // PDF
       case 'doc':
       case 'docx':
-        return '📄'; // Word
+        return 'https://res.cloudinary.com/dapvuniyx/image/upload/v1744105116/word_lso4l4.png'; // Word
       case 'xls':
       case 'xlsx':
-        return '📊'; // Excel
+        return 'https://res.cloudinary.com/dapvuniyx/image/upload/v1744105116/excel_gc6nyu.png'; // Excel
       case 'ppt':
       case 'pptx':
-        return '📽️'; // PowerPoint
+        return 'https://res.cloudinary.com/dapvuniyx/image/upload/v1744105116/pptx_jxtoow.png'; // PowerPoint
       case 'zip':
       case 'rar':
-        return '🗜️'; // Compressed
+        return 'https://res.cloudinary.com/dapvuniyx/image/upload/v1744105116/rar_tftd1l.png'; // Compressed
       case 'txt':
-        return '📝'; // Text
+        return 'https://res.cloudinary.com/dapvuniyx/image/upload/v1744105116/txt_uake55.png'; // Text
       case 'mp4':
       case 'mov':
-        return '🎥'; // Video
+        return 'https://res.cloudinary.com/dapvuniyx/image/upload/v1744105234/image_xv2d6s.png'; // Video
       default:
         return '📎'; // Default
     }
