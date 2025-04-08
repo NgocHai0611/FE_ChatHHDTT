@@ -1,13 +1,13 @@
 import axios from "axios";
-import { 
-    forgotPasswordFailed, forgotPasswordStart, forgotPasswordSuccess, 
-    loginFailed, loginStart, loginSuccess, 
-    logoutFailed, logoutStart, logoutSuccess, 
-    registerFailed, registerStart, registerSuccess, 
-    resetPasswordFailed, resetPasswordStart, resetPasswordSuccess 
+import {
+    forgotPasswordFailed, forgotPasswordStart, forgotPasswordSuccess,
+    loginFailed, loginStart, loginSuccess,
+    logoutFailed, logoutStart, logoutSuccess,
+    registerFailed, registerStart, registerSuccess,
+    resetPasswordFailed, resetPasswordStart, resetPasswordSuccess
 } from "./authSlice";
 
-import {  toast } from 'react-toastify';
+import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css'; // Import CSS
 
 
@@ -23,7 +23,7 @@ export const loginUser = async (user, dispatch, navigate) => {
         }
 
         dispatch(loginSuccess(res.data));
-        navigate("/");
+        navigate("/chat-app", { state: { user: res.data } });
         toast.success("Đăng nhập thành công! Chào mừng bạn đến với hệ thống!"); // Thông báo thành công
 
     } catch (error) {
@@ -81,12 +81,12 @@ export const forgotPassword = async (email, dispatch) => {
         const res = await axios.post("/v1/auth/forgot-password", { email });
 
         dispatch(forgotPasswordSuccess(res.data.message));
-        
+
         toast.success("Chúng tôi đã gửi hướng dẫn đặt lại mật khẩu đến email của bạn."); // Thông báo thành công
     } catch (error) {
         const errorMessage = error.response?.data?.message || "Đã xảy ra lỗi, vui lòng thử lại.";
         dispatch(forgotPasswordFailed(errorMessage));
-       
+
         toast.error(errorMessage); // Thông báo lỗi
     }
 };
@@ -98,14 +98,13 @@ export const resetPassword = async (token, newPassword, confirmPassword, dispatc
         const res = await axios.post(`/v1/auth/reset-password/${token}`, { newPassword, confirmPassword });
 
         dispatch(resetPasswordSuccess(res.data.message));
-       
+
         navigate("/login");  // Chuyển hướng đến trang đăng nhập
         toast.success("Đổi mật khẩu thành công!"); // Thông báo thành công
     } catch (error) {
         const errorMessage = error.response?.data?.message || "Đã xảy ra lỗi, vui lòng thử lại.";
         dispatch(resetPasswordFailed(errorMessage));
-       
+
         toast.error(errorMessage); // Thông báo lỗi
     }
 };
-

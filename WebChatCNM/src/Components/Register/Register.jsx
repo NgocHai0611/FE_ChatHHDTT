@@ -10,7 +10,7 @@ const Register = () => {
   const [password, setPassword] = useState("");
   // const [username, setUsername] = useState("");
   const [phone, setPhone] = useState("");
- 
+
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
@@ -19,10 +19,10 @@ const Register = () => {
 
   const handleRegister = (e) => {
     e.preventDefault();
-    const newUser = { email, password,phone };
+    const newUser = { email, password, phone };
 
-    
-    registerUser(newUser, dispatch, navigate); 
+
+    registerUser(newUser, dispatch, navigate);
   };
 
   return (
@@ -68,11 +68,11 @@ const Register = () => {
             </span>
           </div>
           <button type="submit">Sign Up</button>
-         
-       
+
+
         </form>
 
-        
+
 
         <div className="or">or continue with</div>
         <div className="social-icons">

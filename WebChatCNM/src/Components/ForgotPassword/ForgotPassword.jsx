@@ -42,7 +42,7 @@ const ForgotPassword = () => {
           />
           <button type="submit">Send Reset Link</button>
         </form>
-        
+      
 
         <div className="or">or continue with</div>
         <div className="social-icons">

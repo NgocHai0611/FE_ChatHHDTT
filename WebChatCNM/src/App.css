@@ -22,26 +22,13 @@ body,
   font-family: "Inter", sans-serif;
   background-color: #ffffff;
 }
-/* App.css */
+.Toastify__toast {
+  position: relative;
+}
 
 .Toastify__close-button {
-  /* Thay đổi vị trí */
-  position: absolute;
-  top: 10px;
-  right: 10px;
-
-  /* Thay đổi kích thước */
-  width: 25px;
-  height: 25px;
-
-  
-  background-size: contain;
-  background-repeat: no-repeat;
-  background-color: transparent; /* Loại bỏ nền mặc định */
-  border: none; /* Loại bỏ đường viền mặc định */
-  opacity: 0.7; /* Độ trong suốt */
+  position: absolute !important;
+  top: -15px !important;
+  right: -147px !important;
 }
 
-.Toastify__close-button:hover {
-  opacity: 1; /* Hiển thị rõ hơn khi hover */
-}
