@@ -7,25 +7,27 @@ import {
   TouchableOpacity,
   Image,
   Modal,
-  ScrollView
+  ScrollView,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
-import axios from 'axios';  // Thêm import axios
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from "axios"; // Thêm import axios
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import Loading from "../loading";
 
 export default function Login() {
   const navigation = useNavigation();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isRememberMe, setIsRememberMe] = useState(false);
   const [isEmailFocused, setIsEmailFocused] = useState(false);
   const [isPasswordFocused, setIsPasswordFocused] = useState(false);
   const [isModalVisible, setModalVisible] = useState(false);
-  const [modalMessage, setModalMessage] = useState('');
-  
+  const [modalMessage, setModalMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
   const togglePasswordVisibility = () => {
     setIsPasswordVisible(!isPasswordVisible);
   };
@@ -38,6 +40,49 @@ export default function Login() {
     navigation.navigate("SignUp");
   };
 
+  const handleLogin = async () => {
+    setIsLoading(true);
+    try {
+      const response = await axios.post(
+        "http://localhost:8004/v1/auth/login",
+        {
+          email,
+          password,
+        }
+      );
+
+      if (response.data.accessToken) {
+        if (response.data.isVerified) {
+          await AsyncStorage.setItem("user", JSON.stringify(response.data));
+          setModalMessage(" Đăng nhập thành công ✅");
+          setModalVisible(true);
+          setIsLoading(false);
+          setTimeout(() => navigation.navigate("ChatListScreen"), 1000);
+        } else {
+          setModalMessage(" Tài Khoản Chưa Được Xác Minh ❌");
+          setModalVisible(true);
+        }
+      } else {
+        setIsLoading(false);
+        setModalMessage("Đăng nhập thất bại. Vui lòng thử lại. ❌");
+        setModalVisible(true);
+      }
+    } catch (error) {
+      if (error.message.includes("Network Error")) {
+        setModalMessage(
+          "Lỗi kết nối đến server. Kiểm tra CORS hoặc API đang chạy."
+        );
+      } else {
+        setModalMessage(
+          error.response?.data?.message || "Đăng nhập thất bại. ❌"
+        );
+      }
+      setModalVisible(true);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <LinearGradient
       colors={["#9AB9F5", "#FFFFFF"]}
@@ -46,10 +91,7 @@ export default function Login() {
       end={{ x: 0.5, y: 0 }}
       style={styles.container}
     >
-      <Image
-        source={require('../assets/Data/char1.png')}
-        style={styles.logo}
-      />
+      <Image source={require("../assets/Data/char1.png")} style={styles.logo} />
       {/* <Text style={styles.title}>Get Start Now</Text>
       <Text style={styles.subtitle}>Create an account or log in to explore about our app</Text> */}
 
@@ -82,7 +124,10 @@ export default function Login() {
           onFocus={() => setIsPasswordFocused(true)}
           onBlur={() => setIsPasswordFocused(false)}
         />
-        <TouchableOpacity onPress={togglePasswordVisibility} style={styles.showPasswordIcon}>
+        <TouchableOpacity
+          onPress={togglePasswordVisibility}
+          style={styles.showPasswordIcon}
+        >
           <MaterialIcons
             name={isPasswordVisible ? "visibility-off" : "visibility"}
             size={24}
@@ -96,7 +141,9 @@ export default function Login() {
           onPress={toggleRememberMe}
           style={styles.checkboxContainer}
         >
-          <View style={[styles.checkbox, isRememberMe && styles.checkboxChecked]}>
+          <View
+            style={[styles.checkbox, isRememberMe && styles.checkboxChecked]}
+          >
             {isRememberMe && (
               <MaterialIcons
                 name="check"
@@ -109,16 +156,21 @@ export default function Login() {
           <Text style={styles.checkboxLabel}>Remember Me</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.forgotPassword} onPress={() => navigation.navigate("ForgetPassScreen")}>
+        <TouchableOpacity
+          style={styles.forgotPassword}
+          onPress={() => navigation.navigate("RecoverPasswordApp")}
+        >
           <Text style={styles.linkText}>Forgot Password?</Text>
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity style={styles.loginButton}>
+      <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
         <Text style={styles.buttonText}>Login</Text>
       </TouchableOpacity>
 
-      <Modal 
+      <Loading loadingState={isLoading}></Loading>
+
+      <Modal
         transparent={true}
         visible={isModalVisible}
         animationType="slide"
@@ -127,13 +179,15 @@ export default function Login() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalMessage}>{modalMessage}</Text>
-            <TouchableOpacity style={styles.modalButton}>
+            <TouchableOpacity
+              style={styles.modalButton}
+              onPress={() => setModalVisible(false)}
+            >
               <Text style={styles.modalButtonText}>Close</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
-
 
       <View style={styles.separatorContainer}>
         <View style={styles.separator} />
@@ -143,7 +197,9 @@ export default function Login() {
 
       <TouchableOpacity style={styles.socialButton}>
         <Image
-          source={{ uri: "https://companieslogo.com/img/orig/GOOG-0ed88f7c.png?t=1722952493",}}
+          source={{
+            uri: "https://companieslogo.com/img/orig/GOOG-0ed88f7c.png?t=1722952493",
+          }}
           style={styles.socialIcon}
         />
         <Text style={styles.socialText}>Continue with Google</Text>
@@ -162,7 +218,9 @@ export default function Login() {
       <View style={styles.footer}>
         <Text style={styles.footerText}>
           <Text style={styles.footerTextNormal}>Don't have an account? </Text>
-          <Text style={styles.footerTextLink} onPress={handleSignUpNavigation}>Sign Up</Text>
+          <Text style={styles.footerTextLink} onPress={handleSignUpNavigation}>
+            Sign Up
+          </Text>
         </Text>
       </View>
     </LinearGradient>
@@ -180,8 +238,8 @@ const styles = StyleSheet.create({
     width: 350,
     height: 233,
     alignSelf: "center",
-    resizeMode: 'contain',
-    marginBottom: 16
+    resizeMode: "contain",
+    marginBottom: 16,
   },
   title: {
     fontSize: 34,
@@ -206,8 +264,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   passwordContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 20,
   },
   inputPassword: {
@@ -217,42 +275,42 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 15,
     fontSize: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
   },
   showPasswordIcon: {
-    position: 'absolute',
+    position: "absolute",
     right: 10,
     padding: 10,
   },
   rememberForgotContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 30,
   },
   checkboxContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   checkbox: {
     width: 16,
     height: 16,
     borderWidth: 1,
-    borderColor: '#B4B4B4',
+    borderColor: "#B4B4B4",
     borderRadius: 4,
     marginRight: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   checkboxChecked: {
-    backgroundColor: '#494948',
+    backgroundColor: "#494948",
   },
   checkIcon: {
     marginTop: 2,
   },
   checkboxLabel: {
     fontSize: 12,
-    color: '#333333',
+    color: "#333333",
   },
   forgotPassword: {
     alignItems: "flex-end",
@@ -266,43 +324,43 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
   },
   modalContent: {
     width: 300,
     padding: 20,
-    backgroundColor: 'white',
+    backgroundColor: "white",
     borderRadius: 10,
-    alignItems: 'center',
+    alignItems: "center",
   },
   modalMessage: {
     marginBottom: 15,
-    textAlign: 'center',
+    textAlign: "center",
   },
   modalButton: {
     padding: 10,
-    backgroundColor: '#007AFF',
+    backgroundColor: "#007AFF",
     borderRadius: 5,
   },
   modalButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
+    color: "white",
+    fontWeight: "bold",
   },
   separatorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginVertical: 16, // Updated margin
   },
   separator: {
     flex: 1,
     height: 1,
-    backgroundColor: '#E8E8E8',
+    backgroundColor: "#E8E8E8",
   },
   separatorText: {
     marginHorizontal: 10,
-    color: '#666666',
+    color: "#666666",
   },
   buttonText: {
     color: "#FFFFFF",
@@ -310,9 +368,9 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   socialButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     height: 50,
     borderRadius: 10,
     // borderColor: '#E8E8E8',
@@ -328,7 +386,7 @@ const styles = StyleSheet.create({
   },
   socialText: {
     fontSize: 14,
-    color: '#666666',
+    color: "#666666",
     fontWeight: "500",
   },
   signupLink: {
