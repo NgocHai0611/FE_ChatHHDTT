@@ -167,3 +167,19 @@ button:hover {
 .password-toggle:hover {
   color: #333;
 }
+
+.error-message {
+  color: #ff0000; /* Màu đỏ cho lỗi */
+  background-color: #fff0f0; /* Màu nền nhẹ để làm nổi bật thông báo */
+  border: 1px solid #ff0000; /* Đường viền đỏ để làm rõ lỗi */
+  border-radius: 5px; /* Bo góc */
+  padding: 5px; /* Khoảng cách xung quanh nội dung */
+  width: 200px;
+  margin-top: 10px; /* Khoảng cách từ phần trên */
+  font-size: 14px; /* Kích thước chữ */
+  font-weight: bold; /* Làm đậm chữ */
+  text-align: center; /* Căn giữa nội dung */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Đổ bóng nhẹ cho hộp thông báo */
+  animation: fadeIn 0.5s ease; /* Thêm hiệu ứng mờ dần khi hiển thị */
+}
+
