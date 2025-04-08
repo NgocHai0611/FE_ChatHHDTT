@@ -59,7 +59,7 @@ export default function ChatApp() {
   const [selectedHeader, setSelectedHeader] = useState("");
   const navigate = useNavigate();
   const messageRefs = useRef({});
-  
+
   dayjs.extend(relativeTime);
   dayjs.locale("vi");
   const [selectedtitle, setSelectedTitle] = useState(
@@ -81,7 +81,7 @@ export default function ChatApp() {
   const menuRef = useRef(null); // Tham chiếu đến menu
   const friendMenuRef = useRef(null); // Tham chiếu đến menu xóa bạn
   const friendRef = useRef(null); // Tham chiếu đến phần tử bạn
-  
+
 
   const location = useLocation();
   const user = location.state?.user; // Lấy user truyền từ navigate
@@ -108,123 +108,125 @@ export default function ChatApp() {
   const [selectedFriend, setSelectedFriend] = useState(null); // xóa bạn bè
   const [chatSearch, setChatSearch] = useState([]);
   const [chats, setChats] = useState([]);
-
+  const [mediaSender, setMediaSender] = useState(null); // Lưu thông tin người gửi media
+  const [showAllMedia, setShowAllMedia] = useState(false); // Xem tất cả, trong phần xem lại video, image
+  const [showAllFiles, setShowAllFiles] = useState(false); // cho file
   {
     /* Lấy danh sách conversation từ server và cập nhật vào state */
   }
-    const fetchConversations = async () => {
-      try {
-        // Bước 1: Lấy danh sách conversation
-        const res = await axios.get(
-          `http://localhost:8004/conversations/${user._id}`
-        );
-        let conversations = res.data;
-        // Bước 2: Lọc bỏ conversations có messages rỗng
-        conversations = conversations.filter(
-          (conv) => conv.messages.length > 0
-        );
-        // Bước 3: Lọc bỏ conversations đã bị xóa bởi tôi
-        conversations = conversations.filter(
-          (conv) =>
-            !conv.deleteBy.some((id) => id.toString() === user._id.toString())
-        );
+  const fetchConversations = async () => {
+    try {
+      // Bước 1: Lấy danh sách conversation
+      const res = await axios.get(
+        `http://localhost:8004/conversations/${user._id}`
+      );
+      let conversations = res.data;
+      // Bước 2: Lọc bỏ conversations có messages rỗng
+      conversations = conversations.filter(
+        (conv) => conv.messages.length > 0
+      );
+      // Bước 3: Lọc bỏ conversations đã bị xóa bởi tôi
+      conversations = conversations.filter(
+        (conv) =>
+          !conv.deleteBy.some((id) => id.toString() === user._id.toString())
+      );
 
-        const chatPromises = conversations.map(async (conv) => {
-          // Bước 2: Lấy userId từ members (trừ currentUser)
-          const unreadCountForUser =
-            conv.unreadCounts.find(
-              (item) => item.userId.toString() === user._id.toString()
-            )?.count || 0;
-          if (conv.isGroup) {
-            // 🟢 Đây là conversation nhóm
-            const memberIds = conv.members.filter((_id) => _id !== user._id);
+      const chatPromises = conversations.map(async (conv) => {
+        // Bước 2: Lấy userId từ members (trừ currentUser)
+        const unreadCountForUser =
+          conv.unreadCounts.find(
+            (item) => item.userId.toString() === user._id.toString()
+          )?.count || 0;
+        if (conv.isGroup) {
+          // 🟢 Đây là conversation nhóm
+          const memberIds = conv.members.filter((_id) => _id !== user._id);
 
-            // Gửi yêu cầu API để lấy thông tin của tất cả thành viên trong nhóm
-            const memberDetails = await Promise.all(
-              memberIds.map(async (memberId) => {
-                try {
-                  const res = await axios.get(
-                    `http://localhost:8004/users/get/${memberId}`
-                  );
-                  return res.data; // { _id, username, avatar }
-                } catch (err) {
-                  console.error("Lỗi khi lấy thông tin thành viên:", err);
-                  return {
-                    _id: memberId,
-                    username: "Không xác định",
-                    avatar: "/default-avatar.png",
-                  };
-                }
-              })
-            );
-            const leftMemberDetails = await Promise.all(
-              (conv.leftMembers || []).map(async (member) => {
-                try {
-                  const res = await axios.get(
-                    `http://localhost:8004/users/get/${member.userId}`
-                  );
-                  return {
-                    userId: member.userId,
-                    username: res.data.username, // Lấy username
-                    leftAt: member.leftAt, // Giữ nguyên thời gian rời nhóm
-                    lastMessageId: member.lastMessageId, // Lưu lại ID của tin nhắn cuối cùng
-                  };
-                } catch (err) {
-                  console.error("Lỗi khi lấy thông tin thành viên rời nhóm:", err);
-                  return { userId: member.userId, username: "Không xác định", leftAt: member.leftAt };
-                }
-              })
-            );
-            return {
-              isGroup: conv.isGroup,
-              conversationId: conv._id,
-              lastMessageSenderId: conv.lastMessageSenderId,
-              lastMessageId: conv.lastMessageId,
-              name: conv.name, // Lấy tên nhóm
-              image:
-                conv.groupAvatar ||
-                "https://file.hstatic.net/200000503583/file/tao-dang-chup-anh-nhom-lay-loi__5__34b470841bb840e3b2ce25cbe02533ec.jpg", // Avatar nhóm
-              lastMessage: conv.latestmessage || "",
-              timestamp: conv.updatedAt,
-              active: false, // Nhóm không có trạng thái online
-              unreadCount: unreadCountForUser,
-              lastMessageTime: conv.lastMessageTime,
-              members: memberDetails, // Lưu danh sách thành viên
-              deleteBy: conv.deleteBy, // Lưu danh sách người đã xóa
-              leftMembers: leftMemberDetails, // Lưu danh sách người đã rời nhóm
-            };
-          } else {
-            // 🟢 Đây là conversation giữa 2 người
-            const otherUserId = conv.members.find((_id) => _id !== user._id);
-            const userRes = await axios.get(
-              `http://localhost:8004/users/get/${otherUserId}`
-            );
-            const otherUser = userRes.data;
+          // Gửi yêu cầu API để lấy thông tin của tất cả thành viên trong nhóm
+          const memberDetails = await Promise.all(
+            memberIds.map(async (memberId) => {
+              try {
+                const res = await axios.get(
+                  `http://localhost:8004/users/get/${memberId}`
+                );
+                return res.data; // { _id, username, avatar }
+              } catch (err) {
+                console.error("Lỗi khi lấy thông tin thành viên:", err);
+                return {
+                  _id: memberId,
+                  username: "Không xác định",
+                  avatar: "/default-avatar.png",
+                };
+              }
+            })
+          );
+          const leftMemberDetails = await Promise.all(
+            (conv.leftMembers || []).map(async (member) => {
+              try {
+                const res = await axios.get(
+                  `http://localhost:8004/users/get/${member.userId}`
+                );
+                return {
+                  userId: member.userId,
+                  username: res.data.username, // Lấy username
+                  leftAt: member.leftAt, // Giữ nguyên thời gian rời nhóm
+                  lastMessageId: member.lastMessageId, // Lưu lại ID của tin nhắn cuối cùng
+                };
+              } catch (err) {
+                console.error("Lỗi khi lấy thông tin thành viên rời nhóm:", err);
+                return { userId: member.userId, username: "Không xác định", leftAt: member.leftAt };
+              }
+            })
+          );
+          return {
+            isGroup: conv.isGroup,
+            conversationId: conv._id,
+            lastMessageSenderId: conv.lastMessageSenderId,
+            lastMessageId: conv.lastMessageId,
+            name: conv.name, // Lấy tên nhóm
+            image:
+              conv.groupAvatar ||
+              "https://file.hstatic.net/200000503583/file/tao-dang-chup-anh-nhom-lay-loi__5__34b470841bb840e3b2ce25cbe02533ec.jpg", // Avatar nhóm
+            lastMessage: conv.latestmessage || "",
+            timestamp: conv.updatedAt,
+            active: false, // Nhóm không có trạng thái online
+            unreadCount: unreadCountForUser,
+            lastMessageTime: conv.lastMessageTime,
+            members: memberDetails, // Lưu danh sách thành viên
+            deleteBy: conv.deleteBy, // Lưu danh sách người đã xóa
+            leftMembers: leftMemberDetails, // Lưu danh sách người đã rời nhóm
+          };
+        } else {
+          // 🟢 Đây là conversation giữa 2 người
+          const otherUserId = conv.members.find((_id) => _id !== user._id);
+          const userRes = await axios.get(
+            `http://localhost:8004/users/get/${otherUserId}`
+          );
+          const otherUser = userRes.data;
 
-            return {
-              isGroup: conv.isGroup,
-              conversationId: conv._id,
-              lastMessageSenderId: conv.lastMessageSenderId,
-              lastMessageId: conv.lastMessageId,
-              name: otherUser.username,
-              image: otherUser.avatar,
-              lastMessage: conv.latestmessage || "",
-              timestamp: conv.updatedAt,
-              active: otherUser.isOnline,
-              unreadCount: unreadCountForUser,
-              lastMessageTime: conv.lastMessageTime,
-              deleteBy: conv.deleteBy, // Lưu danh sách người đã xóa
-            };
-          }
-        });
-        // Chờ tất cả promises hoàn thành
-        const chatList = await Promise.all(chatPromises);
-        setChats(chatList);
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    useEffect(() => {
+          return {
+            isGroup: conv.isGroup,
+            conversationId: conv._id,
+            lastMessageSenderId: conv.lastMessageSenderId,
+            lastMessageId: conv.lastMessageId,
+            name: otherUser.username,
+            image: otherUser.avatar,
+            lastMessage: conv.latestmessage || "",
+            timestamp: conv.updatedAt,
+            active: otherUser.isOnline,
+            unreadCount: unreadCountForUser,
+            lastMessageTime: conv.lastMessageTime,
+            deleteBy: conv.deleteBy, // Lưu danh sách người đã xóa
+          };
+        }
+      });
+      // Chờ tất cả promises hoàn thành
+      const chatList = await Promise.all(chatPromises);
+      setChats(chatList);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+  useEffect(() => {
 
     fetchConversations();
     socket.on("conversationUpdated", (data) => {
@@ -273,7 +275,7 @@ export default function ChatApp() {
     if (fileUrl) {
       const imageExtensions = ["jpg", "jpeg", "png", "gif"];
       const videoExtensions = ["mp4", "mov"];
-      const fileExtensions = ["pdf", "docx", "xlsx", "doc", "pptx"];
+      const fileExtensions = ["pdf", "docx", "xlsx", "doc", "pptx", "txt", "zip", "rar"];
 
       const fileExtension = fileName.split(".").pop().toLowerCase();
 
@@ -397,7 +399,7 @@ export default function ChatApp() {
       if ((menuRef.current && !menuRef.current.contains(event.target))) {
         setShowMenu(false); // Đóng menu đăng xuất
       }
-        if ((friendRef.current && !friendRef.current.contains(event.target)) ) {
+      if ((friendRef.current && !friendRef.current.contains(event.target))) {
         setSelectedFriend(null); // Đóng menu "Xóa bạn"
       }
     };
@@ -580,7 +582,7 @@ export default function ChatApp() {
       //   const messages = await fetchMessagesByConversationId(conversationId);
       //   setMessages(messages);
       // };
-  
+
       // fetchMessages(); // Gọi hàm async
     });
 
@@ -645,7 +647,7 @@ export default function ChatApp() {
     if (!file) return;
 
     // Reset input file để kích hoạt sự kiện onChange khi chọn lại cùng file
-    e.target.value = ""; 
+    e.target.value = "";
 
     const formData = new FormData();
     formData.append("file", file);
@@ -657,7 +659,7 @@ export default function ChatApp() {
     for (let key of formData.keys()) {
       console.log(key);
     }
-    
+
 
     const fileUrl = URL.createObjectURL(file) + `#${Math.random()}`;
     console.log("fileUrl", fileUrl);
@@ -692,6 +694,8 @@ export default function ChatApp() {
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResult, setSearchResult] = useState(null);
 
+  const [showMediaModal, setShowMediaModal] = useState(false); // Xem lại hình ảnh, video đã gửi
+
   const handleEmojiClick = (emojiObject) => {
     const emoji = emojiObject.emoji;
     if (inputText.trim() === "") {
@@ -723,10 +727,12 @@ export default function ChatApp() {
     return () => document.removeEventListener("click", handleClickOutside);
   }, [showEmojiPicker]);
 
-  const openModal = (url, type) => {
+  const openModal = (url, type, senderInfo) => {
     setMediaUrl(url);
     setMediaType(type);
     setIsOpen(true);
+    setMediaSender(senderInfo); // thêm dòng này
+    console.log("mediaSender", senderInfo); // Kiểm tra thông tin người gửi
   };
 
   const closeModal = () => {
@@ -779,7 +785,7 @@ export default function ChatApp() {
   };
   //Gửi lời mời kết bạn
   const handleSendFriendRequest = async (receiverId) => {
-   
+
     try {
       const response = await fetch(
         "http://localhost:8004/friends/send-request",
@@ -799,7 +805,7 @@ export default function ChatApp() {
         // Gọi lại loadFriends để cập nhật danh sách bạn bè nếu API cập nhật ngay
         loadFriends();
         toast.success("Đã gửi lời mời kết bạn!"); // Hiển thị thông báo thành công
-       
+
       } else {
         toast.error(data.message); // Hiển thị thông báo lỗi
       }
@@ -1015,7 +1021,7 @@ export default function ChatApp() {
         (conv) =>
           conv.members.length === 2 && // Chỉ kiểm tra chat 1-1
           conv.members.some((member) => member._id === user._id) &&
-          conv.members.some((member) => member._id === receiverId)
+          conv.members.some((member) => member._id === receiverId) 
       );
       const userreciver = await fetch(
         `http://localhost:8004/users/get/${receiverId}`
@@ -1082,7 +1088,7 @@ export default function ChatApp() {
       ...updatedUser,
       [e.target.name]: e.target.value
     });
-   
+
   };
 
   const handleAvatarChange = (e) => {
@@ -1110,7 +1116,7 @@ export default function ChatApp() {
           'Content-Type': 'multipart/form-data',
         },
       });
-      
+
 
       // Sau khi cập nhật thành công, cập nhật lại user với thông tin mới
       setUpdatedUser({
@@ -1130,7 +1136,53 @@ export default function ChatApp() {
   const togglePasswordVisibility = () => {
     setShowPassword(!showPassword);
   };
-  
+  // Lọc media đã gửi
+  const filteredMedia = messages
+    .filter(
+      (msg) =>
+        !msg.isRecalled &&
+        (msg.imageUrl || msg.videoUrl || msg.fileUrl) &&
+        !msg.deletedFrom?.includes(user._id)
+    )
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); // Sắp xếp mới nhất lên trước
+
+  // Trước phần return
+  const mediaOnly = filteredMedia
+    .filter((msg) => (msg.imageUrl || msg.videoUrl) && !msg.isRecalled && !msg.deletedFrom?.includes(user._id));
+
+  const fileOnly = filteredMedia
+    .filter((msg) => msg.fileUrl && !msg.isRecalled && !msg.deletedFrom?.includes(user._id));
+
+  const getFileIcon = (fileName) => {
+    const extension = fileName.split('.').pop().toLowerCase();
+    console.log("extension", extension);
+
+    switch (extension) {
+      case 'pdf':
+        return '📕'; // PDF
+      case 'doc':
+      case 'docx':
+        return '📄'; // Word
+      case 'xls':
+      case 'xlsx':
+        return '📊'; // Excel
+      case 'ppt':
+      case 'pptx':
+        return '📽️'; // PowerPoint
+      case 'zip':
+      case 'rar':
+        return '🗜️'; // Compressed
+      case 'txt':
+        return '📝'; // Text
+      case 'mp4':
+      case 'mov':
+        return '🎥'; // Video
+      default:
+        return '📎'; // Default
+    }
+  };
+
+
 
   return (
     <div className="chat-app">
@@ -1192,12 +1244,12 @@ export default function ChatApp() {
                   friends.some(friend => friend._id === searchResult._id) ? (
                     <span className="friend-label">Bạn bè</span>
                   ) : isFriendRequestSent ? (
-                      <>
-                        <span className="added-request">Đã gửi lời mời kết bạn</span>
-                        <button onClick={() => handleCancelFriendRequest(searchResult._id)} className="cancel-button">
-                          Thu hồi
-                        </button>
-                      </>
+                    <>
+                      <span className="added-request">Đã gửi lời mời kết bạn</span>
+                      <button onClick={() => handleCancelFriendRequest(searchResult._id)} className="cancel-button">
+                        Thu hồi
+                      </button>
+                    </>
                   ) : (
                     <button onClick={() => handleSendFriendRequest(searchResult._id)}>
                       Kết bạn
@@ -1235,20 +1287,18 @@ export default function ChatApp() {
                   <div className="chat-container">
                     <p className="chat-name">{chat.name}</p>
                     <p
-                      className={`chat-message ${
-                        chat.unreadCount > 0 ? "unread-message" : ""
-                      }`}
+                      className={`chat-message ${chat.unreadCount > 0 ? "unread-message" : ""
+                        }`}
                     >
                       {chat.lastMessageSenderId?.toString() ===
-                      user._id.toString()
-                        ? `Bạn: ${
-                            chat.lastMessage.length > 10
-                              ? chat.lastMessage.slice(0, 10) + "..."
-                              : chat.lastMessage
-                          }`
+                        user._id.toString()
+                        ? `Bạn: ${chat.lastMessage.length > 10
+                          ? chat.lastMessage.slice(0, 10) + "..."
+                          : chat.lastMessage
+                        }`
                         : chat.lastMessage.length > 10
-                        ? chat.lastMessage.slice(0, 10) + "..."
-                        : chat.lastMessage}
+                          ? chat.lastMessage.slice(0, 10) + "..."
+                          : chat.lastMessage}
 
                       {chat.unreadCount > 0 && (
                         <span className="unread-badge">
@@ -1259,9 +1309,8 @@ export default function ChatApp() {
                   </div>
                   <div className="chat-timestamp">
                     <p
-                      className={`chat-timestamp-item ${
-                        chat.unreadCount > 0 ? "unread-timestamp" : ""
-                      }`}
+                      className={`chat-timestamp-item ${chat.unreadCount > 0 ? "unread-timestamp" : ""
+                        }`}
                     >
                       {formatTimeMessage(chat.lastMessageTime)}
                     </p>
@@ -1373,7 +1422,7 @@ export default function ChatApp() {
               <span className="close-btnuser" onClick={() => setShowModal(false)}>&times;</span>
               <h5>Thông tin tài khoản</h5>
               <img
-                src="https://res-console.cloudinary.com/dapvuniyx/thumbnails/v1/image/upload/v1742811884/Y3ptcjF1bmJwcXh3MXRoMWw4aTI=/drilldown"
+                src="https://res.cloudinary.com/dapvuniyx/image/upload/v1743264121/chat_app_uploads/pecr79frcqusf69mdzhm.png"
                 alt=""
                 className="profile-avataruser-nen"
               />
@@ -1385,7 +1434,7 @@ export default function ChatApp() {
                 />
                 {/* Thay input bằng icon */}
                 <label htmlFor="avatar-upload" className="avatar-icon-label">
-                  <FaCamera size={25} color="black"/> {/* Thêm icon từ react-icons */}
+                  <FaCamera size={25} color="black" /> {/* Thêm icon từ react-icons */}
                 </label>
                 <input
                   id="avatar-upload"
@@ -1410,7 +1459,7 @@ export default function ChatApp() {
               <div className="thongtin-canhan">
                 <h5>Thông tin cá nhân</h5>
                 <p>
-                  <strong>Email:</strong> 
+                  <strong>Email:</strong>
                   <input
                     type="text"
                     name="email"
@@ -1418,7 +1467,7 @@ export default function ChatApp() {
                     // onChange={handleChange}
                     readOnly // Chỉ xem, không chỉnh sửa được
                     placeholder="Nhập email mới"
-                   
+
                   />
                 </p>
                 <p>
@@ -1462,7 +1511,7 @@ export default function ChatApp() {
             </div>
           </div>
         )}
-        
+
         <div className="icon-item" onClick={showChatlists}>
           <FaComments className="icon chat-icon" title="Chat" />
           <span className="chat-icon-text">Chats</span>
@@ -1522,23 +1571,23 @@ export default function ChatApp() {
         <div className="friends-list">
           <h2>Danh sách bạn bè</h2>
           {friends.length > 0 ? (
-              friends.map((friend) => (
-                console.log("friend nhận được", friend._id),
-                
-                <div key={friend._id} className="friend-item" ref={friendRef}>
-                  <div className="friend-info">
+            friends.map((friend) => (
+              console.log("friend nhận được", friend._id),
+
+              <div key={friend._id} className="friend-item" ref={friendRef}>
+                <div className="friend-info">
                   <img src={friend.avatar} alt="avatar" className="friend-avatar" onClick={() => {
                     if (friend._id) {
                       createNewChat(friend._id);
                     } else {
                       console.error("friend._id bị undefined:", friend);
                     }
-                  }}/>
+                  }} />
                   <p className="friend-name">{friend.username}</p>
-                      <FaEllipsisV className="bacham-banbe" onClick={() => toggleMenuXoa(friend._id)}  />
+                  <FaEllipsisV className="bacham-banbe" onClick={() => toggleMenuXoa(friend._id)} />
                 </div>
                 {selectedFriend === friend._id && (
-                      <div className="dropdown-menu" ref={friendMenuRef} >
+                  <div className="dropdown-menu" ref={friendMenuRef} >
                     <button onClick={() => handleRemoveFriend(friend._id)}>Xóa bạn</button>
                   </div>
                 )}
@@ -1564,8 +1613,8 @@ export default function ChatApp() {
                   {selectedChat.isGroup
                     ? `${selectedChat.members.length + 1} thành viên`
                     : selectedChat.active
-                    ? "Online"
-                    : "Offline"}
+                      ? "Online"
+                      : "Offline"}
                 </p>
               </div>
             </div>
@@ -1573,7 +1622,110 @@ export default function ChatApp() {
               <FaVideo className="icon" />
               <FaPhone className="icon" />
               <FaStarHalfAlt className="icon" />
-              <FaExclamationCircle className="icon" />
+              <FaExclamationCircle className="icon" onClick={() => setShowMediaModal((prev) => !prev)} />
+
+              {showMediaModal && (
+                <div className="media-overlay" onClick={() => setShowMediaModal(false)}>
+                  <div className="media-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="media-header">
+                          <FaTimes className="icon-outmedia" onClick={() => setShowMediaModal(false)} />
+                      <h4>Thông tin hội thoại</h4>
+                      <hr />
+                    </div>
+                    <div className="user-conservation">
+                      <div className="container-conservation">
+                        <div className="avatar-conservation">
+                          <img src={selectedChat.image} alt="img" className="avatar-conservation-img" />
+                        </div>
+                        <div className="info-conservation">
+                          <p className="name-conservation">{selectedChat.name}</p>
+                        </div>
+                        <div className="add-group-conservation">
+                          <FaUsers className="icon-addgroups" />
+                          <p>Tạo nhóm trò chuyện</p>
+                        </div>
+
+                          </div>
+                          <div className="container-conservation">
+                          <div className="image-video-conservation">
+                            <p>Ảnh / Video</p>
+                            {mediaOnly.length === 0 ? (
+                              <p className="no-media-message">Chưa có ảnh/video nào được gửi.</p>
+                            ) : (
+                              <>
+                                <div className="media-content">
+                                  {(showAllMedia ? mediaOnly : mediaOnly.slice(0, 4)).map((msg, index) => (
+                                    <div key={index} className="media-item">
+                                      {msg.imageUrl && (
+                                        <img
+                                          src={msg.imageUrl}
+                                          alt="image"
+                                          className="media-thumbnail"
+                                          onClick={() => openModal(msg.imageUrl, "image", msg)}
+                                        />
+                                      )}
+                                      {msg.videoUrl && (
+                                        <video
+                                          src={msg.videoUrl}
+                                          className="media-thumbnail"
+                                          controls
+                                          onClick={() => openModal(msg.videoUrl, "video", msg)}
+                                        />
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                                {mediaOnly.length > 4 && (
+                                  <button onClick={() => setShowAllMedia(!showAllMedia)}>
+                                    {showAllMedia ? "Ẩn bớt" : "Xem tất cả"}
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                          </div>
+
+                          <div className="container-conservation">
+                            <div className="image-video-conservation">
+                              
+                            <p>File</p>
+                            {fileOnly.length === 0 ? (
+                              <p className="no-media-message">Chưa có file nào được gửi.</p>
+                            ) : (
+                              <>
+                                <div className="media-content">
+                                  {(showAllFiles ? fileOnly : fileOnly.slice(0, 4)).map((msg, index) => (
+                                    <div key={index} className="media-item">
+                                      <a
+                                        href={msg.fileUrl}
+                                        download={msg.fileName}
+                                        className="media-file-link"
+                                      >
+                                        <span className="file-icon">{getFileIcon(msg.fileName)}</span>
+                                        {msg.fileName}
+                                      </a>
+                                    </div>
+                                  ))}
+                                </div>
+                                {fileOnly.length > 4 && (
+                                  <button onClick={() => setShowAllFiles(!showAllFiles)}>
+                                    {showAllFiles ? "Ẩn bớt" : "Xem tất cả"}
+                                  </button>
+                                )}
+                              </>
+                            )}
+                            </div>
+                          </div>
+
+
+
+                    </div>
+
+                  </div>
+                </div>
+              )}
+
+
             </div>
           </div>
           {pinnedMessage && (
@@ -1604,11 +1756,12 @@ export default function ChatApp() {
                 const currentDate = new Date(
                   msg.createdAt
                 ).toLocaleDateString();
+                console.log("msg", msg);
                 const prevDate =
                   index > 0
                     ? new Date(
-                        messages[index - 1].createdAt
-                      ).toLocaleDateString()
+                      messages[index - 1].createdAt
+                    ).toLocaleDateString()
                     : null;
                 const showDateDivider = currentDate !== prevDate;
                 const isMe =
@@ -1620,6 +1773,7 @@ export default function ChatApp() {
                   );
                 return (
                   <>
+
                     {showDateDivider && (
                       <div className="date-divider">
                         <span>
@@ -1635,9 +1789,8 @@ export default function ChatApp() {
                     <div
                       key={index}
                       ref={(el) => (messageRefs.current[msg._id] = el)}
-                      className={`message-row ${isMe ? "me" : "them"} ${
-                        highlightedMessageId === msg._id ? "highlight" : ""
-                      }`}
+                      className={`message-row ${isMe ? "me" : "them"} ${highlightedMessageId === msg._id ? "highlight" : ""
+                        }`}
                     >
                       <div
                         className={`message-row ${isMe ? "me" : "them"}`}
@@ -1675,7 +1828,7 @@ export default function ChatApp() {
                                   <span className="reply-preview-text">
                                     {msg.replyTo.text ||
                                       msg.replyTo.fileName ||
-                                        (msg.replyTo.imageUrl && "Ảnh") ||
+                                      (msg.replyTo.imageUrl && "Ảnh") ||
                                       (msg.replyTo.video && "Video")}
                                   </span>
                                 </div>
@@ -1690,28 +1843,28 @@ export default function ChatApp() {
                               <div className="message-text">
                                 {msg.text && <p>{msg.text}</p>}
                               </div>
-                                {msg.imageUrl && (
+                              {msg.imageUrl && (
                                 <img
-                                    src={msg.imageUrl}
+                                  src={msg.imageUrl}
                                   alt="sent"
                                   className="chat-image"
-                                    onClick={() => openModal(msg.imageUrl, "image")}
-                                  />
-                                  
+                                  onClick={() => openModal(msg.imageUrl, "image", msg)}
+                                />
+
                               )}
-                                {msg.videoUrl && (
+                              {msg.videoUrl && (
                                 <video
                                   controls
                                   className="chat-video"
-                                    onClick={() => openModal(msg.videoUrl, "video")}
+                                  onClick={() => openModal(msg.videoUrl, "video", msg)}
                                 >
-                                    <source src={msg.videoUrl} type="video/mp4" />
+                                  <source src={msg.videoUrl} type="video/mp4" />
                                 </video>
                               )}
                               {msg.fileUrl && (
                                 <div className="file-message">
                                   <a
-                                      href={msg.fileUrl}
+                                    href={msg.fileUrl}
                                     download={msg.fileName}
                                     className="file-link"
                                   >
@@ -1726,12 +1879,12 @@ export default function ChatApp() {
                             <span className="timestamp">
                               {msg.createdAt
                                 ? new Date(msg.createdAt).toLocaleTimeString(
-                                    [],
-                                    {
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    }
-                                  )
+                                  [],
+                                  {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  }
+                                )
                                 : ""}
                             </span>
                             {msg.status === "sending" ? (
@@ -1744,9 +1897,8 @@ export default function ChatApp() {
                         {/* Nút ba chấm khi hover */}
                         {hoveredMessageId === msg._id && (
                           <div
-                            className={`three-dots-icon ${
-                              isMe ? "left" : "right"
-                            }`}
+                            className={`three-dots-icon ${isMe ? "left" : "right"
+                              }`}
                           >
                             <FaEllipsisH
                               className="icon"
@@ -1757,9 +1909,8 @@ export default function ChatApp() {
                             />
                             {menuMessageId === msg._id && (
                               <div
-                                className={`message-menu ${
-                                  isMe ? "left" : "right"
-                                }`}
+                                className={`message-menu ${isMe ? "left" : "right"
+                                  }`}
                               >
                                 {!msg.isRecalled && (
                                   <div
@@ -1961,21 +2112,55 @@ export default function ChatApp() {
         <Modal
           isOpen={isOpen}
           onRequestClose={closeModal}
-          shouldCloseOnOverlayClick={true} // Cho phép đóng khi click vào overlay
+          shouldCloseOnOverlayClick={true}
           contentLabel="Media Modal"
           className="modal-overlay"
           overlayClassName="overlay"
         >
-          {mediaType === "image" ? (
-            <img src={mediaUrl} alt="Media" className="modal-media" />
-          ) : (
-            <video controls className="modal-media">
-              <source src={mediaUrl} type="video/mp4" />
-            </video>
-          )}
-          <label onClick={closeModal} className="close-modal-button">
-            <FaTimes />
-          </label>
+          <div className="modal-content-wrapper">
+            <div className="modal-media-wrapper">
+              {mediaType === "image" ? (
+                <img src={mediaUrl} alt="Media" className="modal-media" />
+              ) : (
+                <video controls className="modal-media">
+                  <source src={mediaUrl} type="video/mp4" />
+                </video>
+              )}
+            </div>
+
+            {mediaSender && (
+              <div className="info-usersend">
+                <div className="info-usersend-item">
+                  <img
+                    src={mediaSender.senderId.avatar}
+                    alt="avatar"
+                    className="avatar-usersend"
+                  />
+                  <span className="name-usersend">{mediaSender.senderId.username}</span>
+                  <span className="time-usersend">
+                    {mediaSender.createdAt
+                      ? `${new Date(mediaSender.createdAt).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })} - ${new Date(mediaSender.createdAt).toLocaleDateString("vi-VN", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                      })}`
+                      : ""}
+                  </span>
+
+
+
+
+                </div>
+              </div>
+            )}
+
+            <label onClick={closeModal} className="close-modal-button">
+              <FaTimes />
+            </label>
+          </div>
         </Modal>
       )}
     </div>

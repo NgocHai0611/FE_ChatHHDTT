@@ -993,11 +993,62 @@
 
 
 /* Modal */
-.modal-media {
-    max-width: 800px; /* Giới hạn kích thước hình ảnh/video */
-    max-height: 600px; /* Giới hạn chiều cao */
-    object-fit: contain; /* Giữ tỷ lệ gốc của hình ảnh/video */
+.modal-content-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px; /* Khoảng cách giữa media và info */
 }
+
+.modal-media-wrapper {
+  background: #f0f0f0;
+  padding: 3px;
+  border-radius: 8px;
+}
+
+.modal-media {
+  max-width: 90vw;      /* Không vượt quá 90% chiều rộng màn hình */
+  max-height: 80vh;     /* Không vượt quá 80% chiều cao màn hình */
+  width: auto;
+  height: auto;
+  object-fit: contain;  /* Giữ tỉ lệ hình ảnh hoặc video */
+  border-radius: 10px;
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+}
+
+
+.info-usersend {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  width: 100%;
+  padding: 0 16px;
+}
+
+.info-usersend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.avatar-usersend {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.name-usersend {
+  font-size: 15px;
+  font-weight: 500;
+  color: #ffffff;
+}
+.time-usersend{
+  font-size: 12px;
+  color: #ffffff;
+  margin-left: 10px;
+}
+
 
 /* Nút đóng */
 .close-modal-button {
@@ -1394,3 +1445,136 @@
   border: 1px solid #ccc;
   border-radius: 4px;
 }
+
+.media-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5); /* overlay mờ */
+  display: flex;
+  justify-content: flex-end; /* căn về phía phải */
+  align-items: stretch; /* cho modal cao hết chiều cao nếu muốn */
+  z-index: 999;
+}
+
+.media-modal {
+  background: #fff;
+  width: 400px; /* hoặc tuỳ ý, ví dụ 30%, 500px,... */
+  height: 100%;
+  padding: 20px;
+  border-radius: 8px 0 0 8px; /* bo tròn góc bên trái */
+  overflow-y: auto;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.2);
+}
+.media-header{
+  padding: 15px 15px;
+  margin-bottom: 10px;
+}
+.container-conservation {
+  background-color: #f1f1f1; /* nền xám nhạt */
+  padding: 16px 20px;
+  border-radius: 12px;       /* bo góc mềm mại */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); /* hiệu ứng nổi lên */
+  margin-bottom: 16px;       /* cách phần dưới */
+}
+.avatar-conservation-img{
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  margin-right: 10px;
+  border: 2px solid #ccc;
+}
+.name-conservation{
+  font-size: 18px;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 5px;
+}
+
+.icon-addgroups {
+  margin-top: 10px;
+  background-color: #e0e0e0; /* nền xám nhạt */
+  border: 2px solid #ccc;    /* viền màu xám */
+  border-radius: 50%;        /* bo tròn */
+  font-size: 30px;           /* kích thước icon */
+  cursor: pointer;
+  transition: 0.3s;
+  width: 30px;
+  height: 30px;
+}
+
+.icon-addgroups:hover {
+  border-color: #aaa;
+  background-color: #ccc; /* nền xám nhạt */
+}
+.add-group-conservation p{
+  font-size: 16px;
+  font-weight: bold;
+  color: #333;
+  margin-left: 10px;
+  margin-top: -5px;
+}
+
+.image-video-conservation p{
+  font-size: 16px;
+  font-weight: bold;
+  color: #333;
+  margin-left: 10px;
+  margin-top: -5px;
+}
+.media-content {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr); /* 4 cột */
+  gap: 10px; /* khoảng cách giữa các ô */
+  padding: 10px;
+}
+
+.media-item {
+  width: 100%;
+  aspect-ratio: 1 / 1; /* đảm bảo ô vuông */
+  overflow: hidden;
+  border-radius: 8px;
+  position: relative;
+  background: #f0f0f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.media-thumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.media-file-link {
+  text-align: center;
+  padding: 6px;
+  font-size: 14px;
+  background-color: #e0e0e0;
+  border-radius: 6px;
+  display: block;
+  word-break: break-word;
+}
+
+.no-media-message {
+  font-style: italic;
+  color: gray;
+  padding: 10px 0;
+}
+.icon-outmedia{
+  font-size: 25px;
+  color: #555;
+  cursor: pointer;
+  transition: color 0.3s ease;
+  margin-left: 300px;
+  top: -15px;
+  position: relative;
+  
+}
+.icon-outmedia:hover { 
+  color: red; } /* Màu xanh chat */
