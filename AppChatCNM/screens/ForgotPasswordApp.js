@@ -1,29 +1,42 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   TextInput,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Modal
+  Modal,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useNavigation } from "@react-navigation/native";
-import axios from 'axios';
+import { useNavigation, useRoute } from "@react-navigation/native";
+import axios from "axios";
 
-export default function ForgetPassScreen() {
+export default function ForgotPasswordApp() {
   const navigation = useNavigation();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const route = useRoute();
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [isNewPasswordVisible, setIsNewPasswordVisible] = useState(false);
   const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
-  const [isEmailFocused, setIsEmailFocused] = useState(false);
   const [isPasswordFocused, setIsPasswordFocused] = useState(false);
   const [isConfirmPasswordFocused, setIsConfirmPasswordFocused] = useState(false);
   const [isModalVisible, setModalVisible] = useState(false);
-  const [modalMessage, setModalMessage] = useState('');
+  const [modalMessage, setModalMessage] = useState("");
+  const [token, setToken] = useState("");
+
+  const API_BASE_URL = `http://localhost:8004`;
+
+  useEffect(() => {
+    // Lấy token từ route.params (được truyền qua deep linking)
+    const resetToken = route.params?.token;
+    if (resetToken) {
+      setToken(resetToken);
+    } else {
+      setModalMessage("Không tìm thấy token. Vui lòng thử lại.");
+      setModalVisible(true);
+    }
+  }, [route.params]);
 
   const toggleNewPasswordVisibility = () => {
     setIsNewPasswordVisible(!isNewPasswordVisible);
@@ -33,29 +46,25 @@ export default function ForgetPassScreen() {
     setIsConfirmPasswordVisible(!isConfirmPasswordVisible);
   };
 
-  // const handleReset = async () => {
-  //   if (password !== confirmPassword) {
-  //     setModalMessage("Passwords do not match.");
-  //     setModalVisible(true);
-  //   } else {
-  //     try {
-  //       const response = await axios.put('http://localhost:3000/reset-password', {
-  //         username,
-  //         password,
-  //       });
+  const handleReset = async () => {
+    if (password !== confirmPassword) {
+      setModalMessage("Mật khẩu và mật khẩu xác nhận không khớp!");
+      setModalVisible(true);
+      return;
+    }
 
-  //       setModalMessage(response.data.message);
-  //       setModalVisible(true);
-  //     } catch (error) {
-  //       if (error.response) {
-  //         setModalMessage(error.response.data.message);
-  //       } else {
-  //         setModalMessage("An error occurred. Please try again.");
-  //       }
-  //       setModalVisible(true);
-  //     }
-  //   }
-  // };
+    try {
+      const response = await axios.post(`${API_BASE_URL}/v1/auth/reset-password/${token}`, {
+        newPassword: password,
+        confirmPassword,
+      });
+      setModalMessage(response.data.message);
+      setModalVisible(true);
+    } catch (error) {
+      setModalMessage(error.response?.data?.message || "Đã có lỗi xảy ra!");
+      setModalVisible(true);
+    }
+  };
 
   return (
     <LinearGradient
@@ -70,20 +79,6 @@ export default function ForgetPassScreen() {
       </TouchableOpacity>
 
       <Text style={styles.title}>Reset Password</Text>
-      <TextInput
-        style={[
-          styles.input,
-          { borderColor: isEmailFocused ? "#007AFF" : "#E8E8E8" },
-        ]}
-        placeholder="Enter email"
-        keyboardType="default"
-        autoCapitalize="none"
-        placeholderTextColor="#A9A9A9"
-        value={email}
-        onChangeText={setEmail}
-        onFocus={() => setIsEmailFocused(true)}
-        onBlur={() => setIsEmailFocused(false)}
-      />
 
       <View style={styles.passwordContainer}>
         <TextInput
@@ -99,7 +94,10 @@ export default function ForgetPassScreen() {
           onFocus={() => setIsPasswordFocused(true)}
           onBlur={() => setIsPasswordFocused(false)}
         />
-        <TouchableOpacity onPress={toggleNewPasswordVisibility} style={styles.showPasswordIcon}>
+        <TouchableOpacity
+          onPress={toggleNewPasswordVisibility}
+          style={styles.showPasswordIcon}
+        >
           <MaterialIcons
             name={isNewPasswordVisible ? "visibility-off" : "visibility"}
             size={24}
@@ -122,7 +120,10 @@ export default function ForgetPassScreen() {
           onFocus={() => setIsConfirmPasswordFocused(true)}
           onBlur={() => setIsConfirmPasswordFocused(false)}
         />
-        <TouchableOpacity onPress={toggleConfirmPasswordVisibility} style={styles.showPasswordIcon}>
+        <TouchableOpacity
+          onPress={toggleConfirmPasswordVisibility}
+          style={styles.showPasswordIcon}
+        >
           <MaterialIcons
             name={isConfirmPasswordVisible ? "visibility-off" : "visibility"}
             size={24}
@@ -131,11 +132,11 @@ export default function ForgetPassScreen() {
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity style={styles.resetButton}>
-        <Text style={styles.buttonText}>Reset</Text>
+      <TouchableOpacity style={styles.resetButton} onPress={handleReset}>
+        <Text style={styles.buttonText}>Submit</Text>
       </TouchableOpacity>
 
-      <Modal 
+      <Modal
         transparent={true}
         visible={isModalVisible}
         animationType="slide"
@@ -144,7 +145,15 @@ export default function ForgetPassScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalMessage}>{modalMessage}</Text>
-            <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.modalButton}>
+            <TouchableOpacity
+              onPress={() => {
+                setModalVisible(false);
+                if (modalMessage.includes("thành công")) {
+                  navigation.navigate("Login");
+                }
+              }}
+              style={styles.modalButton}
+            >
               <Text style={styles.modalButtonText}>Close</Text>
             </TouchableOpacity>
           </View>
@@ -173,18 +182,9 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontWeight: "bold",
   },
-  input: {
-    height: 50,
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 15,
-    fontSize: 16,
-    marginBottom: 20,
-    backgroundColor: "#FFFFFF",
-  },
   passwordContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 20,
   },
   inputPassword: {
@@ -194,10 +194,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 15,
     fontSize: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
   },
   showPasswordIcon: {
-    position: 'absolute',
+    position: "absolute",
     right: 10,
     padding: 10,
   },
@@ -215,28 +215,28 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
   },
   modalContent: {
     width: 300,
     padding: 20,
-    backgroundColor: 'white',
+    backgroundColor: "white",
     borderRadius: 10,
-    alignItems: 'center',
+    alignItems: "center",
   },
   modalMessage: {
     marginBottom: 15,
-    textAlign: 'center',
+    textAlign: "center",
   },
   modalButton: {
     padding: 10,
-    backgroundColor: '#007AFF',
+    backgroundColor: "#007AFF",
     borderRadius: 5,
   },
   modalButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
+    color: "white",
+    fontWeight: "bold",
   },
 });

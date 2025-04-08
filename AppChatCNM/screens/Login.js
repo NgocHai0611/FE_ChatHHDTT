@@ -44,7 +44,7 @@ export default function Login() {
     setIsLoading(true);
     try {
       const response = await axios.post(
-        "http://192.168.100.150:8004/v1/auth/login",
+        "http://localhost:8004/v1/auth/login",
         {
           email,
           password,
@@ -158,7 +158,7 @@ export default function Login() {
 
         <TouchableOpacity
           style={styles.forgotPassword}
-          onPress={() => navigation.navigate("ForgetPassScreen")}
+          onPress={() => navigation.navigate("RecoverPasswordApp")}
         >
           <Text style={styles.linkText}>Forgot Password?</Text>
         </TouchableOpacity>
