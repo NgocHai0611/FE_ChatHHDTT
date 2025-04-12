@@ -121,27 +121,29 @@ export default function ChatApp() {
         `http://localhost:8004/conversations/${user._id}`
       );
       let conversations = res.data;
+  
       // Bước 2: Lọc bỏ conversations có messages rỗng
       conversations = conversations.filter(
-        (conv) => conv.messages.length > 0
+        (conv) => Array.isArray(conv.messages) && conv.messages.length > 0
       );
+  
       // Bước 3: Lọc bỏ conversations đã bị xóa bởi tôi
       conversations = conversations.filter(
         (conv) =>
-          !conv.deleteBy.some((id) => id.toString() === user._id.toString())
+          !(Array.isArray(conv.deleteBy) &&
+            conv.deleteBy.some((id) => id.toString() === user._id.toString()))
       );
-
+  
       const chatPromises = conversations.map(async (conv) => {
-        // Bước 2: Lấy userId từ members (trừ currentUser)
         const unreadCountForUser =
-          conv.unreadCounts.find(
+          conv.unreadCounts?.find(
             (item) => item.userId.toString() === user._id.toString()
           )?.count || 0;
+  
         if (conv.isGroup) {
           // 🟢 Đây là conversation nhóm
           const memberIds = conv.members.filter((_id) => _id !== user._id);
-
-          // Gửi yêu cầu API để lấy thông tin của tất cả thành viên trong nhóm
+  
           const memberDetails = await Promise.all(
             memberIds.map(async (memberId) => {
               try {
@@ -159,41 +161,49 @@ export default function ChatApp() {
               }
             })
           );
+  
           const leftMemberDetails = await Promise.all(
-            (conv.leftMembers || []).map(async (member) => {
-              try {
-                const res = await axios.get(
-                  `http://localhost:8004/users/get/${member.userId}`
-                );
-                return {
-                  userId: member.userId,
-                  username: res.data.username, // Lấy username
-                  leftAt: member.leftAt, // Giữ nguyên thời gian rời nhóm
-                  lastMessageId: member.lastMessageId, // Lưu lại ID của tin nhắn cuối cùng
-                };
-              } catch (err) {
-                console.error("Lỗi khi lấy thông tin thành viên rời nhóm:", err);
-                return { userId: member.userId, username: "Không xác định", leftAt: member.leftAt };
+            (Array.isArray(conv.leftMembers) ? conv.leftMembers : []).map(
+              async (member) => {
+                try {
+                  const res = await axios.get(
+                    `http://localhost:8004/users/get/${member.userId}`
+                  );
+                  return {
+                    userId: member.userId,
+                    username: res.data.username,
+                    leftAt: member.leftAt,
+                    lastMessageId: member.lastMessageId,
+                  };
+                } catch (err) {
+                  console.error("Lỗi khi lấy thông tin thành viên rời nhóm:", err);
+                  return {
+                    userId: member.userId,
+                    username: "Không xác định",
+                    leftAt: member.leftAt,
+                  };
+                }
               }
-            })
+            )
           );
+  
           return {
             isGroup: conv.isGroup,
             conversationId: conv._id,
             lastMessageSenderId: conv.lastMessageSenderId,
             lastMessageId: conv.lastMessageId,
-            name: conv.name, // Lấy tên nhóm
+            name: conv.name, // Tên nhóm
             image:
               conv.groupAvatar ||
-              "https://file.hstatic.net/200000503583/file/tao-dang-chup-anh-nhom-lay-loi__5__34b470841bb840e3b2ce25cbe02533ec.jpg", // Avatar nhóm
+              "https://file.hstatic.net/200000503583/file/tao-dang-chup-anh-nhom-lay-loi__5__34b470841bb840e3b2ce25cbe02533ec.jpg",
             lastMessage: conv.latestmessage || "",
             timestamp: conv.updatedAt,
-            active: false, // Nhóm không có trạng thái online
+            active: false,
             unreadCount: unreadCountForUser,
             lastMessageTime: conv.lastMessageTime,
-            members: memberDetails, // Lưu danh sách thành viên
-            deleteBy: conv.deleteBy, // Lưu danh sách người đã xóa
-            leftMembers: leftMemberDetails, // Lưu danh sách người đã rời nhóm
+            members: memberDetails,
+            deleteBy: conv.deleteBy,
+            leftMembers: leftMemberDetails,
           };
         } else {
           // 🟢 Đây là conversation giữa 2 người
@@ -202,7 +212,7 @@ export default function ChatApp() {
             `http://localhost:8004/users/get/${otherUserId}`
           );
           const otherUser = userRes.data;
-
+  
           return {
             isGroup: conv.isGroup,
             conversationId: conv._id,
@@ -215,10 +225,11 @@ export default function ChatApp() {
             active: otherUser.isOnline,
             unreadCount: unreadCountForUser,
             lastMessageTime: conv.lastMessageTime,
-            deleteBy: conv.deleteBy, // Lưu danh sách người đã xóa
+            deleteBy: conv.deleteBy,
           };
         }
       });
+  
       // Chờ tất cả promises hoàn thành
       const chatList = await Promise.all(chatPromises);
       setChats(chatList);
@@ -226,17 +237,18 @@ export default function ChatApp() {
       console.error(err);
     }
   };
+  
   useEffect(() => {
-
     fetchConversations();
-    socket.on("conversationUpdated", (data) => {
-      fetchConversations(); // Chỉ fetch lại khi có sự thay đổi
+    socket.on("conversationUpdated", () => {
+      fetchConversations(); // Fetch lại khi có thay đổi
     });
-
+  
     return () => {
       socket.off("conversationUpdated");
     };
   }, [user._id]);
+  
 
   {
     /* Lắng nghe sự kiện nhận tin nhắn từ server */
@@ -277,7 +289,9 @@ export default function ChatApp() {
       const videoExtensions = ["mp4", "mov"];
       const fileExtensions = ["pdf", "docx", "xlsx", "doc", "pptx", "txt", "zip", "rar"];
 
-      const fileExtension = fileName.split(".").pop().toLowerCase();
+
+      // const fileExtension = fileName.split(".").pop().toLowerCase();
+      const fileExtension = fileName ? fileName.split(".").pop().toLowerCase() : '';
 
       if (imageExtensions.includes(fileExtension)) {
         fileType = "image";
