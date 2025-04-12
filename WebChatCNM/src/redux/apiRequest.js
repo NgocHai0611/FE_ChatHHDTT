@@ -16,11 +16,13 @@ export const loginUser = async (user, dispatch, navigate) => {
     try {
         const res = await axios.post("/v1/auth/login", user);
 
+
         if (res.data.message) {
             toast.error(res.data.message); // Hiển thị thông báo lỗi
             dispatch(loginFailed());
             return;
         }
+
 
         dispatch(loginSuccess(res.data));
         navigate("/chat-app", { state: { user: res.data } });
