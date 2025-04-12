@@ -69,7 +69,7 @@ const ContactItem = ({ item, onPress, onUnfriend, isFriend, onAddFriend, onAccep
                                           </View>
                                           <TouchableOpacity
                                               style={[styles.actionButton, styles.cancelButton]}
-                                              onPress={() => onCancelFriendRequest(item._id)} // Cần truyền requestId, có thể cần điều chỉnh logic
+                                              onPress={() => onCancelFriendRequest(item._id)} 
                                               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                                           >
                                               <Text style={styles.actionText}>Hủy</Text>
@@ -344,33 +344,35 @@ const AccessListPhone = ({ route }) => {
             Alert.alert("Lỗi", "Đã xảy ra lỗi khi từ chối yêu cầu kết bạn.");
         }
     };
-    const handleCancelFriendRequest = async (requestId) => { // Chỉ nhận requestId
-      Alert.alert(
-          "Xác nhận",
-          "Bạn có chắc chắn muốn hủy lời mời kết bạn này?",
-          [
-              { text: "Không", style: "cancel" },
-              {
-                  text: "Hủy",
-                  onPress: async () => {
-                      try {
-                          if (requestId) {
-                              await cancelFriendRequest(requestId);
-                              Alert.alert("Thành công", "Đã hủy yêu cầu kết bạn.");
-                              setFriendStatus('none');
-                              setSearchedUser(prevUser => ({ ...prevUser, friendStatus: 'none' }));
-                          } else {
-                              Alert.alert("Lỗi", "Không tìm thấy ID yêu cầu.");
-                          }
-                      } catch (error) {
-                          console.error("Lỗi khi hủy yêu cầu kết bạn:", error);
-                          Alert.alert("Lỗi", "Đã xảy ra lỗi khi hủy yêu cầu.");
-                      }
-                  },
-              },
-          ]
-      );
-  };
+   // Trong component AccessListPhone
+const handleCancelFriendRequest = async (receiverId) => {
+    Alert.alert(
+        "Xác nhận",
+        "Bạn có chắc chắn muốn hủy lời mời kết bạn này?",
+        [
+            { text: "Không", style: "cancel" },
+            {
+                text: "Hủy",
+                onPress: async () => {
+                    try {
+                        if (receiverId && currentUser?._id) {
+                            // Đảm bảo bạn truyền cả receiverId và senderId (currentUser._id)
+                            await cancelFriendRequest(receiverId, currentUser._id);
+                            Alert.alert("Thành công", "Đã hủy yêu cầu kết bạn.");
+                            setFriendStatus('none');
+                            setSearchedUser(prevUser => ({ ...prevUser, friendStatus: 'none' }));
+                        } else {
+                            Alert.alert("Lỗi", "Không tìm thấy ID người nhận hoặc thông tin người dùng.");
+                        }
+                    } catch (error) {
+                        console.error("Lỗi khi hủy yêu cầu kết bạn:", error);
+                        Alert.alert("Lỗi", "Đã xảy ra lỗi khi hủy yêu cầu.");
+                    }
+                },
+            },
+        ]
+    );
+};
 
     const renderItem = ({ item }) => (
         <ContactItem

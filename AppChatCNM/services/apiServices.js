@@ -169,19 +169,20 @@ export const rejectFriendRequest = async (requestId) => {
 };
 
 // Hủy yêu cầu kết bạn (người gửi hủy)
-export const cancelFriendRequest = async (requestId) => {
+// Hủy yêu cầu kết bạn (người gửi hủy)
+export const cancelFriendRequest = async (receiverId, senderId) => { // Chắc chắn có senderId ở đây
   try {
-      const response = await api.post('/friends/cancel-request', {
-          requestId,
-      });
-      console.log("Hủy yêu cầu kết bạn thành công:", response.data);
-      return response.data;
+    const response = await api.post('/friends/cancel-request', {
+      senderId,
+      receiverId,
+    });
+    console.log("Hủy yêu cầu kết bạn thành công:", response.data);
+    return response.data;
   } catch (error) {
-      console.error("Lỗi khi hủy yêu cầu kết bạn:", error.response?.data || error.message);
-      throw error;
+    console.error("Lỗi khi hủy yêu cầu kết bạn:", error.response?.data || error.message);
+    throw error;
   }
 };
-
 // Lấy danh sách yêu cầu kết bạn
 export const getFriendRequests = async (userId) => {
   try {
