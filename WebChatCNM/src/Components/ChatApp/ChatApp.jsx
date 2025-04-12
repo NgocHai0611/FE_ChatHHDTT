@@ -29,7 +29,7 @@ import {
   FaCamera,
   FaEye, FaEyeSlash
 } from "react-icons/fa";
-import { FiLogOut } from "react-icons/fi"; // ✅ Đúng
+import { FiLogOut, FiChevronDown, FiChevronRight, FiMoreVertical } from "react-icons/fi"; // ✅ Đúng
 
 import "./chatApp.css";
 import dayjs from "dayjs";
@@ -79,12 +79,15 @@ export default function ChatApp() {
   }, [messages]);
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef(null); // Tham chiếu đến menu
-  const friendMenuRef = useRef(null); // Tham chiếu đến menu xóa bạn
+  const friendMenuRef = useRef({}); // Tham chiếu đến menu xóa bạn
   const friendRef = useRef(null); // Tham chiếu đến phần tử bạn
-
+  const membersListRef = useRef(null); // danh sách thành viên nhóm
 
   const location = useLocation();
-  const user = location.state?.user; // Lấy user truyền từ navigate
+  const [user, setUser] = useState(() => {
+    const savedUser = localStorage.getItem("user");
+    return savedUser ? JSON.parse(savedUser) : location.state?.user;
+  });
 
   //Update user
   const [showModal, setShowModal] = useState(false);
@@ -111,6 +114,14 @@ export default function ChatApp() {
   const [mediaSender, setMediaSender] = useState(null); // Lưu thông tin người gửi media
   const [showAllMedia, setShowAllMedia] = useState(false); // Xem tất cả, trong phần xem lại video, image
   const [showAllFiles, setShowAllFiles] = useState(false); // cho file
+  const [showMembersList, setShowMembersList] = useState(false); // hiển thị danh sách thành viên
+  const [showAddMembersModal, setShowAddMembersModal] = useState(false); // Thêm vào thành viên vào nhóm
+  const [selectedMembers, setSelectedMembers] = useState([]); // Lưu danh sách thành viên được chọn
+  const [phoneSearchTerm, setPhoneSearchTerm] = useState("");
+  const [phoneSearchResult, setPhoneSearchResult] = useState(null);
+  const [selectedPhoneUser, setSelectedPhoneUser] = useState(null);
+  const [showMenuId, setShowMenuId] = useState(null); // menu rời nhóm từ ds nhóm
+
   {
     /* Lấy danh sách conversation từ server và cập nhật vào state */
   }
@@ -121,9 +132,11 @@ export default function ChatApp() {
         `http://localhost:8004/conversations/${user._id}`
       );
       let conversations = res.data;
+
       // Bước 2: Lọc bỏ conversations có messages rỗng
       conversations = conversations.filter(
-        (conv) => conv.messages.length > 0
+
+        (conv) => conv.messages.length > 0 || conv.isGroup === true
       );
       // Bước 3: Lọc bỏ conversations đã bị xóa bởi tôi
       conversations = conversations.filter(
@@ -177,6 +190,35 @@ export default function ChatApp() {
               }
             })
           );
+          //Thêm thành viên vào nhóm chat
+          const addedMemberDetails = await Promise.all(
+            (conv.addMembers || []).map(async ({ userId, addedAt, addBy, lastMessageId }) => {
+              console.log("addBy", addBy);
+
+              try {
+                const res = await axios.get(`http://localhost:8004/users/get/${userId}`);
+                const res2 = await axios.get(`http://localhost:8004/users/get/${addBy}`);
+
+                return {
+                  userId,
+                  username: res.data.username,
+                  addBy: res2.data.username,
+                  addedAt: addedAt ? new Date(addedAt) : new Date(),
+                  lastMessageId: lastMessageId || null, // hoặc undefined
+                };
+              } catch (err) {
+                console.error("Lỗi khi lấy thông tin thành viên được thêm:", err);
+                return {
+                  userId,
+                  username: "Không xác định",
+                  addBy,
+                  lastMessageId: lastMessageId || null,
+                };
+              }
+            })
+          );
+
+
           return {
             isGroup: conv.isGroup,
             conversationId: conv._id,
@@ -194,7 +236,10 @@ export default function ChatApp() {
             members: memberDetails, // Lưu danh sách thành viên
             deleteBy: conv.deleteBy, // Lưu danh sách người đã xóa
             leftMembers: leftMemberDetails, // Lưu danh sách người đã rời nhóm
+            addedMembers: addedMemberDetails, // Lưu danh sách người đã được thêm vào nhóm
+
           };
+
         } else {
           // 🟢 Đây là conversation giữa 2 người
           const otherUserId = conv.members.find((_id) => _id !== user._id);
@@ -227,7 +272,6 @@ export default function ChatApp() {
     }
   };
   useEffect(() => {
-
     fetchConversations();
     socket.on("conversationUpdated", (data) => {
       fetchConversations(); // Chỉ fetch lại khi có sự thay đổi
@@ -395,12 +439,21 @@ export default function ChatApp() {
   // Đóng menu khi click ra ngoài
   useEffect(() => {
     const handleClickOutsideMenu = (event) => {
-      // Đóng cả menu đăng xuất và menu xóa bạn khi click ra ngoài
-      if ((menuRef.current && !menuRef.current.contains(event.target))) {
-        setShowMenu(false); // Đóng menu đăng xuất
+      // Đóng menu đăng xuất
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setShowMenu(false);
       }
-      if ((friendRef.current && !friendRef.current.contains(event.target))) {
-        setSelectedFriend(null); // Đóng menu "Xóa bạn"
+      if (membersListRef.current && !membersListRef.current.contains(event.target)) {
+        setShowMembersList(null); // Đóng menu thành viên
+      }
+
+      // Kiểm tra nếu click nằm ngoài TẤT CẢ các friend menu
+      const clickedOutsideAllFriendMenus = Object.values(friendMenuRef.current).every(
+        (ref) => !ref?.contains(event.target)
+      );
+
+      if (clickedOutsideAllFriendMenus) {
+        setSelectedFriend(null); // Đóng tất cả menu xóa bạn
       }
     };
 
@@ -408,12 +461,33 @@ export default function ChatApp() {
     return () => {
       document.removeEventListener("mousedown", handleClickOutsideMenu);
     };
-  }, []); // Chạy khi component mount và unmount
+  }, []);
+
 
   // Hàm xử lý đăng xuất
-  const handleLogout = () => {
-    navigate("/");
+
+  const handleLogout = async () => {
+    try {
+      const response = await fetch(`http://localhost:8004/v1/auth/logout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: user._id }),
+      });
+
+      if (response.ok) {
+        console.log("Đã đăng xuất thành công!");
+        localStorage.removeItem("user");
+        navigate("/login"); // Điều hướng về trang đăng nhập
+      } else {
+        console.log("Đăng xuất không thành công!");
+        toast.error("Đăng xuất không thành công!");
+      }
+    } catch (error) {
+      console.error("Lỗi khi đăng xuất:", error);
+      toast.error("Có lỗi xảy ra khi đăng xuất!");
+    }
   };
+
 
   // Hàm xử lý format thời gian tin nhắn
   const formatTimeMessage = (timestamp) => {
@@ -588,6 +662,126 @@ export default function ChatApp() {
 
     return () => socket.off("groupUpdated");
   }, []);
+
+  //Thêm thành viên mới vào nhóm
+
+  const handleAddMembersSocket = async (newMembers) => {
+    let updatedMembers = [...new Set([
+      ...newMembers,
+      phoneSearchResult &&
+        selectedPhoneUser === phoneSearchResult._id &&
+        !selectedChat.members.some((m) => m._id === phoneSearchResult._id)
+        ? phoneSearchResult._id
+        : null
+    ].filter(Boolean))];
+
+
+    if (!selectedChat?.conversationId || updatedMembers.length === 0) return;
+
+    // Gửi socket yêu cầu thêm thành viên
+    socket.emit("addMembersToGroup", {
+      conversationId: selectedChat.conversationId,
+      newMemberIds: updatedMembers,
+      addedBy: user._id,
+    });
+
+    try {
+      // Gọi API để lấy thông tin chi tiết các user
+      const memberDetails = await Promise.all(
+        updatedMembers.map(async (id) => {
+          try {
+            const res = await axios.get(`http://localhost:8004/users/get/${id}`);
+            return res.data;
+          } catch (err) {
+            console.error("Lỗi khi lấy user:", id);
+            return {
+              _id: id,
+              username: "Không xác định",
+              avatar: "/default-avatar.png",
+            };
+          }
+        })
+      );
+
+      // Cập nhật selectedChat với member chi tiết, loại bỏ id trùng từ checkbox trước khi thêm thành viên
+      setSelectedChat((prev) => {
+        const existingIds = new Set(prev.members.map((m) => m._id));
+        const uniqueNewMembers = memberDetails.filter((m) => !existingIds.has(m._id));
+        return {
+          ...prev,
+          members: [...prev.members, ...uniqueNewMembers],
+        };
+      });
+
+
+      toast.success("Đã thêm thành viên!");
+      setSelectedMembers([]);
+      setShowAddMembersModal(false);
+      setPhoneSearchTerm("");
+      setPhoneSearchResult(null);
+      setSelectedPhoneUser(null);
+    } catch (err) {
+      console.error("Lỗi khi xử lý thêm thành viên:", err);
+    }
+  };
+
+
+
+
+  useEffect(() => {
+    socket.on("groupUpdatedAdd", async ({ conversationId, newMembers }) => {
+      console.log("Group updated:", conversationId, newMembers);
+      fetchConversations(); // Cập nhật danh sách cuộc trò chuyện
+
+      // Lấy tên người dùng từ API để hiển thị realtime
+      const enrichedMembers = await Promise.all(
+        newMembers.map(async (member) => {
+          try {
+            const userRes = await axios.get(`http://localhost:8004/users/get/${member.userId}`);
+            const addByRes = await axios.get(`http://localhost:8004/users/get/${member.addBy}`);
+            return {
+              ...member,
+              username: userRes.data.username || "Không rõ",
+              addByName: addByRes.data.username || "Không rõ",
+            };
+          } catch (err) {
+            console.error("Lỗi enrich member:", err);
+            return {
+              ...member,
+              username: "Không rõ",
+              addByName: "Không rõ",
+            };
+          }
+        })
+      );
+
+      // Cập nhật lại selectedChat.addedMembers để hiển thị ngay thông báo
+      setSelectedChat((prev) => {
+        if (!prev || prev.conversationId !== conversationId) return prev;
+        return {
+          ...prev,
+          addedMembers: [...(prev.addedMembers || []), ...enrichedMembers],
+        };
+      });
+
+      // Gọi lại message để update UI (nếu cần)
+      const messages = await fetchMessagesByConversationId(conversationId);
+      setMessages(messages);
+    });
+
+    return () => socket.off("groupUpdatedAdd");
+  }, []);
+
+  // Xử lý làm mới tìm kiếm sđt để thêm thành viên
+
+  useEffect(() => {
+    if (showAddMembersModal) {
+      setPhoneSearchTerm("");
+      setPhoneSearchResult(null);
+      setSelectedPhoneUser(null);
+    }
+  }, [showAddMembersModal]);
+
 
   // Xử lý chọn nhiều ảnh
   const handleImageUpload = (e) => {
@@ -801,6 +995,7 @@ export default function ChatApp() {
 
         // Cập nhật trạng thái ngay lập tức để giao diện thay đổi
         setIsFriendRequestSent(true);
+        setFriendRequests(prev => [...prev, { senderId: user._id, receiverId }]); // Cập nhật danh sách request
 
         // Gọi lại loadFriends để cập nhật danh sách bạn bè nếu API cập nhật ngay
         loadFriends();
@@ -828,6 +1023,11 @@ export default function ChatApp() {
       }
 
       setIsFriendRequestSent(false); // Cập nhật lại trạng thái
+
+      setFriendRequests(prev =>
+        prev.filter(req => req.receiverId !== friendId && req._id !== friendId)
+      ); // Cập nhật danh sách lời mời kết bạn
+
       toast.success("Đã thu hồi lời mời kết bạn!");
     } catch (error) {
       console.error("Lỗi khi thu hồi lời mời kết bạn:", error);
@@ -1006,39 +1206,62 @@ export default function ChatApp() {
     }
   }, [chatSearch]);
   //Tạo cuộc hội thoại từ kết quả tìm kiếm
-  const createNewChat = async (receiverId) => {
+  const createNewChat = async (receiverId, isGroup = false) => {
     setSelectedHeader("");
 
+
     try {
-      // 1️⃣ Gọi API để lấy danh sách cuộc trò chuyện
+      if (isGroup) {
+        const res = await fetch(`http://localhost:8004/conversations/get/${receiverId}`);
+        const groupInfo = await res.json();
+        console.log("groupInfo", groupInfo);
+
+        if (res.ok) {
+          setChatSearch({
+            conversationId: groupInfo._id,
+            name: groupInfo.name,
+            image: groupInfo.groupAvatar || "https://file.hstatic.net/200000503583/file/tao-dang-chup-anh-nhom-lay-loi__5__34b470841bb840e3b2ce25cbe02533ec.jpg",
+            members: groupInfo.members,
+            isGroup: groupInfo.isGroup,
+            lastMessage: groupInfo.latestmessage,
+            lastMessageTime: groupInfo.lastMessageTime,
+          });
+        } else {
+          console.error("Không tìm thấy nhóm:", groupInfo.message);
+        }
+
+        return;
+      }
+
+      // ✅ Trường hợp chat 1-1
       const response = await fetch(
         `http://localhost:8004/conversations/${user._id}/search`
       );
       const conversations = await response.json();
 
-      // 2️⃣ Kiểm tra xem cuộc trò chuyện với receiverId đã tồn tại chưa
       const existingConversation = conversations.find(
         (conv) =>
-          conv.members.length === 2 && // Chỉ kiểm tra chat 1-1
+          conv.members.length === 2 &&
           conv.members.some((member) => member._id === user._id) &&
-          conv.members.some((member) => member._id === receiverId) 
+          conv.members.some((member) => member._id === receiverId)
       );
-      const userreciver = await fetch(
-        `http://localhost:8004/users/get/${receiverId}`
-      );
-      const data = await userreciver.json();
+
+      // 💡 Chỉ gọi API user nếu là chat 1-1
+      const userReceiver = await fetch(`http://localhost:8004/users/get/${receiverId}`);
+      const data = await userReceiver.json();
+
       if (existingConversation) {
-        setChatSearch((prevState) => ({
-          ...prevState,
+        setChatSearch({
           conversationId: existingConversation._id,
           name: data.username,
           image: data.avatar,
           active: data.isOnline,
-        }));
+
+        });
         return;
       }
 
-      // 3️⃣ Nếu chưa có, tạo mới cuộc trò chuyện
+      // Nếu chưa có, tạo mới cuộc trò chuyện
       const createResponse = await fetch(
         "http://localhost:8004/conversations/create",
         {
@@ -1053,15 +1276,14 @@ export default function ChatApp() {
 
       const newConversation = await createResponse.json();
       if (createResponse.ok) {
-        setChatSearch((prevState) => ({
-          ...prevState,
+        setChatSearch({
           conversationId: newConversation._id,
           name: data.username,
           image: data.avatar,
           active: data.isOnline,
           lastMessage: "",
           lastMessageTime: Date.now(),
-        }));
+        });
       } else {
         console.error("Lỗi khi tạo cuộc trò chuyện:", newConversation.message);
       }
@@ -1069,6 +1291,7 @@ export default function ChatApp() {
       console.error("Lỗi kết nối server:", error);
     }
   };
+
 
   //Hàm xử lý cập nhật thông tin user
   useEffect(() => {
@@ -1101,7 +1324,6 @@ export default function ChatApp() {
   };
 
   const handleUpdate = async () => {
-    console.log("Response trước khi:", updatedUser);
     try {
       const formData = new FormData();
       formData.append('username', updatedUser.username);
@@ -1118,6 +1340,8 @@ export default function ChatApp() {
       });
 
 
+      localStorage.setItem("user", JSON.stringify(response.data));
+
       // Sau khi cập nhật thành công, cập nhật lại user với thông tin mới
       setUpdatedUser({
         username: response.data.username,
@@ -1125,10 +1349,15 @@ export default function ChatApp() {
         password: '',
         avatar: response.data.avatar,
       });
-      console.log("Response updated:", updatedUser);
       toast.success("Cập nhật thông tin thành công!");
       setShowModal(false);
     } catch (error) {
+      // Bắt lỗi trả về từ server (đã kiểm tra regex, định dạng...)
+      if (error.response && error.response.data && error.response.data.error) {
+        toast.error(error.response.data.error); // Hiển thị nội dung lỗi từ backend
+      } else {
+        toast.error("Đã xảy ra lỗi khi cập nhật!");
+      }
       console.error("Error updating user:", error);
     }
   };
@@ -1155,7 +1384,6 @@ export default function ChatApp() {
 
   const getFileIcon = (fileName) => {
     const extension = fileName.split('.').pop().toLowerCase();
-    console.log("extension", extension);
 
     switch (extension) {
       case 'pdf':
@@ -1182,6 +1410,43 @@ export default function ChatApp() {
     }
   };
 
+
+  // Mở modal thêm thành viên
+  const toggleSelectMember = (memberId) => {
+    setSelectedMembers((prev) =>
+      prev.includes(memberId)
+        ? prev.filter((id) => id !== memberId)
+        : [...prev, memberId]
+    );
+  };
+
+  const handleSearchByPhone = async () => {
+    try {
+      const response = await fetch(
+        `http://localhost:8004/friends/search?phone=${phoneSearchTerm}`
+      );
+      const res = await response.json();
+
+      // Nếu res là user object (không có .success, .data...)
+      if (res && res._id && res._id !== user._id) {
+        setPhoneSearchResult(res);
+        toast.success("Tìm thấy người dùng!");
+      } else if (res.message) {
+        toast.error(res.message);
+        setPhoneSearchResult(null);
+      } else {
+        toast.error("Không tìm thấy người dùng.");
+        setPhoneSearchResult(null);
+      }
+    } catch (error) {
+      console.error("Lỗi khi tìm kiếm:", error);
+      toast.error("Đã xảy ra lỗi khi tìm kiếm.");
+    }
+  };
+  // rời nhóm từ ds nhóm
+  const toggleMenuOutGroup = (id) => {
+    setShowMenuId((prev) => (prev === id ? null : id));
+  };
 
 
   return (
@@ -1232,7 +1497,11 @@ export default function ChatApp() {
 
             <div className="search-user-info" >
               <div className="img-user-search">
-                <img src={searchResult.avatar} alt={searchResult.username} className="avatar" onClick={() => createNewChat(searchResult._id)} />
+                <img src={searchResult.avatar} alt={searchResult.username} className="avatar" onClick={() => {
+                  if (searchResult._id !== user._id) {
+                    createNewChat(searchResult._id);
+                  }
+                }} />
               </div>
               <div className="info-user-search">
                 <p className="search-username">{searchResult.username}</p>
@@ -1380,10 +1649,10 @@ export default function ChatApp() {
 
             <div
               className="contacts-header"
-              onClick={() => handleClick("Danh sách nhóm và cộng đồng")}
+              onClick={() => handleClick("Danh sách nhóm")}
             >
               <FaUsers className="icon-contacts" />
-              <span>Danh sách nhóm và cộng đồng</span>
+              <span>Danh sách nhóm</span>
             </div>
             <div
               className="contacts-header"
@@ -1393,21 +1662,15 @@ export default function ChatApp() {
               <span>Lời mời kết bạn</span>
             </div>
 
-            <div
-              className="contacts-header"
-              onClick={() => handleClick("Lời mời vào nhóm và bạn bè")}
-            >
-              <FaUserCheck className="icon-contacts" />
-              <span>Lời mời vào nhóm và bạn bè</span>
-            </div>
+
           </div>
         )}
       </div>
       <div className="icon-container-left">
         {/* Avatar nhấn vào để mở modal */}
-        {user && (
+        {updatedUser && (
           <div className="icon-item" onClick={() => setShowModal(true)}>
-            <img src={user.avatar} alt="Avatar" className="chat-avatar" />
+            <img src={`${updatedUser.avatar}?t=${Date.now()}`} alt="Avatar" className="chat-avatar" />
           </div>
         )}
         {/* Modal hiển thị thông tin user */}
@@ -1552,11 +1815,12 @@ export default function ChatApp() {
                       <p className="friend-name">{request.senderId.username}</p>
                     </div>
                     <div className="friend-actions">
-                      <button onClick={() => acceptRequest(request._id)}>
-                        Chấp nhận
-                      </button>
+                    
                       <button onClick={() => rejectRequest(request._id)}>
                         Từ chối
+                      </button>
+                      <button onClick={() => acceptRequest(request._id)}>
+                        Chấp nhận
                       </button>
                     </div>
                   </div>
@@ -1567,546 +1831,866 @@ export default function ChatApp() {
             <p className="not-requestfriend">Không có lời mời kết bạn nào.</p>
           )}
         </div>
-      ) : selectedHeader === "Danh sách bạn bè" ? ( // Thêm điều kiện này
-        <div className="friends-list">
-          <h2>Danh sách bạn bè</h2>
-          {friends.length > 0 ? (
-            friends.map((friend) => (
-              console.log("friend nhận được", friend._id),
+      ) :
+        selectedHeader === "Danh sách nhóm" ? (
+          <div className="group-list">
+            <h2>Danh sách nhóm</h2>
 
-              <div key={friend._id} className="friend-item" ref={friendRef}>
-                <div className="friend-info">
-                  <img src={friend.avatar} alt="avatar" className="friend-avatar" onClick={() => {
-                    if (friend._id) {
-                      createNewChat(friend._id);
-                    } else {
-                      console.error("friend._id bị undefined:", friend);
-                    }
-                  }} />
-                  <p className="friend-name">{friend.username}</p>
-                  <FaEllipsisV className="bacham-banbe" onClick={() => toggleMenuXoa(friend._id)} />
-                </div>
-                {selectedFriend === friend._id && (
-                  <div className="dropdown-menu" ref={friendMenuRef} >
-                    <button onClick={() => handleRemoveFriend(friend._id)}>Xóa bạn</button>
-                  </div>
-                )}
+            {console.log("✅ Tất cả chats:", chats)}
 
-                <br /><hr />
-              </div>
+            {chats.filter((chat) => chat.isGroup).length > 0 ? (
+              chats
+                .filter((chat) => chat.isGroup)
+                .map((group) => {
+                  console.log("🎯 Nhóm sẽ hiển thị:", group);
+                  console.log("👥 Thành viên trong nhóm:", group.members);
 
-            ))
-          ) : (
-            <p className="not-friend">Bạn chưa có bạn bè nào.</p>
-          )}
-        </div>
-      ) : selectedChat ? (
-        <div className="chat-window">
-          {/* Header */}
+                  return (
+                    <div
+                      key={group.conversationId}
+                      className="group-item"
+                    
+                    >
+                      <div
+                        className="group-info"
+                        onMouseLeave={() => setShowMenuId(null)} // ẩn menu khi ra ngoài
+                      >
+                        <img
+                          src={group.image || "/default-group.png"}
+                          alt="group-avatar"
+                          className="group-avatar"
+                          onClick={() => createNewChat(group.conversationId, true)}
+                        />
+                        <div className="group-details">
+                          <p className="group-name">{group.name || "Nhóm không tên"}</p>
+                        </div>
 
-          <div className="chat-header">
-            <div className="avatar-container-main">
-              <img src={selectedChat.image} alt="img" className="avatar" />
-              <div className="avatar-container-main-item">
-                <p className="chat-title-main">{selectedChat.name}</p>
-                <p className="active-statu-main">
-                  {selectedChat.isGroup
-                    ? `${selectedChat.members.length + 1} thành viên`
-                    : selectedChat.active
-                      ? "Online"
-                      : "Offline"}
-                </p>
-              </div>
-            </div>
-            <div className="chat-icons">
-              <FaVideo className="icon" />
-              <FaPhone className="icon" />
-              <FaStarHalfAlt className="icon" />
-              <FaExclamationCircle className="icon" onClick={() => setShowMediaModal((prev) => !prev)} />
+                        {/* Icon 3 chấm dọc */}
+                        <div className="group-menu-icon" onClick={() => toggleMenuOutGroup(group.conversationId)}>
+                          <FiMoreVertical size={18} />
+                        </div>
 
-              {showMediaModal && (
-                <div className="media-overlay" onClick={() => setShowMediaModal(false)}>
-                  <div className="media-modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="media-header">
-                          <FaTimes className="icon-outmedia" onClick={() => setShowMediaModal(false)} />
-                      <h4>Thông tin hội thoại</h4>
+                        {/* Menu rời nhóm */}
+                        {showMenuId === group.conversationId && (
+                          <div className="group-menu-popup">
+                            <span onClick={() => handleLeaveGroup(group.conversationId)}>
+                              <FiLogOut size={14} color="red" /> Rời nhóm
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
                       <hr />
                     </div>
-                    <div className="user-conservation">
-                      <div className="container-conservation">
-                        <div className="avatar-conservation">
-                          <img src={selectedChat.image} alt="img" className="avatar-conservation-img" />
+                  );
+                })
+            ) : (
+              <>
+                {console.log("❌ Không có nhóm nào có isGroup === true")}
+                <p className="not-group">Không có nhóm nào.</p>
+              </>
+            )}
+          </div>
+        )
+
+
+          : selectedHeader === "Danh sách bạn bè" ? ( // Thêm điều kiện này
+            <div className="friends-list">
+              <h2>Danh sách bạn bè</h2>
+              {friends.length > 0 ? (
+                friends.map((friend) => (
+                  console.log("friend nhận được", friend._id),
+
+                  <div key={friend._id} className="friend-item" ref={friendRef}>
+                    <div className="friend-info">
+                      <img src={friend.avatar} alt="avatar" className="friend-avatar" onClick={() => {
+                        if (friend._id) {
+                          createNewChat(friend._id);
+                        } else {
+                          console.error("friend._id bị undefined:", friend);
+                        }
+                      }} />
+                      <p className="friend-name">{friend.username}</p>
+                      <FaEllipsisV className="bacham-banbe" onClick={() => toggleMenuXoa(friend._id)} />
+                    </div>
+                    {selectedFriend === friend._id && (
+                      <div className="dropdown-menu" ref={(el) => (friendMenuRef.current[friend._id] = el)} >
+                        <button onClick={() => handleRemoveFriend(friend._id)}>Xóa bạn</button>
+                      </div>
+                    )}
+
+                    <br /><hr />
+                  </div>
+
+                ))
+              ) : (
+                <p className="not-friend">Bạn chưa có bạn bè nào.</p>
+              )}
+            </div>
+          ) : selectedChat ? (
+            <div className="chat-window">
+              {/* Header */}
+
+              <div className="chat-header">
+                <div className="avatar-container-main">
+                  <img src={selectedChat.image} alt="img" className="avatar" />
+                  <div className="avatar-container-main-item">
+                    <p className="chat-title-main">{selectedChat.name}</p>
+                    <p className="active-statu-main">
+                      {selectedChat.isGroup
+                        ? `${selectedChat.members.length + 1} thành viên`
+                        : selectedChat.active
+                          ? "Online"
+                          : "Offline"}
+                    </p>
+                  </div>
+                </div>
+                <div className="chat-icons">
+                  <FaVideo className="icon" />
+                  <FaPhone className="icon" />
+                  <FaStarHalfAlt className="icon" />
+                  <FaExclamationCircle className="icon" onClick={() => setShowMediaModal((prev) => !prev)} />
+
+                  {showMediaModal && (
+                    <div className="media-overlay" onClick={() => setShowMediaModal(false)}>
+                      <div className="media-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="media-header">
+                          <FaTimes className="icon-outmedia" onClick={() => setShowMediaModal(false)} />
+                          <h4>{selectedChat.isGroup ? "Thông tin nhóm" : "Thông tin hội thoại"}</h4>
+                          <hr />
                         </div>
-                        <div className="info-conservation">
-                          <p className="name-conservation">{selectedChat.name}</p>
-                        </div>
-                        <div className="add-group-conservation">
-                          <FaUsers className="icon-addgroups" />
-                          <p>Tạo nhóm trò chuyện</p>
-                        </div>
+                        <div className="user-conservation">
+
+
+
+                          <div className="container-conservation">
+                            <div className="avatar-conservation">
+                              <img src={selectedChat.image} alt="img" className="avatar-conservation-img" />
+                            </div>
+                            <div className="info-conservation">
+                              <p className="name-conservation">{selectedChat.name}</p>
+                            </div>
+
+                            {/* Thêm thành viên vô nhóm  */}
+                            {showAddMembersModal && (
+
+                              <div className="add-members-modal">
+                                <FaTimes className="icon-outmedia-addmember" onClick={() => {
+                                  setShowAddMembersModal(false);
+                                  setPhoneSearchTerm(""); // Reset input khi đóng modal
+                                  setPhoneSearchResult(null); // (Tùy chọn) Xóa kết quả tìm kiếm
+                                  setSelectedPhoneUser(null); // (Tùy chọn) Bỏ checkbox nếu cần
+                                }} />
+                                <h4>Chọn thành viên để thêm</h4>
+                                <div className="member-list">
+                                  <div className="add-by-phone-wrapper">
+                                    <input
+                                      type="text"
+                                      placeholder="Nhập số điện thoại để thêm thành viên"
+                                      value={phoneSearchTerm}
+                                      onChange={(e) => setPhoneSearchTerm(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          e.preventDefault();
+                                          if (phoneSearchTerm.trim() !== "") {
+                                            handleSearchByPhone();
+                                          }
+                                        }
+                                      }}
+                                      className="add-member-phone-input"
+                                    />
+
+                                  </div>
+
+                                  {phoneSearchResult && (
+                                    <div
+                                      className={`search-user-info-addgroup ${selectedChat?.members?.some(m => m._id === phoneSearchResult._id) ? 'disabled-member' : ''}`}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        disabled={selectedChat?.members?.some(m => m._id === phoneSearchResult._id)}
+                                        checked={selectedPhoneUser === phoneSearchResult._id}
+                                        onChange={(e) => {
+                                          if (e.target.checked) {
+                                            setSelectedPhoneUser(phoneSearchResult._id);
+                                          } else {
+                                            setSelectedPhoneUser(null);
+                                          }
+                                        }}
+                                      />
+                                      <div className="img-user-search-addgroup">
+                                        <img
+                                          src={phoneSearchResult.avatar}
+                                          alt={phoneSearchResult.username}
+                                          className="avatar-addgroup"
+                                        />
+                                      </div>
+                                      <div className="info-user-search-addgroup">
+                                        <p className="search-username-addgroup">
+                                          {phoneSearchResult.username}
+                                        </p>
+
+                                        {selectedChat?.members?.some(m => m._id === phoneSearchResult._id) && (
+                                          <p className="already-text">(Đã tham gia)</p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {friends.map((friend) => {
+
+                                    const isAlreadyInGroup = selectedChat?.members?.some(
+                                      (member) => member._id === friend._id
+                                    );
+                                    const isSelected = selectedMembers.includes(friend._id);
+
+                                    return (
+                                      <div
+                                        key={friend._id}
+                                        className={`member-item-wrapper ${isAlreadyInGroup ? "disabled-member" : ""}`}
+                                      >
+
+                                        <div className="member-item-add">
+                                          <div className="info-item-add">
+                                            <input
+                                              type="checkbox"
+                                              disabled={isAlreadyInGroup}
+                                              checked={isSelected}
+                                              onChange={() => toggleSelectMember(friend._id)}
+                                            />
+                                            <img src={friend.avatar} alt={friend.username} className="avatar-small-addgroup" />
+                                          </div>
+                                          <div className="member-text-wrapper">
+                                            <span className="username-add">{friend.username}</span>
+                                            {isAlreadyInGroup && <span className="already-text">(Đã tham gia)</span>}
+                                          </div>
+                                        </div>
+
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+
+                                <div className="modal-actions">
+                                  <span className="cancel-btn-add" onClick={() => setShowAddMembersModal(false)}>Đóng</span>
+                                  <span className="confirm-btn-add" onClick={() => handleAddMembersSocket(selectedMembers)}>Xác nhận thêm</span>
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="add-group-conservation"
+                              onClick={() => {
+                                if (selectedChat.isGroup) {
+                                  setShowAddMembersModal(true);
+                                } else {
+                                  // Logic tạo nhóm từ cuộc trò chuyện 1-1 nếu cần
+                                }
+                              }}>
+
+                              <FaUsers className="icon-addgroups" />
+                              <h4>{selectedChat.isGroup ? "Thêm thành viên" : "Tạo nhóm trò chuyện"}</h4>
+
+                            </div>
 
                           </div>
-                          <div className="container-conservation">
-                          <div className="image-video-conservation">
-                            <p>Ảnh / Video</p>
-                            {mediaOnly.length === 0 ? (
-                              <p className="no-media-message">Chưa có ảnh/video nào được gửi.</p>
-                            ) : (
-                              <>
-                                <div className="media-content">
-                                  {(showAllMedia ? mediaOnly : mediaOnly.slice(0, 4)).map((msg, index) => (
-                                    <div key={index} className="media-item">
-                                      {msg.imageUrl && (
-                                        <img
-                                          src={msg.imageUrl}
-                                          alt="image"
-                                          className="media-thumbnail"
-                                          onClick={() => openModal(msg.imageUrl, "image", msg)}
-                                        />
-                                      )}
-                                      {msg.videoUrl && (
-                                        <video
-                                          src={msg.videoUrl}
-                                          className="media-thumbnail"
-                                          controls
-                                          onClick={() => openModal(msg.videoUrl, "video", msg)}
-                                        />
-                                      )}
-                                    </div>
-                                  ))}
+
+                          {selectedChat?.isGroup && (
+                            <div className="container-conservation-member">
+                              <div className="member-count" onClick={() => setShowMembersList(!showMembersList)} style={{ cursor: "pointer" }}>
+                                <FaUsers className="icon-member" />
+                                <strong >
+                                  Thành viên:{" "}
+                                  {selectedChat.members?.some(m => m._id === user._id || m === user._id)
+                                    ? selectedChat.members.length
+                                    : selectedChat.members.length + 1}
+                                  {/* Wrap icon để gán ref */}
+
+                                  <span
+                                    onClick={() => setShowMembersList(!showMembersList)}
+                                    // ref={membersListRef}
+                                    className="span-thanhvien"
+                                  >
+                                    {showMembersList ? <FiChevronDown /> : <FiChevronRight />}
+                                  </span>
+
+                                </strong>
+                              </div>
+
+                              {showMembersList && (
+                                <div className="members-list">
+                                  {(() => {
+                                    const members = selectedChat.members || [];
+
+                                    const isCurrentUserIncluded = members.some(
+                                      (m) => m._id === user._id || m === user._id
+                                    );
+
+                                    const membersToDisplay = isCurrentUserIncluded ? members : [...members, user];
+
+                                    return membersToDisplay.map((member, index) => {
+                                      const isFriend = friends.some(f => f._id === member._id);
+                                      const isRequestSent = friendRequests.some(req =>
+                                        req.receiverId === member._id || req._id === member._id
+                                      );
+
+                                      const isCurrentUser = member._id === user._id;
+
+                                      return (
+                                        <div key={index} className="member-item">
+                                          <img
+                                            src={member.avatar || "/default-avatar.png"}
+                                            alt="avatar"
+                                            className="member-avatar"
+                                            onClick={() => {
+                                              if (!isCurrentUser) createNewChat(member._id);
+                                            }}
+                                            style={{ cursor: isCurrentUser ? "default" : "pointer" }}
+                                          />
+                                          <span>{isCurrentUser ? "Bạn" : member.username || "Không xác định"}</span>
+
+                                          {/* Không hiển thị nút nếu là chính mình */}
+                                          {!isCurrentUser && !isFriend && (
+                                            isRequestSent ? (
+                                              <>
+
+                                                <span
+                                                  onClick={() => handleCancelFriendRequest(member._id)}
+                                                  className="cancel-btn"
+                                                >
+                                                  Thu hồi
+                                                </span>
+                                              </>
+                                            ) : (
+                                              <span
+                                                onClick={() => handleSendFriendRequest(member._id)}
+                                                className="add-friend"
+                                              >
+                                                Kết bạn
+                                              </span>
+                                            )
+                                          )}
+                                        </div>
+                                      );
+                                    });
+                                  })()}
                                 </div>
-                                {mediaOnly.length > 4 && (
-                                  <button onClick={() => setShowAllMedia(!showAllMedia)}>
-                                    {showAllMedia ? "Ẩn bớt" : "Xem tất cả"}
-                                  </button>
-                                )}
-                              </>
-                            )}
-                          </div>
-                          </div>
+
+
+                              )}
+                            </div>
+                          )}
+
+
 
                           <div className="container-conservation">
                             <div className="image-video-conservation">
-                              
-                            <p>File</p>
-                            {fileOnly.length === 0 ? (
-                              <p className="no-media-message">Chưa có file nào được gửi.</p>
-                            ) : (
-                              <>
-                                <div className="media-content">
-                                  {(showAllFiles ? fileOnly : fileOnly.slice(0, 4)).map((msg, index) => (
-                                    <div key={index} className="media-item">
-                                      <a
-                                        href={msg.fileUrl}
-                                        download={msg.fileName}
-                                        className="media-file-link"
-                                      >
-                                        <span className="file-icon">{getFileIcon(msg.fileName)}</span>
-                                        {msg.fileName}
-                                      </a>
-                                    </div>
-                                  ))}
-                                </div>
-                                {fileOnly.length > 4 && (
-                                  <button onClick={() => setShowAllFiles(!showAllFiles)}>
-                                    {showAllFiles ? "Ẩn bớt" : "Xem tất cả"}
-                                  </button>
-                                )}
-                              </>
-                            )}
+                              <p>Ảnh / Video</p>
+                              {mediaOnly.length === 0 ? (
+                                <p className="no-media-message">Chưa có ảnh/video nào được gửi.</p>
+                              ) : (
+                                <>
+                                  <div className="media-content">
+                                    {(showAllMedia ? mediaOnly : mediaOnly.slice(0, 4)).map((msg, index) => (
+                                      <div key={index} className="media-item">
+                                        {msg.imageUrl && (
+                                          <img
+                                            src={msg.imageUrl}
+                                            alt="image"
+                                            className="media-thumbnail"
+                                            onClick={() => openModal(msg.imageUrl, "image", msg)}
+                                          />
+                                        )}
+                                        {msg.videoUrl && (
+                                          <video
+                                            src={msg.videoUrl}
+                                            className="media-thumbnail"
+                                            controls
+                                            onClick={() => openModal(msg.videoUrl, "video", msg)}
+                                          />
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {mediaOnly.length > 4 && (
+                                    <button onClick={() => setShowAllMedia(!showAllMedia)}>
+                                      {showAllMedia ? "Ẩn bớt" : "Xem tất cả"}
+                                    </button>
+                                  )}
+                                </>
+                              )}
                             </div>
                           </div>
 
+                          <div className="container-conservation">
 
+                            <div className="image-video-conservation">
 
+                              <p>File</p>
+                              {fileOnly.length === 0 ? (
+                                <p className="no-media-message">Chưa có file nào được gửi.</p>
+                              ) : (
+                                <>
+                                  <div className="media-content-file">
+                                    {(showAllFiles ? fileOnly : fileOnly.slice(0, 4)).map((msg, index) => (
+                                      <div key={index} className="media-item-file">
+                                        <a
+                                          href={msg.fileUrl}
+                                          download={msg.fileName}
+                                          className="media-file-link"
+                                        >
+                                          <span className="file-icon">
+                                            <img src={getFileIcon(msg.fileName)} alt="file icon" style={{ width: 25, height: 25, marginRight: 8 }} />
+                                          </span>
+                                          <span className="file-name">{msg.fileName}</span>
+
+                                          <span className="time-file-name">
+                                            {formatTimeMessage(msg.createdAt)}
+                                          </span>
+
+                                        </a>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {fileOnly.length > 4 && (
+                                    <button onClick={() => setShowAllFiles(!showAllFiles)}>
+                                      {showAllFiles ? "Ẩn bớt" : "Xem tất cả"}
+                                    </button>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                      </div>
                     </div>
+                  )}
 
+
+                </div>
+              </div>
+              {pinnedMessage && (
+                <div className="pinned-message" onClick={scrollToPinnedMessage}>
+                  <div className="pinned-label">📌 Đã ghim</div>
+                  <div className="pinned-content">{pinnedMessage.text}</div>
+                  <div className="pinned-timestamp">
+                    {new Date(pinnedMessage.createdAt).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
                   </div>
+                  <FaTimes
+                    className="unpin-icon"
+                    onClick={(e) => {
+                      handlePinMessage(pinnedMessage._id, false);
+                      e.stopPropagation();
+                    }}
+                  />
                 </div>
               )}
 
+              {/* Messages */}
+              <div className="chat-box">
+                {messages
+                  .filter((msg) => !msg.deletedFrom?.includes(user._id))
+                  .map((msg, index) => {
+                    const currentDate = new Date(
+                      msg.createdAt
+                    ).toLocaleDateString();
+                    console.log("msg", msg);
+                    const prevDate =
+                      index > 0
+                        ? new Date(
+                          messages[index - 1].createdAt
+                        ).toLocaleDateString()
+                        : null;
+                    const showDateDivider = currentDate !== prevDate;
+                    const isMe =
+                      (msg.sender?._id || msg.senderId?._id || msg.senderId) ===
+                      user._id;
+                    const leftMembersAfterThisMessage =
+                      selectedChat.leftMembers?.filter(
+                        (member) => member.lastMessageId === msg._id
+                      );
 
-            </div>
-          </div>
-          {pinnedMessage && (
-            <div className="pinned-message" onClick={scrollToPinnedMessage}>
-              <div className="pinned-label">📌 Đã ghim</div>
-              <div className="pinned-content">{pinnedMessage.text}</div>
-              <div className="pinned-timestamp">
-                {new Date(pinnedMessage.createdAt).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </div>
-              <FaTimes
-                className="unpin-icon"
-                onClick={(e) => {
-                  handlePinMessage(pinnedMessage._id, false);
-                  e.stopPropagation();
-                }}
-              />
-            </div>
-          )}
+                    const addMembersAfterThisMessage =
+                      selectedChat.addedMembers?.filter(
+                        (member) => member.lastMessageId === msg._id
+                      );
 
-          {/* Messages */}
-          <div className="chat-box">
-            {messages
-              .filter((msg) => !msg.deletedFrom?.includes(user._id))
-              .map((msg, index) => {
-                const currentDate = new Date(
-                  msg.createdAt
-                ).toLocaleDateString();
-                console.log("msg", msg);
-                const prevDate =
-                  index > 0
-                    ? new Date(
-                      messages[index - 1].createdAt
-                    ).toLocaleDateString()
-                    : null;
-                const showDateDivider = currentDate !== prevDate;
-                const isMe =
-                  (msg.sender?._id || msg.senderId?._id || msg.senderId) ===
-                  user._id;
-                const leftMembersAfterThisMessage =
-                  selectedChat.leftMembers?.filter(
-                    (member) => member.lastMessageId === msg._id
-                  );
-                return (
-                  <>
+                    return (
+                      <>
 
-                    {showDateDivider && (
-                      <div className="date-divider">
-                        <span>
-                          {new Date(msg.createdAt).toLocaleDateString("vi-VN", {
-                            weekday: "long",
-                            day: "2-digit",
-                            month: "2-digit",
-                            year: "numeric",
-                          })}
-                        </span>
-                      </div>
-                    )}
-                    <div
-                      key={index}
-                      ref={(el) => (messageRefs.current[msg._id] = el)}
-                      className={`message-row ${isMe ? "me" : "them"} ${highlightedMessageId === msg._id ? "highlight" : ""
-                        }`}
-                    >
-                      <div
-                        className={`message-row ${isMe ? "me" : "them"}`}
-                        onMouseEnter={() => setHoveredMessageId(msg._id)}
-                      >
-                        {/* Avatar bên trái nếu là 'them' */}
-                        {!isMe && (
-                          <img
-                            src={
-                              selectedChat.isGroup === false
-                                ? selectedChat.image || "/default-avatar.png" // Cuộc trò chuyện 1-1
-                                : msg.senderId.avatar || "/default-avatar.png" // Cuộc trò chuyện nhóm
-                            }
-                            alt="avatar"
-                            className="message-avatar"
-                          />
+                        {showDateDivider && (
+                          <div className="date-divider">
+                            <span>
+                              {new Date(msg.createdAt).toLocaleDateString("vi-VN", {
+                                weekday: "long",
+                                day: "2-digit",
+                                month: "2-digit",
+                                year: "numeric",
+                              })}
+                            </span>
+                          </div>
                         )}
-
                         <div
-                          className={`message-content ${isMe ? "me" : "them"}`}
+                          key={index}
+                          ref={(el) => (messageRefs.current[msg._id] = el)}
+                          className={`message-row ${isMe ? "me" : "them"} ${highlightedMessageId === msg._id ? "highlight" : ""
+                            }`}
                         >
-                          {msg.isRecalled ? (
-                            <p className="recalled-message">
-                              Tin nhắn đã bị thu hồi
-                            </p>
-                          ) : (
-                            <>
-                              {msg.replyTo && (
-                                <div
-                                  className="reply-to clickable"
-                                  onClick={() =>
-                                    scrollToMessage(msg.replyTo._id)
-                                  }
-                                >
-                                  <span className="reply-preview-text">
-                                    {msg.replyTo.text ||
-                                      msg.replyTo.fileName ||
-                                      (msg.replyTo.imageUrl && "Ảnh") ||
-                                      (msg.replyTo.video && "Video")}
-                                  </span>
-                                </div>
+                          <div
+                            className={`message-row ${isMe ? "me" : "them"}`}
+                            onMouseEnter={() => setHoveredMessageId(msg._id)}
+                          >
+                            {/* Avatar bên trái nếu là 'them' */}
+                            {!isMe && (
+                              <img
+                                src={
+                                  selectedChat.isGroup === false
+                                    ? selectedChat.image || "/default-avatar.png" // Cuộc trò chuyện 1-1
+                                    : msg.senderId.avatar || "/default-avatar.png" // Cuộc trò chuyện nhóm
+                                }
+                                alt="avatar"
+                                className="message-avatar"
+                              />
+                            )}
+
+                            <div
+                              className={`message-content ${isMe ? "me" : "them"}`}
+                            >
+                              {msg.isRecalled ? (
+                                <p className="recalled-message">
+                                  Tin nhắn đã bị thu hồi
+                                </p>
+                              ) : (
+                                <>
+                                  {msg.replyTo && (
+                                    <div
+                                      className="reply-to clickable"
+                                      onClick={() =>
+                                        scrollToMessage(msg.replyTo._id)
+                                      }
+                                    >
+                                      <span className="reply-preview-text">
+                                        {msg.replyTo.text ||
+                                          msg.replyTo.fileName ||
+                                          (msg.replyTo.imageUrl && "Ảnh") ||
+                                          (msg.replyTo.video && "Video")}
+                                      </span>
+                                    </div>
+                                  )}
+                                  <div className="sender-info">
+                                    <span className="sender-username">
+                                      {selectedChat.isGroup === true
+                                        ? msg.senderId?.username
+                                        : ""}
+                                    </span>
+                                  </div>
+                                  <div className="message-text">
+                                    {msg.text && <p>{msg.text}</p>}
+                                  </div>
+                                  {msg.imageUrl && (
+                                    <img
+                                      src={msg.imageUrl}
+                                      alt="sent"
+                                      className="chat-image"
+                                      onClick={() => openModal(msg.imageUrl, "image", msg)}
+                                    />
+
+                                  )}
+                                  {msg.videoUrl && (
+                                    <video
+                                      controls
+                                      className="chat-video"
+                                      onClick={() => openModal(msg.videoUrl, "video", msg)}
+                                    >
+                                      <source src={msg.videoUrl} type="video/mp4" />
+                                    </video>
+                                  )}
+                                  {msg.fileUrl && (
+                                    <div className="file-message">
+                                      <a
+                                        href={msg.fileUrl}
+                                        download={msg.fileName}
+                                        className="file-link"
+                                      >
+                                        <span className="file-icon-name-message">
+                                          <img
+                                            src={getFileIcon(msg.fileName)}
+                                            alt="file icon"
+                                            className="file-icon-img"
+                                          />
+                                          <span className="file-name">{msg.fileName}</span>
+                                        </span>
+                                      </a>
+                                    </div>
+
+                                  )}
+                                </>
                               )}
-                              <div className="sender-info">
-                                <span className="sender-username">
-                                  {selectedChat.isGroup === true
-                                    ? msg.senderId?.username
+
+                              <div className="message-info">
+                                <span className="timestamp">
+                                  {msg.createdAt
+                                    ? new Date(msg.createdAt).toLocaleTimeString(
+                                      [],
+                                      {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      }
+                                    )
                                     : ""}
                                 </span>
+                                {msg.status === "sending" ? (
+                                  <FaClock className="status-icon" />
+                                ) : (
+                                  <FaCheck className="status-icon" />
+                                )}
                               </div>
-                              <div className="message-text">
-                                {msg.text && <p>{msg.text}</p>}
-                              </div>
-                              {msg.imageUrl && (
-                                <img
-                                  src={msg.imageUrl}
-                                  alt="sent"
-                                  className="chat-image"
-                                  onClick={() => openModal(msg.imageUrl, "image", msg)}
+                            </div>
+                            {/* Nút ba chấm khi hover */}
+                            {hoveredMessageId === msg._id && (
+                              <div
+                                className={`three-dots-icon ${isMe ? "left" : "right"
+                                  }`}
+                              >
+                                <FaEllipsisH
+                                  className="icon"
+                                  onClick={(e) => {
+                                    setMenuMessageId(msg._id);
+                                    e.stopPropagation(); // chặn click propagation
+                                  }}
                                 />
-
-                              )}
-                              {msg.videoUrl && (
-                                <video
-                                  controls
-                                  className="chat-video"
-                                  onClick={() => openModal(msg.videoUrl, "video", msg)}
-                                >
-                                  <source src={msg.videoUrl} type="video/mp4" />
-                                </video>
-                              )}
-                              {msg.fileUrl && (
-                                <div className="file-message">
-                                  <a
-                                    href={msg.fileUrl}
-                                    download={msg.fileName}
-                                    className="file-link"
+                                {menuMessageId === msg._id && (
+                                  <div
+                                    className={`message-menu ${isMe ? "left" : "right"
+                                      }`}
                                   >
-                                    {msg.fileName}
-                                  </a>
-                                </div>
-                              )}
-                            </>
-                          )}
+                                    {!msg.isRecalled && (
+                                      <div
+                                        className="menu-item"
+                                        onClick={() =>
+                                          handlePinMessage(msg._id, true)
+                                        }
+                                      >
+                                        📌 Ghim tin nhắn
+                                      </div>
+                                    )}
 
-                          <div className="message-info">
-                            <span className="timestamp">
-                              {msg.createdAt
-                                ? new Date(msg.createdAt).toLocaleTimeString(
-                                  [],
-                                  {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  }
-                                )
-                                : ""}
-                            </span>
-                            {msg.status === "sending" ? (
-                              <FaClock className="status-icon" />
-                            ) : (
-                              <FaCheck className="status-icon" />
+                                    <div
+                                      className="menu-item"
+                                      onClick={() =>
+                                        handleDeleteMessageFrom(msg._id)
+                                      }
+                                      style={{ color: "red" }}
+                                    >
+                                      ❌ Xóa phía tôi
+                                    </div>
+                                    {isMe && !msg.isRecalled && (
+                                      <div
+                                        className="menu-item"
+                                        onClick={() => handleRecallMessage(msg._id)}
+                                        style={{ color: "red" }}
+                                      >
+                                        🔄 Thu hồi
+                                      </div>
+                                    )}
+                                    {!msg.isRecalled && (
+                                      <div
+                                        className="menu-item"
+                                        onClick={() => handleReplyMessage(msg)}
+                                      >
+                                        💬 Trả lời
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Avatar bên phải nếu là 'me' */}
+                            {isMe && (
+                              <img
+                                src={user.avatar || "/default-avatar.png"}
+                                alt="avatar"
+                                className="message-avatar"
+                              />
                             )}
                           </div>
                         </div>
-                        {/* Nút ba chấm khi hover */}
-                        {hoveredMessageId === msg._id && (
-                          <div
-                            className={`three-dots-icon ${isMe ? "left" : "right"
-                              }`}
-                          >
-                            <FaEllipsisH
-                              className="icon"
-                              onClick={(e) => {
-                                setMenuMessageId(msg._id);
-                                e.stopPropagation(); // chặn click propagation
-                              }}
-                            />
-                            {menuMessageId === msg._id && (
-                              <div
-                                className={`message-menu ${isMe ? "left" : "right"
-                                  }`}
-                              >
-                                {!msg.isRecalled && (
-                                  <div
-                                    className="menu-item"
-                                    onClick={() =>
-                                      handlePinMessage(msg._id, true)
-                                    }
-                                  >
-                                    📌 Ghim tin nhắn
-                                  </div>
-                                )}
+                        {(() => {
+                          const systemEvents = [
+                            ...(leftMembersAfterThisMessage || []).map((member) => ({
+                              type: "left",
+                              time: new Date(member.leftAt),
+                              username: member.username,
+                            })),
+                            ...(addMembersAfterThisMessage || []).map((member) => ({
+                              type: "add",
+                              time: new Date(member.addedAt || member.time || 0),
+                              username: member.username,
+                              addBy: member.addByName || member.addBy,
+                            }))
+                          ];
 
-                                <div
-                                  className="menu-item"
-                                  onClick={() =>
-                                    handleDeleteMessageFrom(msg._id)
-                                  }
-                                  style={{ color: "red" }}
-                                >
-                                  ❌ Xóa phía tôi
+                          // Lọc ra những event có `time` hợp lệ
+                          const validEvents = systemEvents.filter(event => !isNaN(event.time));
+
+                          // Sắp xếp theo thời gian
+                          validEvents.sort((a, b) => a.time - b.time);
+                          console.log("Event time check", systemEvents.map(e => ({
+                            type: e.type,
+                            user: e.username,
+                            time: e.time.toISOString()
+                          })));
+                          return (
+                            <div className="system-message">
+                              {validEvents.map((event, index) => (
+                                <div key={index}>
+                                  {event.type === "left" ? (
+                                    <span>{event.username} đã rời nhóm</span>
+                                  ) : (
+                                    <span>{event.username} đã được thêm bởi {event.addBy}</span>
+                                  )}
                                 </div>
-                                {isMe && !msg.isRecalled && (
-                                  <div
-                                    className="menu-item"
-                                    onClick={() => handleRecallMessage(msg._id)}
-                                    style={{ color: "red" }}
-                                  >
-                                    🔄 Thu hồi
-                                  </div>
-                                )}
-                                {!msg.isRecalled && (
-                                  <div
-                                    className="menu-item"
-                                    onClick={() => handleReplyMessage(msg)}
-                                  >
-                                    💬 Trả lời
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )}
+                              ))}
+                            </div>
+                          );
+                        })()}
 
-                        {/* Avatar bên phải nếu là 'me' */}
-                        {isMe && (
-                          <img
-                            src={user.avatar || "/default-avatar.png"}
-                            alt="avatar"
-                            className="message-avatar"
-                          />
-                        )}
-                      </div>
-                    </div>
-                    {leftMembersAfterThisMessage && (
-                      <div className="system-message">
-                        {leftMembersAfterThisMessage.map((member, index) => (
-                          <div key={index}>
-                            <span>
-                              {member.username} đã rời nhóm
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                );
-              })}
-            <div ref={messagesEndRef} />
-          </div>
-          {replyingMessage && (
-            <div className="reply-preview">
-              <div className="reply-info">
-                <strong>Đang trả lời:</strong>
-                <span className="reply-text">
-                  {replyingMessage.text ||
-                    replyingMessage.fileName ||
-                    (replyingMessage.image && "Ảnh") ||
-                    (replyingMessage.video && "Video")}
-                </span>
+                      </>
+                    );
+                  })}
+                <div ref={messagesEndRef} />
               </div>
-              <FaTimes
-                className="close-reply-icon"
-                onClick={() => setReplyingMessage(null)}
-              />
-            </div>
-          )}
-          {/* Input Box */}
-          <div className="input-box-chat">
-            <div className="input-icon-container">
-              <button className="icon-input" onClick={toggleEmojiPicker}>
-                <FaSmile />
-              </button>
-              {showEmojiPicker && (
-                <div className="emoji-picker">
-                  <EmojiPicker onEmojiClick={handleEmojiClick} />
+              {replyingMessage && (
+                <div className="reply-preview">
+                  <div className="reply-info">
+                    <strong>Đang trả lời:</strong>
+                    <span className="reply-text">
+                      {replyingMessage.text ||
+                        replyingMessage.fileName ||
+                        (replyingMessage.image && "Ảnh") ||
+                        (replyingMessage.video && "Video")}
+                    </span>
+                  </div>
+                  <FaTimes
+                    className="close-reply-icon"
+                    onClick={() => setReplyingMessage(null)}
+                  />
                 </div>
               )}
+              {/* Input Box */}
+              <div className="input-box-chat">
+                <div className="input-icon-container">
+                  <button className="icon-input" onClick={toggleEmojiPicker}>
+                    <FaSmile />
+                  </button>
+                  {showEmojiPicker && (
+                    <div className="emoji-picker">
+                      <EmojiPicker onEmojiClick={handleEmojiClick} />
+                    </div>
+                  )}
 
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={(e) => handleFileUpload(e, "image")}
-                style={{ display: "none" }}
-                id="imageUpload"
-              />
-              <label htmlFor="imageUpload" className="icon-input">
-                <FaImage />
-              </label>
-
-              <input
-                type="file"
-                accept="video/*"
-                onChange={(e) => handleFileUpload(e, "video")}
-                style={{ display: "none" }}
-                id="videoUpload"
-              />
-              <label htmlFor="videoUpload" className="icon-input">
-                <FaVideo />
-              </label>
-
-              <input
-                type="file"
-                onChange={(e) => handleFileUpload(e, "file")}
-                style={{ display: "none" }}
-                id="fileUpload"
-              />
-              <label htmlFor="fileUpload" className="icon-input">
-                <FaPaperclip />
-              </label>
-
-              <button className="icon-input">
-                <FaMicrophone />
-              </button>
-            </div>
-            {/* Preview selected image */}
-            {Array.isArray(selectedImage) && selectedImage.length > 0 && (
-              <div className="preview-container">
-                {selectedImage.map((img, idx) => (
-                  <img
-                    key={idx}
-                    src={img}
-                    alt={`preview-${idx}`}
-                    width="60"
-                    height="60"
-                    style={{ objectFit: "cover", borderRadius: "8px" }}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => handleFileUpload(e, "image")}
+                    style={{ display: "none" }}
+                    id="imageUpload"
                   />
-                ))}
+                  <label htmlFor="imageUpload" className="icon-input">
+                    <FaImage />
+                  </label>
+
+                  <input
+                    type="file"
+                    accept="video/*"
+                    onChange={(e) => handleFileUpload(e, "video")}
+                    style={{ display: "none" }}
+                    id="videoUpload"
+                  />
+                  <label htmlFor="videoUpload" className="icon-input">
+                    <FaVideo />
+                  </label>
+
+                  <input
+                    type="file"
+                    onChange={(e) => handleFileUpload(e, "file")}
+                    style={{ display: "none" }}
+                    id="fileUpload"
+                  />
+                  <label htmlFor="fileUpload" className="icon-input">
+                    <FaPaperclip />
+                  </label>
+
+                  <button className="icon-input">
+                    <FaMicrophone />
+                  </button>
+                </div>
+                {/* Preview selected image */}
+                {Array.isArray(selectedImage) && selectedImage.length > 0 && (
+                  <div className="preview-container">
+                    {selectedImage.map((img, idx) => (
+                      <img
+                        key={idx}
+                        src={img}
+                        alt={`preview-${idx}`}
+                        width="60"
+                        height="60"
+                        style={{ objectFit: "cover", borderRadius: "8px" }}
+                      />
+                    ))}
+                  </div>
+                )}
+                {/* Preview selected video */}
+                {selectedVideo && (
+                  <div className="preview-container">
+                    <video
+                      width="80"
+                      height="60"
+                      controls
+                      style={{ borderRadius: "8px" }}
+                    >
+                      <source src={selectedVideo} type="video/mp4" />
+                    </video>
+                  </div>
+                )}
+                {/* Text input */}
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  placeholder="Type your message..."
+                  className="message-input"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (inputText.trim() !== "") {
+                        sendMessage();
+                      }
+                    }
+                  }}
+                />
+                <button onClick={sendMessage} className="send-button">
+                  <FaPaperPlane />
+                </button>
               </div>
-            )}
-            {/* Preview selected video */}
-            {selectedVideo && (
-              <div className="preview-container">
-                <video
-                  width="80"
-                  height="60"
-                  controls
-                  style={{ borderRadius: "8px" }}
-                >
-                  <source src={selectedVideo} type="video/mp4" />
-                </video>
+            </div>
+          ) : (
+            <>
+              <div className="header-chat-window-item">
+                <p>{selectedHeader}</p>
               </div>
-            )}
-            {/* Text input */}
-            <input
-              ref={inputRef}
-              type="text"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              placeholder="Type your message..."
-              className="message-input"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  if (inputText.trim() !== "") {
-                    sendMessage();
-                  }
-                }
-              }}
-            />
-            <button onClick={sendMessage} className="send-button">
-              <FaPaperPlane />
-            </button>
-          </div>
-        </div>
-      ) : (
-        <>
-          <div className="header-chat-window-item">
-            <p>{selectedHeader}</p>
-          </div>
-          <div className="welcome-message">
-            <h2>{selectedtitle}</h2>
-            <p>{selectedtitle2}</p>
-          </div>
-        </>
-      )}
+              <div className="welcome-message">
+                <h2>{selectedtitle}</h2>
+                <p>{selectedtitle2}</p>
+              </div>
+            </>
+          )}
       {/* Modal for image/video preview */}
       {isOpen && (
         <Modal
