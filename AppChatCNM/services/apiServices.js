@@ -169,7 +169,6 @@ export const rejectFriendRequest = async (requestId) => {
 };
 
 // Hủy yêu cầu kết bạn (người gửi hủy)
-// Hủy yêu cầu kết bạn (người gửi hủy)
 export const cancelFriendRequest = async (receiverId, senderId) => { // Chắc chắn có senderId ở đây
   try {
     const response = await api.post('/friends/cancel-request', {
@@ -210,9 +209,65 @@ export const acceptFriendRequest = async (requestId, senderId, receiverId) => {
   }
 };
 
+// Hàm call API thu hồi tin nhắn
+export const recallMessage = async (messageId, conversationId) => {
+  try {
+    const response = await api.put(`/messages/recall/${messageId}`, { conversationId });
+    return response.data;
+  } catch (error) {
+    console.error("Lỗi khi thu hồi tin nhắn:", error);
+    throw error;
+  }
+};
+// Xóa tin nhắn ở phía người tôi
+export const deleteMessageForUser = async (messageId, userId, conversationId) => {
+  try {
+    const response = await api.put(`/messages/deletefrom/${messageId}`, {
+      userId,
+      conversationId,
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Lỗi khi xóa tin nhắn ở phía người dùng:", error);
+    throw error;
+  }
+};
 
 
 
+// Hàm upload file, video, image
+export const uploadFile = async (file, conversationId, senderId) => {
+  try {
+    const formData = new FormData();
+    // Nếu file có blob (từ base64), dùng blob
+    if (file.blob) {
+      formData.append("file", file.blob, file.name);
+    } else {
+      formData.append("file", {
+        uri: file.uri,
+        name: file.name,
+        type: file.type,
+      });
+    }
+    formData.append("conversationId", conversationId);
+    formData.append("senderId", senderId);
+
+    console.log("Uploading file:", file);
+
+    const response = await api.post("/messages/upload", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+
+    console.log("Upload response:", response.data);
+
+    return response.data;
+  } catch (error) {
+    console.error("Lỗi khi tải lên file:", error.response?.data || error.message);
+    throw error;
+  }
+};
 
 
 

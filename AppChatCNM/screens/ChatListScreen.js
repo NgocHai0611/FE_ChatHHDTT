@@ -75,20 +75,23 @@ export default function ChatListScreen({ navigation }) {
 
 
     const filteredConversations = conversations.filter(c => {
-        // Kiểm tra nếu cuộc trò chuyện không rỗng
-        const hasValidMessage = c.latestmessage && c.latestmessage.trim() !== "";
-        const hasValidMembers = c.members && c.members.length > 0;
-
-        // Nếu hợp lệ, kiểm tra điều kiện lọc
-        return (
-            hasValidMessage &&
-            hasValidMembers &&
-            (
-                c.latestmessage.toLowerCase().includes(searchText.toLowerCase()) ||
-                c.members.join(" ").toLowerCase().includes(searchText.toLowerCase())
-            )
-        );
-    });
+    // Kiểm tra nếu cuộc trò chuyện có tin nhắn cuối cùng
+     const hasLatestMessage = c.latestmessage !== undefined && c.latestmessage !== null;
+         const hasValidMembers = c.members && c.members.length > 0;
+        const isLastMessageRecalled = c.isLastMessageRecalled || false;
+        
+         // Điều kiện để hiển thị cuộc trò chuyện:
+                    const shouldShowConversation = hasValidMembers && (
+                        hasLatestMessage && (
+                            isLastMessageRecalled ||
+                            c.latestmessage.trim() !== "" ||
+                            c.latestMessageType !== 'text'
+                        ) ||
+                        c.members.join(" ").toLowerCase().includes(searchText.toLowerCase()) // Hiển thị nếu khớp với tìm kiếm
+         );
+        
+         return shouldShowConversation;
+         });
 
 
     console.log("Filtered Conversations:", filteredConversations);  // Add a log to check the filtered result

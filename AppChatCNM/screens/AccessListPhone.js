@@ -65,16 +65,16 @@ const ContactItem = ({ item, onPress, onUnfriend, isFriend, onAddFriend, onAccep
                 ) : isFriend === 'pending' ? ( // Trường hợp bạn đã gửi yêu cầu (theo logic hiện tại của API checkFriendStatus)
                   <View style={styles.actionButtonsContainer}>
                                           <View style={styles.sentRequestStatus}>
-                                              <Text style={styles.sentRequestText}>Đã gửi</Text>
-                                          </View>
-                                          <TouchableOpacity
-                                              style={[styles.actionButton, styles.cancelButton]}
-                                              onPress={() => onCancelFriendRequest(item._id)} 
-                                              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                          >
-                                              <Text style={styles.actionText}>Hủy</Text>
-                                          </TouchableOpacity>
-                                      </View>
+                   <Text style={styles.sentRequestText}>Đã gửi</Text>
+                   </View>
+                   <TouchableOpacity
+                  style={[styles.actionButton, styles.cancelButton]}
+                   onPress={() => onCancelFriendRequest(item._id)} 
+                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                 >
+                  <Text style={styles.actionText}>Hủy</Text>
+                  </TouchableOpacity>
+                  </View>
                 ) : (
                     <TouchableOpacity
                         style={styles.actionButton}
