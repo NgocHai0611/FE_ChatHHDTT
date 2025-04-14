@@ -7,7 +7,7 @@ import * as DocumentPicker from "expo-document-picker";
 import { Video } from "expo-av";
 import EmojiSelector from "react-native-emoji-selector";
 import Lightbox from "react-native-lightbox";
-import { uploadFile, getMessages, pinMessage, recallMessage as recallMessageApi, deleteMessageForUser } from "../services/apiServices";
+import { uploadFile, getMessages, pinMessage, recallMessage as recallMessageApi, deleteMessageForUser,getListFriend,createConversation,getConversations } from "../services/apiServices";
 import { useFocusEffect } from "@react-navigation/native";
 import io from "socket.io-client";
 
@@ -29,6 +29,8 @@ export default function ChatScreen({ navigation, route }) {
   const socket = useRef(null); // Ref cho socket.io
   const { conversation, currentUser, otherUser } = route.params; // Thông tin cuộc trò chuyện, người dùng hiện tại và đối phương
 
+  const [isForwardModalVisible, setIsForwardModalVisible] = useState(false); // Hiển thị modal chọn bạn bè
+  const [friendList, setFriendList] = useState([]); // Danh sách bạn bè (cuộc trò chuyện)
   // --- Kết nối và xử lý socket ---
   useEffect(() => {
     // Khởi tạo socket và kết nối tới server
@@ -90,6 +92,17 @@ export default function ChatScreen({ navigation, route }) {
         fetchMessages();
       }
     });
+     // Lấy danh sách bạn bè từ API
+     const fetchFriends = async () => {
+      try {
+        const friends = await getListFriend(currentUser._id);
+        setFriendList(friends);
+      } catch (error) {
+        console.error("Lỗi khi lấy danh sách bạn bè:", error);
+        alert("Không thể lấy danh sách bạn bè. Vui lòng thử lại.");
+      }
+    };
+    fetchFriends();
 
     // Ngắt kết nối socket khi component unmount
     return () => {
@@ -527,6 +540,15 @@ export default function ChatScreen({ navigation, route }) {
         <TouchableOpacity style={styles.modalOption} onPress={handleReply}>
           <Text>Trả lời</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.modalOption}
+          onPress={() => {
+            setIsMessageModalVisible(false);
+            setIsForwardModalVisible(true);
+          }}
+        >
+          <Text>Chuyển tiếp</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.modalOption} onPress={handleDeleteForMe}>
           <Text>Xóa ở phía tôi</Text>
         </TouchableOpacity>
@@ -537,6 +559,32 @@ export default function ChatScreen({ navigation, route }) {
     );
   };
 
+  const renderForwardModal = () => {
+    return (
+      <View style={styles.modalContent}>
+        <Text style={styles.modalTitle}>Chuyển tiếp tin nhắn đến:</Text>
+        {friendList.map((friend) => (
+          <TouchableOpacity
+            key={friend._id}
+            style={styles.friendItem}
+            onPress={() => handleForwardMessage(friend)}
+          >
+            <Image
+              source={{ uri: friend.avatar || "https://via.placeholder.com/50" }}
+              style={styles.friendAvatar}
+            />
+            <Text style={styles.friendName}>{friend.username}</Text>
+          </TouchableOpacity>
+        ))}
+        <TouchableOpacity
+          style={styles.modalOption}
+          onPress={() => setIsForwardModalVisible(false)}
+        >
+          <Text>Hủy</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
   // Hiển thị nội dung tin nhắn (văn bản hoặc thông báo thu hồi)
   const renderCustomText = (props) => {
     if (props.currentMessage.isRecalled) {
@@ -686,6 +734,66 @@ export default function ChatScreen({ navigation, route }) {
     setText((prevText) => prevText + emoji);
   };
 
+  // Xử lý chuyển tiếp tin nhắn
+  const handleForwardMessage = async (friend) => {
+    if (!selectedMessage) return;
+  
+    try {
+      let conversationId = null;
+      const userConversations = await getConversations(currentUser._id);
+      console.log("Danh sách cuộc trò chuyện:", userConversations);
+      console.log("currentUser._id:", currentUser._id, "friend._id:", friend._id);
+  
+      const existingConversation = userConversations.find((conv) => {
+        console.log("Conversation members:", conv.members);
+        // Kiểm tra xem trong conv.members có chứa cả currentUser._id và friend._id không
+        const hasCurrentUser = conv.members.some(member => member._id === currentUser._id);
+        const hasFriend = conv.members.some(member => member._id === friend._id);
+        return hasCurrentUser && hasFriend && !conv.isGroup;
+      });
+  
+      if (existingConversation) {
+        console.log("Tìm thấy cuộc trò chuyện hiện có:", existingConversation);
+        conversationId = existingConversation._id;
+      } else {
+        console.log("Không tìm thấy cuộc trò chuyện, tạo mới...");
+        const newConversation = await createConversation([currentUser._id, friend._id]);
+        conversationId = newConversation._id;
+      }
+  
+      const messageType = selectedMessage.image
+        ? "image"
+        : selectedMessage.video
+        ? "video"
+        : selectedMessage.file
+        ? "file"
+        : "text";
+  
+      const forwardedMessage = {
+        conversationId: conversationId,
+        senderId: currentUser._id,
+        messageType: messageType,
+        text: selectedMessage.text || "",
+        imageUrl: selectedMessage.image || "",
+        videoUrl: selectedMessage.video || "",
+        fileUrl: selectedMessage.file || "",
+        fileName: selectedMessage.fileName || "",
+        iconCode: "",
+        replyTo: null,
+        forwardedFrom: {
+          user: selectedMessage.user.name,
+          conversationId: conversation._id,
+        },
+      };
+  
+      socket.current.emit("sendMessage", forwardedMessage);
+      setIsForwardModalVisible(false);
+      alert(`Tin nhắn đã được chuyển tiếp đến ${friend.username}`);
+    } catch (error) {
+      console.error("Lỗi khi chuyển tiếp tin nhắn:", error);
+      alert("Đã xảy ra lỗi khi chuyển tiếp tin nhắn. Vui lòng thử lại.");
+    }
+  };
   // --- Giao diện chính ---
   return (
     <SafeAreaView style={styles.container}>
@@ -865,6 +973,17 @@ export default function ChatScreen({ navigation, route }) {
           {renderMessageOptions()}
         </View>
       </Modal>
+
+      <Modal
+          animationType="slide"
+          transparent={true}
+          visible={isForwardModalVisible}
+          onRequestClose={() => setIsForwardModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            {renderForwardModal()}
+          </View>
+        </Modal>
     </KeyboardAvoidingView>
   </SafeAreaView>
 );
@@ -1078,4 +1197,23 @@ downloadText: {
   fontSize: 12,
   marginLeft: 4,
 },
+friendAvatar: {
+  width: 40,
+  height: 40,
+  borderRadius: 20,
+  marginRight: 10,
+  backgroundColor: "lightgray", // Thêm màu nền để kiểm tra xem component có hiển thị không
+},
+friendItem:{
+  flexDirection: 'row',
+        backgroundColor: '#fff',
+        borderRadius: 15,
+        padding: 15,
+        alignItems: 'center',
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+}
 });
