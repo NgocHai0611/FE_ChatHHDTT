@@ -883,47 +883,54 @@ export default function ChatApp() {
   //Xử lý upload ảnh
 
   const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    console.log("file handleFileUpload", file);
-    if (!file) return;
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
 
-    // Reset input file để kích hoạt sự kiện onChange khi chọn lại cùng file
-    e.target.value = "";
+    e.target.value = ""; // Reset input để chọn lại cùng file
 
     const formData = new FormData();
-    formData.append("file", file);
+    files.forEach((file) => {
+      formData.append("files", file); // đổi sang "files" (plural)
+    });
+
     formData.append("conversationId", selectedChat.conversationId);
     formData.append("senderId", user._id);
 
-    console.log("formData", formData);
-    console.log("Các key trong FormData:");
+    console.log("Các file:", files);
+    console.log("FormData keys:");
     for (let key of formData.keys()) {
       console.log(key);
     }
 
-
-    const fileUrl = URL.createObjectURL(file) + `#${Math.random()}`;
-    console.log("fileUrl", fileUrl);
     try {
       const response = await fetch("http://localhost:8004/messages/upload", {
         method: "POST",
         body: formData,
       });
-      console.log("Raw response:", response);
-
 
       if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
 
       const data = await response.json();
-      console.log("Response data:", data);
-      const uploadedFileUrl = data.fileUrl || data.imageUrl || data.videoUrl; // URL Cloudinary\
-      console.log("Uploaded file URL:", uploadedFileUrl);
-      sendMessage(uploadedFileUrl, file.name); // Gửi tin nhắn với URL đã upload
+      console.log("Server response:", data);
+
+      // Gửi từng file URL như một message
+      (data.imageUrls || []).forEach((url, index) => {
+        sendMessage(url, files[index]?.name || "image");
+      });
+
+      (data.fileUrls || []).forEach((url, index) => {
+        sendMessage(url, files[index]?.name || "file");
+      });
+
+      (data.videoUrls || []).forEach((url, index) => {
+        sendMessage(url, files[index]?.name || "video");
+      });
 
     } catch (error) {
       console.error("Upload error:", error);
     }
   };
+
 
 
 
@@ -1644,21 +1651,41 @@ export default function ChatApp() {
   }, []);
 
   const handleForwardMessage = async () => {
-    console.log("selectedChatsToForward", selectedChatsToForward);
-    console.log("messageToForward", messageToForward);
-
     if (!messageToForward || !selectedChatsToForward || selectedChatsToForward.length === 0) {
       toast.error("Không có tin nhắn hoặc người nhận để chuyển tiếp");
       return;
     }
 
-    for (const conversationId of selectedChatsToForward) {
+    for (const itemId of selectedChatsToForward) {
+      let conversationId = null;
+
+      // 1. Nếu là conversationId có sẵn
+      const chat = chats.find((c) => c.conversationId === itemId);
+      if (chat) {
+        conversationId = chat.conversationId;
+      } else {
+        // 2. Nếu là friendId, tạo mới cuộc trò chuyện
+        try {
+          const newChat = await createNewChat(itemId); // itemId bây giờ là userId
+          if (newChat && newChat._id) {
+            conversationId = newChat._id;
+          } else {
+            toast.error("Không thể tạo cuộc trò chuyện mới");
+            continue;
+          }
+        } catch (error) {
+          console.error("Lỗi tạo cuộc trò chuyện:", error);
+          toast.error("Lỗi tạo cuộc trò chuyện");
+          continue;
+        }
+      }
+
+      // 3. Gửi tin nhắn
       if (!conversationId) {
-        toast.error("Thiếu conversationId để gửi tin nhắn");
+        toast.error("Không có conversationId hợp lệ");
         continue;
       }
 
-      // Tạo dữ liệu tin nhắn chuyển tiếp
       const messageData = {
         conversationId,
         senderId: user._id,
@@ -1668,21 +1695,19 @@ export default function ChatApp() {
         imageUrl: messageToForward.imageUrl || null,
         videoUrl: messageToForward.videoUrl || null,
         fileUrl: messageToForward.fileUrl || null,
-        isForwarded: true,
       };
 
-      console.log("Tin nhắn chuyển tiếp gửi đi:", messageData);
-
-      // Gửi qua socket
       socket.emit("sendMessage", messageData);
     }
 
-    // Reset sau khi gửi
+    // Reset
     setMessageToForward(null);
     setSelectedChatsToForward([]);
     setShowForwardModal(false);
     toast.success("Đã chuyển tiếp tin nhắn!");
   };
+
+
 
 
   return (
@@ -3209,21 +3234,21 @@ export default function ChatApp() {
                                                 <h3>Danh sách nhóm, bạn bè & cuộc trò chuyện</h3>
 
                                                 {/* Hiển thị nhóm, bạn bè và cuộc trò chuyện */}
-                                              
                                                 {(() => {
                                                   // 1. Tập hợp tất cả conversationId từ chats
                                                   const chatIdsSet = new Set(chats.map((chat) => chat.conversationId));
 
-                                                  // 2. Gộp chats + friends (loại friend đã có chat)
+                                                  // 2. Gộp chats + friends (chỉ lấy friends có conversationId thật và chưa có trong chats)
                                                   const mergedList = [
                                                     ...chats.map((chat) => ({ ...chat, type: "chat" })),
                                                     ...friends
-                                                      .filter((friend) => !chatIdsSet.has(friend.conversationId)) // chỉ thêm nếu chưa có chat
+                                                      .filter((friend) => {
+                                                        return friend.conversationId && !chatIdsSet.has(friend.conversationId);
+                                                      })
                                                       .map((friend) => ({
                                                         ...friend,
                                                         type: "friend",
-                                                        conversationId: friend.conversationId || `temp-${friend._id}`, // tạm ID nếu chưa có
-                                                      }))
+                                                      })),
                                                   ];
 
                                                   // 3. Lọc theo searchTermShare
@@ -3233,7 +3258,7 @@ export default function ChatApp() {
                                                       .includes(searchTermShare.toLowerCase())
                                                   );
 
-                                                  // 4. Loại bỏ trùng dựa theo conversationId hoặc _id
+                                                  // 4. Loại bỏ trùng conversationId hoặc _id
                                                   const uniqueList = filteredList.reduce((acc, current) => {
                                                     const currentId = current.conversationId || current._id;
                                                     const isDuplicate = acc.some((item) => {
@@ -3246,7 +3271,7 @@ export default function ChatApp() {
                                                     return acc;
                                                   }, []);
 
-                                                  // 5. Ưu tiên nhóm (isGroup) lên đầu
+                                                  // 5. Ưu tiên nhóm lên đầu
                                                   const sortedList = uniqueList.sort((a, b) => {
                                                     const aIsGroup = a.type === "chat" && a.isGroup;
                                                     const bIsGroup = b.type === "chat" && b.isGroup;
@@ -3257,7 +3282,7 @@ export default function ChatApp() {
 
                                                   // 6. Render danh sách
                                                   return sortedList.map((item) => {
-                                                    const itemId = item.conversationId || item._id;
+                                                    const itemId = item.conversationId;
                                                     const isSelected = selectedChatsToForward.includes(itemId);
                                                     const displayName = item.name || item.username || "Cuộc trò chuyện";
                                                     const avatar = item.image || item.avatar || "/default-avatar.png";
@@ -3291,6 +3316,8 @@ export default function ChatApp() {
                                                     );
                                                   });
                                                 })()}
+
+
 
 
 
@@ -3453,7 +3480,8 @@ export default function ChatApp() {
 
                   <input
                     type="file"
-                    accept="video/*"
+                      accept="video/*"
+                      multiple
                     onChange={(e) => handleFileUpload(e, "video")}
                     style={{ display: "none" }}
                     id="videoUpload"
@@ -3463,7 +3491,8 @@ export default function ChatApp() {
                   </label>
 
                   <input
-                    type="file"
+                      type="file"
+                      multiple
                     onChange={(e) => handleFileUpload(e, "file")}
                     style={{ display: "none" }}
                     id="fileUpload"
