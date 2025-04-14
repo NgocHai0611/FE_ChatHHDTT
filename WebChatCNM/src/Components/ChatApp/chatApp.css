@@ -4,6 +4,8 @@
   height: 100vh;
   background-color: #f3f4f6;
   width: 100%;
+  z-index: 1;
+
 }
 
 /* Sidebar */
@@ -14,6 +16,7 @@
   border-right: 1px solid #ddd;
   height: 100vh;
   margin-left: 70px;
+  z-index: 1;
 }
 
 .sidebar-title {
@@ -78,6 +81,7 @@
   padding: 10px;
   cursor: pointer;
   transition: background-color 0.2s;
+ 
 }
 
 .chat-left:hover {
@@ -132,6 +136,7 @@
   width: 70%;
   display: flex;
   flex-direction: column;
+  
 }
 
 /* Header */
@@ -141,6 +146,7 @@
   justify-content: space-between;
   background-color: white;
   border-bottom: 1px solid #ddd;
+ 
 }
 
 .chat-title {
@@ -152,6 +158,7 @@
   display: flex;
   gap: 12px;
   margin-right: 20px;
+  z-index: 99999;
 }
 
 .icon {
@@ -418,7 +425,8 @@
 }
 .bacham-icon{
     color: #6b7280;
-    margin-left: 82%;
+    margin-left: 75%;
+    font-size: 25px;
     
 }
 .avatar{
@@ -467,6 +475,7 @@
   position: relative;
   display: flex;
   align-items: center;
+ 
 }
 .unread-badge {
     background-color: #6852D6;
@@ -890,6 +899,7 @@
     scrollbar-color: #ccc transparent; /* Màu thanh cuộn */
     padding-right: 0px;
    
+   
 }
 
 /* Tùy chỉnh thanh cuộn trên Chrome, Edge, Safari */
@@ -953,13 +963,11 @@
 
 /* Nền mờ đen cho Modal */
 .modal-overlay {
-   
-    top: 0;
-    left: 0;
+    
     display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 9999;
+    z-index: 99999 !important;
 }
 
 .date-divider {
@@ -998,6 +1006,7 @@
   flex-direction: column;
   align-items: center;
   gap: 12px; /* Khoảng cách giữa media và info */
+   z-index: 10000 !important; /* Đặt z-index cao hơn */
 }
 
 .modal-media-wrapper {
@@ -1761,7 +1770,7 @@
   padding: 20px;
   border-radius: 8px;
   box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-  z-index: 1000;
+  z-index: 999999;
 
 }
 .member-list {
@@ -1769,7 +1778,38 @@
   align-items: flex-start;
   gap: 10px;
   flex-direction: column;
+   max-height: 300px; /* hoặc bao nhiêu bạn muốn */
+  overflow-y: auto;
+  padding-right: 6px; /* tránh thanh scroll đè lên nội dung */
 }
+.member-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.member-list::-webkit-scrollbar-thumb {
+  background-color: #ccc;
+  border-radius: 4px;
+}
+
+
+.member-list-chiase {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex-direction: column;
+
+}
+.member-list-chiase::-webkit-scrollbar {
+  width: 6px;
+}
+
+.member-list-chiase::-webkit-scrollbar-thumb {
+  background-color: #ccc;
+  border-radius: 4px;
+}
+
+
+
 .member-item-wrapper{
   display: flex;
 
@@ -1891,7 +1931,7 @@
   transition: color 0.3s ease;
   margin-left: 300px;
   top: -10px;
-  right: -135px;
+  right: -130px;
   position: relative;
   
 }
@@ -1913,7 +1953,9 @@
   width: 100%;
   flex-direction: row;
 
+
 }
+
 
 .search-user-info-addgroup:hover {
   background-color: #f0f0f0;
@@ -2012,6 +2054,7 @@
   display: flex;
   align-items: center;
   width: 100%;
+  position: relative;
 }
 
 .group-avatar {
@@ -2031,7 +2074,7 @@
 
 .group-menu-popup {
   position: absolute;
-  top: 70px;
+  top: 0;
   right: 20px;
   transform: translateY(10%);
   background: #fff;
@@ -2043,6 +2086,144 @@
 }
 .group-menu-icon {
   position: absolute;
-  top: 70px;
+   top: 0;
   right: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 99999;
+  padding: 8px;
+}
+
+.group-avatar-picker {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 15px;
+}
+
+.avatar-upload-label {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background-color: #f0f0f0;
+  border: 2px dashed #ccc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+  position: relative;
+}
+
+.camera-icon {
+  font-size: 30px;
+  color: #888;
+}
+
+.group-avatar-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.add-members-modal-creategroup {
+  position: fixed;
+  top: 5%;
+  left: 30%;
+  width: 40%;
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  z-index: 999999;
+  
+
+}
+.modal-overlay-creategroup {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5); /* Lớp phủ nửa trong suốt */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+   z-index: 9999;
+}
+
+.search-result-list {
+ 
+  margin-top: 10px;
+  padding-right: 6px;
+}
+.list-container{
+  max-height: 200px; /* tuỳ chỉnh theo chiều cao mong muốn */
+  overflow-y: auto;
+  margin-top: 10px;
+  padding-right: 6px;
+}
+
+/* Optional: Scrollbar gọn đẹp hơn */
+.list-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.list-container::-webkit-scrollbar-thumb {
+  background-color: #ccc;
+  border-radius: 4px;
+}
+.custom-toast-container {
+  z-index: 99999 !important;
+}
+/* Ghi đè container chính */
+.Toastify__toast-container {
+  z-index: 100000 !important;
+}
+
+/* Tùy chỉnh từng toast (nếu muốn) */
+.custom-toast-container {
+  z-index: 100000 !important;
+}
+
+.add-members-modal-chiase{
+  position: fixed;
+  top: 5%;
+  left: 30%;
+  width: 40%;
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  z-index: 999999;
+
+}
+
+.message-preview {
+  padding: 10px;
+  background-color: #f4f5f6;  /* Màu nền nhạt cho phần hiển thị tin nhắn */
+  border-radius: 8px;  /* Bo góc nhẹ */
+  margin-top: 10px;
+  border: 1px solid #ddd;  /* Viền mỏng nhẹ */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);  /* Tạo hiệu ứng bóng đổ nhẹ */
+}
+
+.message-preview p {
+  font-size: 14px;
+  color: #333;  /* Màu chữ cho tiêu đề */
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.message-content-chiase {
+  font-size: 16px;
+  color: #555;  /* Màu chữ của nội dung tin nhắn */
+  line-height: 1.5;  /* Giãn dòng cho dễ đọc */
+  white-space: pre-line;  /* Giữ lại các dòng mới trong tin nhắn */
+  max-height: 150px;  /* Giới hạn chiều cao của khối nội dung */
+  overflow-y: auto;  /* Cho phép cuộn dọc khi nội dung vượt quá max-height */
+  padding: 8px;
+  background-color: #fff;  /* Màu nền của phần nội dung tin nhắn */
+  border-radius: 5px;  /* Bo góc phần nội dung */
+  border: 1px solid #e1e4e8;  /* Viền nhẹ quanh nội dung */
 }
