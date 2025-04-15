@@ -19,7 +19,7 @@ export default function RecoverPasswordApp() {
   const [isModalVisible, setModalVisible] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
 
-  const API_BASE_URL = `http://localhost:8004`;
+  const API_BASE_URL = `http://192.168.100.5:8004`;
 
   const handleReset = async () => {
     try {

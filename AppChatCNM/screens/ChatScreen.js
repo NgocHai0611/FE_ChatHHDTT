@@ -29,7 +29,7 @@ export default function ChatScreen({ navigation, route }) {
   const socket = useRef(null);
   // Kết nối với socket server
   useEffect(() => {
-    socket.current = io("http://192.168.100.60:8004", { transports: ["websocket"] }); // Thay thế bằng URL backend
+    socket.current = io("http://192.168.100.5:8004", { transports: ["websocket"] }); // Thay thế bằng URL backend
     socket.current.on("connect", () => {
       console.log("Socket connected: ", socket.current.id);
       // Emit sự kiện markAsSeen khi kết nối và vào màn hình chat

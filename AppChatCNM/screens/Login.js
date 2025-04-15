@@ -8,11 +8,12 @@ import {
   Image,
   Modal,
   ScrollView,
+  SafeAreaView,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
-import axios from "axios"; // Thêm import axios
+import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Loading from "../loading";
 
@@ -44,7 +45,7 @@ export default function Login() {
     setIsLoading(true);
     try {
       const response = await axios.post(
-        "http://192.168.100.60:8004/v1/auth/login",
+        "http://192.168.100.5:8004/v1/auth/login",
         {
           email,
           password,
@@ -84,155 +85,145 @@ export default function Login() {
   };
 
   return (
-    <LinearGradient
-      colors={["#9AB9F5", "#FFFFFF"]}
-      locations={[0, 0.25]}
-      start={{ x: 0, y: 1 }}
-      end={{ x: 0.5, y: 0 }}
-      style={styles.container}
-    >
-      <Image source={require("../assets/Data/char1.png")} style={styles.logo} />
-      {/* <Text style={styles.title}>Get Start Now</Text>
-      <Text style={styles.subtitle}>Create an account or log in to explore about our app</Text> */}
-
-      <TextInput
-        style={[
-          styles.input,
-          { borderColor: isEmailFocused ? "#007AFF" : "#E8E8E8" },
-        ]}
-        placeholder="Enter email"
-        keyboardType="default"
-        autoCapitalize="none"
-        placeholderTextColor="#A9A9A9"
-        value={email}
-        onChangeText={setEmail}
-        onFocus={() => setIsEmailFocused(true)}
-        onBlur={() => setIsEmailFocused(false)}
-      />
-
-      <View style={styles.passwordContainer}>
-        <TextInput
-          style={[
-            styles.inputPassword,
-            { borderColor: isPasswordFocused ? "#007AFF" : "#E8E8E8" },
-          ]}
-          placeholder="Password"
-          secureTextEntry={!isPasswordVisible}
-          placeholderTextColor="#A9A9A9"
-          value={password}
-          onChangeText={setPassword}
-          onFocus={() => setIsPasswordFocused(true)}
-          onBlur={() => setIsPasswordFocused(false)}
-        />
-        <TouchableOpacity
-          onPress={togglePasswordVisibility}
-          style={styles.showPasswordIcon}
-        >
-          <MaterialIcons
-            name={isPasswordVisible ? "visibility-off" : "visibility"}
-            size={24}
-            color="#ACB5BB"
-          />
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.rememberForgotContainer}>
-        <TouchableOpacity
-          onPress={toggleRememberMe}
-          style={styles.checkboxContainer}
-        >
-          <View
-            style={[styles.checkbox, isRememberMe && styles.checkboxChecked]}
-          >
-            {isRememberMe && (
-              <MaterialIcons
-                name="check"
-                size={10}
-                color="#FFFFFF"
-                style={styles.checkIcon}
-              />
-            )}
-          </View>
-          <Text style={styles.checkboxLabel}>Remember Me</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.forgotPassword}
-          onPress={() => navigation.navigate("RecoverPasswordApp")}
-        >
-          <Text style={styles.linkText}>Forgot Password?</Text>
-        </TouchableOpacity>
-      </View>
-
-      <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-        <Text style={styles.buttonText}>Login</Text>
-      </TouchableOpacity>
-
-      <Loading loadingState={isLoading}></Loading>
-
-      <Modal
-        transparent={true}
-        visible={isModalVisible}
-        animationType="slide"
-        onRequestClose={() => setModalVisible(false)}
+    <SafeAreaView style={styles.safeArea}>
+      <LinearGradient
+        colors={["#9AB9F5", "#FFFFFF"]}
+        locations={[0, 0.25]}
+        start={{ x: 0, y: 1 }}
+        end={{ x: 0.5, y: 0 }}
+        style={styles.container}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalMessage}>{modalMessage}</Text>
+        <ScrollView contentContainerStyle={styles.scrollContainer}>
+          <Image
+            source={require("../assets/Data/char1.png")}
+            style={styles.logo}
+          />
+
+          <TextInput
+            style={[
+              styles.input,
+              { borderColor: isEmailFocused ? "#007AFF" : "#E8E8E8" },
+            ]}
+            placeholder="Enter email"
+            keyboardType="default"
+            autoCapitalize="none"
+            placeholderTextColor="#A9A9A9"
+            value={email}
+            onChangeText={setEmail}
+            onFocus={() => setIsEmailFocused(true)}
+            onBlur={() => setIsEmailFocused(false)}
+          />
+
+          <View style={styles.passwordContainer}>
+            <TextInput
+              style={[
+                styles.inputPassword,
+                { borderColor: isPasswordFocused ? "#007AFF" : "#E8E8E8" },
+              ]}
+              placeholder="Password"
+              secureTextEntry={!isPasswordVisible}
+              placeholderTextColor="#A9A9A9"
+              value={password}
+              onChangeText={setPassword}
+              onFocus={() => setIsPasswordFocused(true)}
+              onBlur={() => setIsPasswordFocused(false)}
+            />
             <TouchableOpacity
-              style={styles.modalButton}
-              onPress={() => setModalVisible(false)}
+              onPress={togglePasswordVisibility}
+              style={styles.showPasswordIcon}
             >
-              <Text style={styles.modalButtonText}>Close</Text>
+              <MaterialIcons
+                name={isPasswordVisible ? "visibility-off" : "visibility"}
+                size={24}
+                color="#ACB5BB"
+              />
             </TouchableOpacity>
           </View>
-        </View>
-      </Modal>
 
-      <View style={styles.separatorContainer}>
-        <View style={styles.separator} />
-        <Text style={styles.separatorText}>Or</Text>
-        <View style={styles.separator} />
-      </View>
+          <View style={styles.rememberForgotContainer}>
+            <TouchableOpacity
+              onPress={toggleRememberMe}
+              style={styles.checkboxContainer}
+            >
+              <View
+                style={[styles.checkbox, isRememberMe && styles.checkboxChecked]}
+              >
+                {isRememberMe && (
+                  <MaterialIcons
+                    name="check"
+                    size={10}
+                    color="#FFFFFF"
+                    style={styles.checkIcon}
+                  />
+                )}
+              </View>
+              <Text style={styles.checkboxLabel}>Remember Me</Text>
+            </TouchableOpacity>
 
-      <TouchableOpacity style={styles.socialButton}>
-        <Image
-          source={{
-            uri: "https://companieslogo.com/img/orig/GOOG-0ed88f7c.png?t=1722952493",
-          }}
-          style={styles.socialIcon}
-        />
-        <Text style={styles.socialText}>Continue with Google</Text>
-      </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.forgotPassword}
+              onPress={() => navigation.navigate("RecoverPasswordApp")}
+            >
+              <Text style={styles.linkText}>Forgot Password?</Text>
+            </TouchableOpacity>
+          </View>
 
-      <TouchableOpacity style={styles.socialButton}>
-        <Image
-          source={{
-            uri: "https://companieslogo.com/img/orig/FB-2d2223ad.png?t=1720244491",
-          }}
-          style={styles.socialIcon}
-        />
-        <Text style={styles.socialText}>Continue with Facebook</Text>
-      </TouchableOpacity>
+          <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
+            <Text style={styles.buttonText}>Login</Text>
+          </TouchableOpacity>
 
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>
-          <Text style={styles.footerTextNormal}>Don't have an account? </Text>
-          <Text style={styles.footerTextLink} onPress={handleSignUpNavigation}>
-            Sign Up
+          <Loading loadingState={isLoading} />
+        </ScrollView>
+
+        <Modal
+          transparent={true}
+          visible={isModalVisible}
+          animationType="slide"
+          onRequestClose={() => setModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalMessage}>{modalMessage}</Text>
+              <TouchableOpacity
+                style={styles.modalButton}
+                onPress={() => setModalVisible(false)}
+              >
+                <Text style={styles.modalButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>
+            <Text style={styles.footerTextNormal}>
+              Don't have an account?{" "}
+            </Text>
+            <Text
+              style={styles.footerTextLink}
+              onPress={handleSignUpNavigation}
+            >
+              Sign Up
+            </Text>
           </Text>
-        </Text>
-      </View>
-    </LinearGradient>
+        </View>
+      </LinearGradient>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    justifyContent: "center",
     paddingHorizontal: 30,
-    backgroundColor: "#F8F8F8",
+  },
+  scrollContainer: {
+    flexGrow: 1,
+    justifyContent: "center",
+    paddingBottom: 100, // Đảm bảo đủ không gian để cuộn khi bàn phím mở
   },
   logo: {
     width: 350,
@@ -240,19 +231,6 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     resizeMode: "contain",
     marginBottom: 16,
-  },
-  title: {
-    fontSize: 34,
-    color: "#333333",
-    marginBottom: 12,
-    textAlign: "center",
-    fontWeight: "bold",
-  },
-  subtitle: {
-    fontSize: 12,
-    color: "#666666",
-    marginBottom: 24,
-    textAlign: "center",
   },
   input: {
     height: 50,
@@ -348,49 +326,10 @@ const styles = StyleSheet.create({
     color: "white",
     fontWeight: "bold",
   },
-  separatorContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: 16, // Updated margin
-  },
-  separator: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "#E8E8E8",
-  },
-  separatorText: {
-    marginHorizontal: 10,
-    color: "#666666",
-  },
   buttonText: {
     color: "#FFFFFF",
     fontSize: 18,
     fontWeight: "600",
-  },
-  socialButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    height: 50,
-    borderRadius: 10,
-    // borderColor: '#E8E8E8',
-    // borderWidth: 1,
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 20,
-    marginBottom: 16, // Updated margin
-  },
-  socialIcon: {
-    width: 20,
-    height: 20,
-    marginRight: 10,
-  },
-  socialText: {
-    fontSize: 14,
-    color: "#666666",
-    fontWeight: "500",
-  },
-  signupLink: {
-    alignItems: "center",
   },
   linkText: {
     color: "#007AFF",
@@ -398,8 +337,9 @@ const styles = StyleSheet.create({
   },
   footer: {
     position: "absolute",
-    bottom: 60,
+    bottom: 20,
     alignSelf: "center",
+    backgroundColor: "transparent",
   },
   footerText: {
     fontSize: 12,

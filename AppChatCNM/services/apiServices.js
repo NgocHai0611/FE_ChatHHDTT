@@ -1,10 +1,6 @@
 // src/services/apiService.ts
 import api from './api'; // Giả sử bạn đã cấu hình axios trong file api.ts hoặc api.js
 
-
-
-
-  
 //Hiển thị danh sách cuộc trò chuyện
   export const getConversations = async (userId) => {
     const response = await api.get(`/conversations/${userId}/search`);
@@ -21,7 +17,21 @@ import api from './api'; // Giả sử bạn đã cấu hình axios trong file a
     }
 };
 
+// Lấy thông tin người dùng theo ID
+export const getUserById = async (userId) => {
+  try {
+    const response = await api.get(`/users/get/${userId}`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching user:", error);
+    throw error;
+  }
+};
 
+export const updateUser = async (userId, data) => {
+  const response = await api.put(`/users/update/${userId}`, data);
+  return response.data;
+};
 
 // Gửi tin nhắn
 export const sendMessages = async (
@@ -209,14 +219,3 @@ export const acceptFriendRequest = async (requestId, senderId, receiverId) => {
       throw error;
   }
 };
-
-
-
-
-
-
-
-
-
-
-  
