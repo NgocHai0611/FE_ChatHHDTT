@@ -253,7 +253,7 @@ export const uploadFile = async (file, conversationId, senderId) => {
     formData.append("senderId", senderId);
 
     console.log("Uploading file:", file);
-
+    console.log("File MIME type:", file.type);
     const response = await api.post("/messages/upload", formData, {
       headers: {
         "Content-Type": "multipart/form-data",

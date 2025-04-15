@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { View, Text, TouchableOpacity, Image, StyleSheet, Modal, Linking,KeyboardAvoidingView,SafeAreaView,Platform, } from "react-native";
+import { View, Text, TouchableOpacity, Image, StyleSheet, Modal, Linking,KeyboardAvoidingView,SafeAreaView,Platform,Dimensions } from "react-native";
 import { GiftedChat, Bubble, Send } from "react-native-gifted-chat";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
@@ -127,25 +127,29 @@ export default function ChatScreen({ navigation, route }) {
   const fetchMessages = async () => {
     try {
       const data = await getMessages(conversation._id);
-      const formattedMessages = data.map((msg) => ({
-        _id: msg._id,
-        text: msg.isRecalled ? "Tin nhắn đã bị thu hồi" : msg.text || "",
-        createdAt: new Date(msg.createdAt),
-        user: {
-          _id: msg.senderId._id,
-          name: msg.senderId.username,
-          avatar: msg.senderId.avatar,
-        },
-        image: msg.imageUrl || undefined,
-        video: msg.videoUrl || undefined,
-        file: msg.fileUrl || undefined,
-        fileName: msg.fileName || undefined,
-        seenBy: msg.seenBy || [],
-        isPinned: msg.isPinned || false,
-        isRecalled: msg.isRecalled || false,
-        deletedFrom: msg.deletedFrom || [],
-        replyTo: msg.replyTo || null,
-      }));
+      const formattedMessages = data.map((msg) => {
+        const formattedMsg = {
+          _id: msg._id,
+          text: msg.isRecalled ? "Tin nhắn đã bị thu hồi" : msg.text || "",
+          createdAt: new Date(msg.createdAt),
+          user: {
+            _id: msg.senderId._id,
+            name: msg.senderId.username,
+            avatar: msg.senderId.avatar,
+          },
+          image: msg.imageUrl || undefined,
+          video: msg.videoUrl || undefined,
+          file: msg.fileUrl || undefined,
+          fileName: msg.fileName || undefined,
+          seenBy: msg.seenBy || [],
+          isPinned: msg.isPinned || false,
+          isRecalled: msg.isRecalled || false,
+          deletedFrom: msg.deletedFrom || [],
+          replyTo: msg.replyTo || null,
+        };
+        console.log("Formatted message:", formattedMsg);
+        return formattedMsg;
+      });
 
       const filteredMessages = formattedMessages.filter(
         (msg) => !msg.deletedFrom?.includes(currentUser._id)
@@ -328,6 +332,7 @@ export default function ChatScreen({ navigation, route }) {
       const responseData = await uploadFile(file, conversation._id, currentUser._id);
       if (responseData && responseData.success) {
         const uploadedFileUrl = responseData.imageUrl || responseData.videoUrl || responseData.fileUrl;
+        console.log("Uploaded file URL:", uploadedFileUrl);
         if (uploadedFileUrl) {
           const newMessage = {
             _id: Math.random().toString(36).substring(7),
@@ -361,78 +366,100 @@ export default function ChatScreen({ navigation, route }) {
 
   // --- Render các loại tin nhắn (ảnh, video, file) ---
   // Hiển thị tin nhắn ảnh
-  const renderMessageImage = (props) => (
-    <Lightbox activeProps={{ resizeMode: "contain" }}>
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-        <Image
-          source={{ uri: props.currentMessage.image }}
-          style={{ width: 200, height: 200, borderRadius: 10 }}
-          resizeMode="cover"
-        />
-      </View>
-    </Lightbox>
-  );
-
-  // Hiển thị tin nhắn video
-  const renderMessageVideo = (props) => (
-    <View style={{ padding: 10 }}>
-      <Video
-        source={{ uri: props.currentMessage.video }}
-        style={{ width: 150, height: 100 }}
-        useNativeControls
-        resizeMode="contain"
-      />
-    </View>
-  );
-
-  // Hiển thị tin nhắn file
-  const renderMessageFile = (props) => {
+  const renderMessageImage = (props) => {
     const { currentMessage } = props;
-    const fileName = currentMessage.fileName || currentMessage.text?.replace("📄 ", "") || "Tệp không xác định";
-    const fileUrl = currentMessage.file;
-    const extension = fileName.split(".").pop()?.toLowerCase();
-    const fileTypeLabel =
-      extension === "pdf"
-        ? "PDF"
-        : extension === "doc" || extension === "docx"
-        ? "Word Document"
-        : extension === "txt"
-        ? "Text File"
-        : "File";
-    const fileIcon =
-      extension === "pdf"
-        ? "file-pdf"
-        : extension === "doc" || extension === "docx"
-        ? "file-word"
-        : "insert-drive-file";
-
+    const imageUrl = currentMessage.image;
+  
     const handleDownload = async () => {
-      if (!fileUrl) {
-        alert("Không tìm thấy link tải xuống cho file này.");
+      if (!imageUrl) {
+        alert("Không tìm thấy link tải xuống cho hình ảnh này.");
         return;
       }
       try {
-        await Linking.openURL(fileUrl);
+        await Linking.openURL(imageUrl);
       } catch (error) {
         console.error("Lỗi khi mở link tải xuống:", error);
         alert("Không thể mở link tải xuống. Vui lòng thử lại sau.");
       }
     };
-
+  
     return (
-      <View style={styles.fileContainer}>
-        <View style={styles.fileInfo}>
-          <MaterialIcons name={fileIcon} size={28} color="#7B61FF" style={{ marginRight: 12 }} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.fileName} numberOfLines={1} ellipsizeMode="middle">
-              {fileName}
-            </Text>
-            <Text style={styles.fileType}>{fileTypeLabel}</Text>
+      <View style={styles.mediaContainer}>
+        <Lightbox activeProps={{ resizeMode: 'contain' }}>
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center',paddingTop:50 }}>
+            <Image
+              source={{ uri: imageUrl }}
+              style={{ width: 200, height: 200, borderRadius: 10 }}
+              resizeMode="cover"
+            />
           </View>
-        </View>
-        <TouchableOpacity onPress={handleDownload} style={styles.downloadButton}>
+        </Lightbox>
+        <TouchableOpacity onPress={handleDownload} style={styles.downloadIconContainer}>
           <MaterialIcons name="file-download" size={20} color="#fff" />
-          <Text style={styles.downloadText}>Tải xuống</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
+  // Hiển thị tin nhắn video
+  const renderMessageVideo = (props) => {
+    const { currentMessage } = props;
+    const videoUrl = currentMessage.video;
+  
+    const handleDownload = async () => {
+      if (!videoUrl) {
+        alert("Không tìm thấy link tải xuống cho video này.");
+        return;
+      }
+      try {
+        await Linking.openURL(videoUrl);
+      } catch (error) {
+        console.error("Lỗi khi mở link tải xuống:", error);
+        alert("Không thể mở link tải xuống. Vui lòng thử lại sau.");
+      }
+    };
+  
+    return (
+      <View style={styles.mediaContainer}>
+        <Video
+          source={{ uri: videoUrl }}
+          style={{ width: 150, height: 100 }}
+          useNativeControls
+          resizeMode="contain"
+        />
+        <TouchableOpacity onPress={handleDownload} style={styles.downloadIconContainer}>
+          <MaterialIcons name="file-download" size={20} color="#fff" />
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
+  // Hiển thị tin nhắn file
+  const renderMessageFile = (props) => {
+    const { currentMessage } = props;
+    console.log("Current message in renderMessageFile:", currentMessage);
+  
+    const fileName = currentMessage.fileName || currentMessage.text?.replace('📄 ', '') || 'Tệp không xác định';
+    const fileUrl = currentMessage.file;
+  
+    const handleDownload = async () => {
+      if (!fileUrl) {
+        alert('Không tìm thấy link tải xuống cho file này.');
+        return;
+      }
+      try {
+        await Linking.openURL(fileUrl);
+      } catch (error) {
+        console.error('Lỗi khi mở link tải xuống:', error);
+        alert('Không thể mở link tải xuống. Vui lòng thử lại sau.');
+      }
+    };
+  
+    return (
+      <View style={{ flexDirection: '1', alignItems: 'center', padding: 10, backgroundColor: '#f5f5f5', borderRadius: 8 }}>
+        <Text>{fileName}</Text>
+        <TouchableOpacity onPress={handleDownload} style={{ marginLeft: 10, backgroundColor: '#7B61FF', padding: 5, borderRadius: 5 }}>
+          <Text style={{ color: '#fff' }}>Tải xuống</Text>
         </TouchableOpacity>
       </View>
     );
@@ -599,7 +626,16 @@ export default function ChatScreen({ navigation, route }) {
     const isCurrentUser = currentMessage.user._id === currentUser._id;
     const repliedToMessage = messages.find((msg) => msg._id === currentMessage.replyTo?._id);
     const isHighlighted = currentMessage._id === highlightedMessageId;
-
+  
+    // Nếu là tin nhắn file, không hiển thị bubble mặc định
+    if (currentMessage.file) {
+      return (
+        <View style={{ marginVertical: 5 }}>
+          {renderMessageFile(props)}
+        </View>
+      );
+    }
+  
     return (
       <View>
         <Bubble
@@ -1159,44 +1195,43 @@ embeddedRepliedToName: {
   color: "black",
 },
 fileContainer: {
-  padding: 12,
-  backgroundColor: "#f5f5f5",
-  borderRadius: 10,
+  flexDirection: 'row',
+  alignItems: 'center',
+  padding: 10,
+  backgroundColor: '#f5f5f5',
+  borderRadius: 8,
+  borderWidth: 1, // Thêm border để debug
   marginVertical: 5,
-  marginHorizontal: 10,
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "space-between",
-  borderWidth: 1,
-  borderColor: "#e0e0e0",
 },
 fileInfo: {
-  flexDirection: "row",
-  alignItems: "center",
   flex: 1,
+  flexDirection: 'row',
+  alignItems: 'center',
 },
 fileName: {
-  color: "#333",
-  fontSize: 16,
-  fontWeight: "600",
-  marginBottom: 4,
+  fontSize: 14,
+  fontWeight: '500',
+  color: '#333',
 },
 fileType: {
-  color: "#666",
   fontSize: 12,
+  color: '#666',
 },
 downloadButton: {
-  padding: 8,
-  backgroundColor: "#7B61FF",
-  borderRadius: 8,
-  flexDirection: "row",
-  alignItems: "center",
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: '#7B61FF',
+  paddingVertical: 6,
+  paddingHorizontal: 10,
+  borderWidth: 1, // Thêm border để debug
+  borderRadius: 6,
 },
 downloadText: {
-  color: "#fff",
+  color: '#fff',
   fontSize: 12,
   marginLeft: 4,
 },
+
 friendAvatar: {
   width: 40,
   height: 40,
