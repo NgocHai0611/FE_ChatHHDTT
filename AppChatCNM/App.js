@@ -12,7 +12,7 @@ import ChatScreen from "./screens/ChatScreen";
 const Stack = createStackNavigator();
 
 const linking = {
-  prefixes: ["http://localhost:8081"], // Prefix của URL
+  prefixes: ["http://192.168.100.60:8081"], // Prefix của URL
   config: {
     screens: {
       Login: "login",

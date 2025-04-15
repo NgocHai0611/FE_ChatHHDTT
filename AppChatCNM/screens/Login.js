@@ -44,7 +44,7 @@ export default function Login() {
     setIsLoading(true);
     try {
       const response = await axios.post(
-        "http://localhost:8004/v1/auth/login",
+        "http://192.168.100.60:8004/v1/auth/login",
         {
           email,
           password,
