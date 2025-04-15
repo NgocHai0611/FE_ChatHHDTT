@@ -236,24 +236,67 @@ export const deleteMessageForUser = async (messageId, userId, conversationId) =>
 
 
 // Hàm upload file, video, image
-export const uploadFile = async (file, conversationId, senderId) => {
+export const uploadFiles = async (files, conversationId, senderId) => {
   try {
     const formData = new FormData();
-    // Nếu file có blob (từ base64), dùng blob
-    if (file.blob) {
-      formData.append("file", file.blob, file.name);
-    } else {
-      formData.append("file", {
-        uri: file.uri,
-        name: file.name,
-        type: file.type,
-      });
+
+    // Danh sách MIME type hợp lệ, khớp với backend
+    const validMimeTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/jpg",
+      "video/mp4",
+      "video/quicktime",
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "text/plain",
+      "application/x-zip-compressed",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ];
+
+    for (const file of files) {
+      console.log("Processing file:", file);
+      if (!file.uri || !file.name || !file.type) {
+        console.error("Invalid file data:", file);
+        throw new Error("Invalid file data");
+      }
+      if (!validMimeTypes.includes(file.type)) {
+        console.error("Unsupported MIME type:", file.type);
+        throw new Error(`Loại file không được hỗ trợ: ${file.type}`);
+      }
+
+      if (file.uri.startsWith("data:")) {
+        const base64String = file.uri.split(",")[1];
+        const mimeType = file.type;
+        const byteCharacters = atob(base64String);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: mimeType });
+
+        formData.append("files", blob, file.name);
+      } else {
+        formData.append("files", {
+          uri: file.uri,
+          name: file.name,
+          type: file.type,
+        });
+      }
     }
+
     formData.append("conversationId", conversationId);
     formData.append("senderId", senderId);
 
-    console.log("Uploading file:", file);
-    console.log("File MIME type:", file.type);
+    if (__DEV__) {
+      for (const [key, value] of formData.entries()) {
+        console.log(`FormData entry: ${key}=`, value);
+      }
+    }
+
     const response = await api.post("/messages/upload", formData, {
       headers: {
         "Content-Type": "multipart/form-data",
@@ -261,14 +304,15 @@ export const uploadFile = async (file, conversationId, senderId) => {
     });
 
     console.log("Upload response:", response.data);
-
+    if (!response.data || typeof response.data !== "object") {
+      throw new Error("Invalid server response");
+    }
     return response.data;
   } catch (error) {
-    console.error("Lỗi khi tải lên file:", error.response?.data || error.message);
+    console.error("Lỗi khi tải lên files:", error.response?.data || error.message);
     throw error;
   }
 };
-
 
 
 
