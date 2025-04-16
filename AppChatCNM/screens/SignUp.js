@@ -79,7 +79,7 @@ export default function SignUp() {
     // Thay localhost thanh ip cua may khi chay tren mobile
     try {
       const response = await axios.post(
-        "http://localhost:8004/v1/auth/register",
+        "http://192.168.90.204:8004/v1/auth/register",
         userData,
         {
           headers: {

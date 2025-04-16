@@ -8,11 +8,12 @@ import ForgotPasswordApp from "./screens/ForgotPasswordApp";
 import AccessListPhone from "./screens/AccessListPhone";
 import ChatListScreen from "./screens/ChatListScreen";
 import ChatScreen from "./screens/ChatScreen";
+import EditProfileScreen from "./screens/EditProfileScreen";
 
 const Stack = createStackNavigator();
 
 const linking = {
-  prefixes: ["http://192.168.100.60:8081"], // Prefix của URL
+  prefixes: ["http://172.20.10.12:8081"], // Prefix của URL
   config: {
     screens: {
       Login: "login",
@@ -22,6 +23,7 @@ const linking = {
       PhoneContact: "phone-contact",
       ChatListScreen: "chat-list",
       ChatScreen: "chat/:conversationId", // Nếu cần, tùy chỉnh cho màn hình chat
+      EditProfileScreen: "edit-profile",
     },
   },
 };
@@ -63,6 +65,11 @@ export default function App() {
         <Stack.Screen
           name="ChatScreen"
           component={ChatScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="EditProfileScreen"
+          component={EditProfileScreen}
           options={{ headerShown: false }}
         />
       </Stack.Navigator>

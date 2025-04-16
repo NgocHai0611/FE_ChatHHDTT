@@ -18,14 +18,16 @@ export default function ForgotPasswordApp() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isNewPasswordVisible, setIsNewPasswordVisible] = useState(false);
-  const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
+  const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] =
+    useState(false);
   const [isPasswordFocused, setIsPasswordFocused] = useState(false);
-  const [isConfirmPasswordFocused, setIsConfirmPasswordFocused] = useState(false);
+  const [isConfirmPasswordFocused, setIsConfirmPasswordFocused] =
+    useState(false);
   const [isModalVisible, setModalVisible] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
   const [token, setToken] = useState("");
 
-  const API_BASE_URL = `http://localhost:8004`;
+  const API_BASE_URL = `http://192.168.90.204:8004`;
 
   useEffect(() => {
     // Lấy token từ route.params (được truyền qua deep linking)
@@ -54,10 +56,13 @@ export default function ForgotPasswordApp() {
     }
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/v1/auth/reset-password/${token}`, {
-        newPassword: password,
-        confirmPassword,
-      });
+      const response = await axios.post(
+        `${API_BASE_URL}/v1/auth/reset-password/${token}`,
+        {
+          newPassword: password,
+          confirmPassword,
+        }
+      );
       setModalMessage(response.data.message);
       setModalVisible(true);
     } catch (error) {
@@ -74,7 +79,10 @@ export default function ForgotPasswordApp() {
       end={{ x: 0.5, y: 0 }}
       style={styles.container}
     >
-      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+      <TouchableOpacity
+        onPress={() => navigation.goBack()}
+        style={styles.backButton}
+      >
         <MaterialIcons name="arrow-back" size={24} color="#000" />
       </TouchableOpacity>
 

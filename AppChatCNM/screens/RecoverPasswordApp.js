@@ -19,13 +19,16 @@ export default function RecoverPasswordApp() {
   const [isModalVisible, setModalVisible] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
 
-  const API_BASE_URL = `http://localhost:8004`;
+  const API_BASE_URL = `http://192.168.90.204:8004`;
 
   const handleReset = async () => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/v1/auth/forgot-password`, {
-        email,
-      });
+      const response = await axios.post(
+        `${API_BASE_URL}/v1/auth/forgot-password`,
+        {
+          email,
+        }
+      );
       setModalMessage(response.data.message);
       setModalVisible(true);
     } catch (error) {
@@ -42,7 +45,10 @@ export default function RecoverPasswordApp() {
       end={{ x: 0.5, y: 0 }}
       style={styles.container}
     >
-      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+      <TouchableOpacity
+        onPress={() => navigation.goBack()}
+        style={styles.backButton}
+      >
         <MaterialIcons name="arrow-back" size={24} color="#000" />
       </TouchableOpacity>
 
