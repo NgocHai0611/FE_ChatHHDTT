@@ -88,27 +88,31 @@ export default function ChatListScreen({ navigation }) {
     };
   }, [user]);
 
-  const filteredConversations = conversations.filter((c) => {
-    
-    
-    // Kiểm tra nếu cuộc trò chuyện có tin nhắn cuối cùng
-    const hasLatestMessage = c.latestmessage !== undefined && c.latestmessage !== null;
-    const hasValidMembers = c.members && c.members.length > 0;
-   const isLastMessageRecalled = c.isLastMessageRecalled || false;
-   
-    // Điều kiện để hiển thị cuộc trò chuyện:
-    const shouldShowConversation = hasValidMembers && (
-    hasLatestMessage && (
-    isLastMessageRecalled ||
-   c.latestmessage.trim() !== "" ||
-    c.latestMessageType !== 'text'
-    ) ||
-    c.members.join(" ").toLowerCase().includes(searchText.toLowerCase()) // Hiển thị nếu khớp với tìm kiếm
-    );
-   
-    return shouldShowConversation;
-    });
- 
+  const filteredConversations = useMemo(() => {
+    return conversations
+      .filter((c) => {
+        // Kiểm tra nếu cuộc trò chuyện có tin nhắn cuối cùng
+        const hasLatestMessage = c.latestmessage !== undefined && c.latestmessage !== null;
+        const hasValidMembers = c.members && c.members.length > 0;
+        const isLastMessageRecalled = c.isLastMessageRecalled || false;
+  
+        // Điều kiện để hiển thị cuộc trò chuyện:
+        const shouldShowConversation =
+          hasValidMembers &&
+          (hasLatestMessage &&
+            (isLastMessageRecalled ||
+              c.latestmessage.trim() !== "" ||
+              c.latestMessageType !== "text") ||
+            c.members.join(" ").toLowerCase().includes(searchText.toLowerCase()));
+  
+        return shouldShowConversation;
+      })
+      .sort((a, b) => {
+        // Sắp xếp theo lastMessageTime, từ mới nhất đến cũ nhất
+        return new Date(b.lastMessageTime) - new Date(a.lastMessageTime);
+      });
+  }, [conversations, searchText]);
+
 
   console.log("Filtered Conversations:", filteredConversations);
 
