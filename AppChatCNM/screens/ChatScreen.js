@@ -47,7 +47,7 @@ export default function ChatScreen({ navigation, route }) {
   const [highlightedMessageId, setHighlightedMessageId] = useState(null); // ID tin nhắn được làm nổi bật
   const [scrollCompleted, setScrollCompleted] = useState(false); // Trạng thái cuộn hoàn tất
   const flatListRef = useRef(null); // Ref cho danh sách tin nhắn
-  const giftedChatRef = useRef(null); // Ref cho GiftedChat
+ 
   const socket = useRef(null); // Ref cho socket.io
   const { conversation, currentUser, otherUser } = route.params; // Thông tin cuộc trò chuyện, người dùng hiện tại và đối phương
 
@@ -1125,6 +1125,13 @@ const renderPreviewItem = ({ item }) => (
     }
   };
 
+  useEffect(() => {
+    if (highlightedMessageId) {
+      // Tạo một bản sao mới của messages để ép re-render
+      setMessages((prevMessages) => [...prevMessages]);
+    }
+  }, [highlightedMessageId]);
+
   // Cuộn tới tin nhắn được làm nổi bật
   useEffect(() => {
     if (highlightedMessageId && flatListRef.current) {
@@ -1325,106 +1332,94 @@ const renderPreviewItem = ({ item }) => (
 
         {/* Danh sách tin nhắn */}
         <GiftedChat
-          ref={giftedChatRef}
-          listViewProps={{
-            ref: flatListRef,
-            key: highlightedMessageId,
-            initialNumToRender: 50,
-            maxToRenderPerBatch: 50,
-            windowSize: 51,
-            onScrollToIndexFailed: (info) => {
-              setTimeout(() => {
-                if (flatListRef.current) {
-                  flatListRef.current.scrollToIndex({
-                    index: info.index,
-                    animated: true,
-                    viewPosition: 0.5,
-                  });
-                }
-              }, 500);
-            },
-            onLayout: () => {
-              if (highlightedMessageId && !scrollCompleted) {
-                setScrollCompleted(true);
-              }
-            },
-            onScrollEndDrag: () => {
-              if (highlightedMessageId && !scrollCompleted) {
-                setScrollCompleted(true);
-              }
-            },
-          }}
-          messages={messages}
-          onSend={onSend}
-          user={{ _id: currentUser._id }}
-          showUserAvatar={true}
-          renderAvatar={renderCustomAvatar}
-          text={text}
-          onInputTextChanged={setText}
-          renderMessageVideo={renderMessageVideo}
-          renderMessageImage={renderMessageImage}
-          renderMessageFile={renderMessageFile}
-          renderBubble={renderBubble}
-          renderActions={() => (
-            <View style={styles.actionContainer}>
-              <TouchableOpacity
-                onPress={handleImagePick}
-                style={styles.actionButton}
-              >
-                <MaterialIcons name="image" size={24} color="#7B61FF" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleVideoPick}
-                style={styles.actionButton}
-              >
-                <MaterialIcons name="videocam" size={24} color="#7B61FF" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleFilePick}
-                style={styles.actionButton}
-              >
-                <MaterialIcons name="attach-file" size={24} color="#7B61FF" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => setShowEmojiPicker(!showEmojiPicker)}
-              >
-                <MaterialIcons
-                  name="insert-emoticon"
-                  size={24}
-                  color="#7B61FF"
-                />
-              </TouchableOpacity>
-            </View>
-          )}
-          renderSend={(props) => (
-            <TouchableOpacity
-              style={styles.sendButton}
-              disabled={!(text.trim().length > 0 || previews.length > 0)}
-              onPress={() => {
-                if (text.trim().length > 0 || previews.length > 0) {
-                  // Tạo tin nhắn giả nếu chỉ có media
-                  const message = {
-                    _id: Math.random().toString(36).substring(7),
-                    text: text.trim(), // Có thể là "" nếu không có văn bản
-                    createdAt: new Date(),
-                    user: { _id: currentUser._id },
-                  };
-                  props.onSend([message], true);
-                }
-              }}
-            >
-              <Ionicons
-                name="send"
-                size={30}
-                color={text.trim().length > 0 || previews.length > 0 ? "#7B61FF" : "#ccc"}
-              />
-            </TouchableOpacity>
-          )}
-          alwaysShowSend={true}
-          // messagesContainerStyle={{ paddingBottom: 10 }}
-          renderCustomText={renderCustomText}
-        />
+  
+  listViewProps={{
+    ref: flatListRef,
+    initialNumToRender: 50,
+    maxToRenderPerBatch: 50,
+    windowSize: 51,
+    onScrollToIndexFailed: (info) => {
+      setTimeout(() => {
+        if (flatListRef.current) {
+          flatListRef.current.scrollToIndex({
+            index: info.index,
+            animated: true,
+            viewPosition: 0.5,
+          });
+        }
+      }, 500);
+    },
+    onLayout: () => {
+      if (highlightedMessageId && !scrollCompleted) {
+        setScrollCompleted(true);
+      }
+    },
+    onScrollEndDrag: () => {
+      if (highlightedMessageId && !scrollCompleted) {
+        setScrollCompleted(true);
+      }
+    },
+  }}
+  messages={messages}
+  onSend={onSend}
+  user={{ _id: currentUser._id }}
+  showUserAvatar={true}
+  renderAvatar={renderCustomAvatar}
+  text={text}
+  onInputTextChanged={setText}
+  renderMessageVideo={renderMessageVideo}
+  renderMessageImage={renderMessageImage}
+  renderMessageFile={renderMessageFile}
+  renderBubble={renderBubble}
+  renderActions={() => (
+    <View style={styles.actionContainer}>
+      <TouchableOpacity onPress={handleImagePick} style={styles.actionButton}>
+        <MaterialIcons name="image" size={24} color="#7B61FF" />
+      </TouchableOpacity>
+      <TouchableOpacity onPress={handleVideoPick} style={styles.actionButton}>
+        <MaterialIcons name="videocam" size={24} color="#7B61FF" />
+      </TouchableOpacity>
+      <TouchableOpacity onPress={handleFilePick} style={styles.actionButton}>
+        <MaterialIcons name="attach-file" size={24} color="#7B61FF" />
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.actionButton}
+        onPress={() => setShowEmojiPicker(!showEmojiPicker)}
+      >
+        <MaterialIcons name="insert-emoticon" size={24} color="#7B61FF" />
+      </TouchableOpacity>
+    </View>
+  )}
+  renderSend={(props) => (
+    <TouchableOpacity
+      style={styles.sendButton}
+      disabled={!(text.trim().length > 0 || previews.length > 0)}
+      onPress={() => {
+        if (text.trim().length > 0 || previews.length > 0) {
+          const message = {
+            _id: Math.random().toString(36).substring(7),
+            text: text.trim(),
+            createdAt: new Date(),
+            user: { _id: currentUser._id },
+          };
+          props.onSend([message], true);
+        }
+      }}
+    >
+      <Ionicons
+        name="send"
+        size={30}
+        color={text.trim().length > 0 || previews.length > 0 ? "#7B61FF" : "#ccc"}
+      />
+    </TouchableOpacity>
+  )}
+  alwaysShowSend={true}
+  shouldUpdateMessage={(props, nextProps) =>
+    props.currentMessage._id === highlightedMessageId ||
+    nextProps.currentMessage._id === highlightedMessageId
+  }
+  renderCustomText={renderCustomText}
+/>
 
         {/* Modal chọn emoji */}
         {showEmojiPicker && (
