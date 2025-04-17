@@ -11,7 +11,8 @@ import {
   SafeAreaView,
   Platform,
   Dimensions,
-  FlatList
+  FlatList,
+  ActivityIndicator
 } from "react-native";
 import { GiftedChat, Bubble, Send } from "react-native-gifted-chat";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
@@ -32,6 +33,9 @@ import {
 } from "../services/apiServices";
 import { useFocusEffect } from "@react-navigation/native";
 import io from "socket.io-client";
+import * as FileSystem from "expo-file-system";
+import * as MediaLibrary from "expo-media-library";
+import * as Sharing from "expo-sharing";
 
 // Component chính cho màn hình chat
 export default function ChatScreen({ navigation, route }) {
@@ -53,6 +57,8 @@ export default function ChatScreen({ navigation, route }) {
 
   const [isForwardModalVisible, setIsForwardModalVisible] = useState(false); // Hiển thị modal chọn bạn bè
   const [friendList, setFriendList] = useState([]); // Danh sách bạn bè (cuộc trò chuyện)
+  const [isDownloading, setIsDownloading] = useState(false);
+  
   // --- Kết nối và xử lý socket ---
   useEffect(() => {
     // Khởi tạo socket và kết nối tới server
@@ -538,152 +544,21 @@ const renderPreviewItem = ({ item }) => (
     </TouchableOpacity>
   </View>
 );
-
-  // // Gửi media (ảnh, video, file) lên server
-  // const sendMediaMessages = async () => {
-  //   if (previews.length === 0) return;
-  
-  //   try {
-  //     const files = previews.map((preview) => ({
-  //       uri: preview.uri,
-  //       name: preview.name,
-  //       type: preview.type,
-  //     }));
-  
-  //     console.log("Files to upload:", files);
-  //     const responseData = await uploadFiles(files, conversation._id, currentUser._id);
-  //     if (responseData && responseData.success) {
-  //       const newMessages = [];
-  
-  //       // Xử lý ảnh
-  //       if (responseData.imageUrls && responseData.imageUrls.length > 0) {
-  //         responseData.imageUrls.forEach((url) => {
-  //           newMessages.push({
-  //             _id: Math.random().toString(36).substring(7),
-  //             createdAt: new Date(),
-  //             user: {
-  //               _id: currentUser._id,
-  //               name: currentUser.username,
-  //               avatar: currentUser.avatar,
-  //             },
-  //             image: url,
-  //             text: "",
-  //             replyTo: replyingMessage
-  //               ? {
-  //                   _id: replyingMessage._id,
-  //                   user: replyingMessage.user,
-  //                   text: replyingMessage.text,
-  //                 }
-  //               : null,
-  //           });
-  //         });
-  //       }
-  
-  //       // Xử lý video
-  //       if (responseData.videoUrls && responseData.videoUrls.length > 0) {
-  //         responseData.videoUrls.forEach((url, index) => {
-  //           const videoPreview = previews.find((p) => p.type.includes("video"));
-  //           newMessages.push({
-  //             _id: Math.random().toString(36).substring(7),
-  //             createdAt: new Date(),
-  //             user: {
-  //               _id: currentUser._id,
-  //               name: currentUser.username,
-  //               avatar: currentUser.avatar,
-  //             },
-  //             video: url,
-  //             text: "",
-  //             fileName: videoPreview?.name || `video_${index}`,
-  //             replyTo: replyingMessage
-  //               ? {
-  //                   _id: replyingMessage._id,
-  //                   user: replyingMessage.user,
-  //                   text: replyingMessage.text,
-  //                 }
-  //               : null,
-  //           });
-  //         });
-  //       }
-  
-  //       // Xử lý file
-  //       if (responseData.fileUrls && responseData.fileUrls.length > 0) {
-  //         responseData.fileUrls.forEach((url, index) => {
-  //           const filePreview = previews.find((p) => p.type.includes("application") || p.type.includes("text"));
-  //           if (!filePreview) {
-  //             console.warn("No matching file preview found for index:", index);
-  //             return;
-  //           }
-  //           newMessages.push({
-  //             _id: Math.random().toString(36).substring(7),
-  //             createdAt: new Date(),
-  //             user: {
-  //               _id: currentUser._id,
-  //               name: currentUser.username,
-  //               avatar: currentUser.avatar,
-  //             },
-  //             file: url,
-  //             text: `📄 ${filePreview.name}`,
-  //             fileName: filePreview.name,
-  //             replyTo: replyingMessage
-  //               ? {
-  //                   _id: replyingMessage._id,
-  //                   user: replyingMessage.user,
-  //                   text: replyingMessage.text,
-  //                 }
-  //               : null,
-  //           });
-  //         });
-  //       }
-  
-  //       if (newMessages.length > 0) {
-  //         newMessages.forEach((msg) => onSend([msg]));
-  //       } else {
-  //         console.warn("No messages created from response:", responseData);
-  //         alert("Không có tin nhắn được tạo. Kiểm tra phản hồi server.");
-  //       }
-  //       setReplyingMessage(null);
-  //       setPreviews([]);
-  //     } else {
-  //       console.error("Upload failed with response:", responseData);
-  //       alert(responseData?.message || "Lỗi khi tải lên files.");
-  //     }
-  //   } catch (error) {
-  //     console.error("Lỗi khi gửi tin nhắn media:", error);
-  //     let errorMessage = "Không thể gửi tin nhắn.";
-  //     if (error.response?.data) {
-  //       if (typeof error.response.data === "string") {
-  //         if (error.response.data.includes("File type not allowed")) {
-  //           errorMessage = "Loại file không được phép. Chỉ hỗ trợ PDF, DOC, DOCX, TXT, ZIP, XLS, XLSX.";
-  //         } else {
-  //           errorMessage = "Lỗi server không xác định. Vui lòng thử lại.";
-  //         }
-  //       } else {
-  //         errorMessage = error.response.data.message || error.message;
-  //       }
-  //     } else {
-  //       errorMessage = error.message || "Lỗi kết nối server.";
-  //     }
-  //     alert(errorMessage);
-  //   }
-  // };
-
   // --- Render các loại tin nhắn (ảnh, video, file) ---
   // Hiển thị tin nhắn ảnh
+ 
+
   const renderMessageImage = (props) => {
     const { currentMessage } = props;
     const imageUrl = currentMessage.image;
+    const fileName = `image_${Date.now()}.jpg`; // Tạo tên file động
 
     const handleDownload = async () => {
       if (!imageUrl) {
         alert("Không tìm thấy link tải xuống cho hình ảnh này.");
         return;
       }
-      try {
-        await Linking.openURL(imageUrl);
-      } catch (error) {
-        console.error("Lỗi khi mở link tải xuống:", error);
-        alert("Không thể mở link tải xuống. Vui lòng thử lại sau.");
-      }
+     await downloadFile(imageUrl, fileName);
     };
 
     return (
@@ -707,8 +582,13 @@ const renderPreviewItem = ({ item }) => (
         <TouchableOpacity
           onPress={handleDownload}
           style={styles.downloadIconContainer}
+          disabled={isDownloading}
         >
-          <MaterialIcons name="file-download" size={20} color="#fff" />
+              {isDownloading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <MaterialIcons name="file-download" size={20} color="#fff" />
+                )}
         </TouchableOpacity>
       </View>
     );
@@ -718,33 +598,33 @@ const renderPreviewItem = ({ item }) => (
   const renderMessageVideo = (props) => {
     const { currentMessage } = props;
     const videoUrl = currentMessage.video;
-
+    const fileName = currentMessage.fileName || `video_${Date.now()}.mp4`;
     const handleDownload = async () => {
       if (!videoUrl) {
         alert("Không tìm thấy link tải xuống cho video này.");
         return;
       }
-      try {
-        await Linking.openURL(videoUrl);
-      } catch (error) {
-        console.error("Lỗi khi mở link tải xuống:", error);
-        alert("Không thể mở link tải xuống. Vui lòng thử lại sau.");
-      }
+      await downloadFile(videoUrl, fileName);
     };
 
     return (
       <View style={styles.mediaContainer}>
         <Video
           source={{ uri: videoUrl }}
-          style={{ width: 150, height: 100 }}
+          style={{ width: 250, height: 200 }}
           useNativeControls
           resizeMode="contain"
         />
         <TouchableOpacity
           onPress={handleDownload}
           style={styles.downloadIconContainer}
+          disabled={isDownloading}
         >
-          <MaterialIcons name="file-download" size={20} color="#fff" />
+          {isDownloading ? (
+    <ActivityIndicator size="small" color="#fff" />
+  ) : (
+    <MaterialIcons name="file-download" size={20} color="#fff" />
+  )}
         </TouchableOpacity>
       </View>
     );
@@ -753,43 +633,94 @@ const renderPreviewItem = ({ item }) => (
   // Hiển thị tin nhắn file
   const renderMessageFile = (props) => {
     const { currentMessage } = props;
-    console.log("Current message in renderMessageFile:", currentMessage);
-
-    const fileName =
+     const fileName =
       currentMessage.fileName ||
       currentMessage.text?.replace("📄 ", "") ||
       "Tệp không xác định";
+      const fileType = fileName.split('.').pop().toUpperCase() || 'UNKNOWN';
+
     const fileUrl = currentMessage.file;
+    // Giới hạn tên file (ví dụ: 20 ký tự)
+    const truncatedFileName =
+      fileName.length > 10 ? `${fileName.substring(0, 17)}...` : fileName;
 
     const handleDownload = async () => {
       if (!fileUrl) {
-        alert("Không tìm thấy link tải xuống cho file này.");
+        alert('Không tìm thấy link tải xuống cho file này.');
         return;
       }
-      try {
-        await Linking.openURL(fileUrl);
-      } catch (error) {
-        console.error("Lỗi khi mở link tải xuống:", error);
-        alert("Không thể mở link tải xuống. Vui lòng thử lại sau.");
+      await downloadFile(fileUrl, fileName);
+    };
+  
+    // Hàm để chọn biểu tượng hoặc văn bản dựa trên loại tệp
+    const renderFileIcon = () => {
+     
+      switch (fileType.toLowerCase()) {
+        case 'doc':
+        case 'docx':
+          return <MaterialIcons name="description" size={24} color="#fff" />;
+        case 'pdf':
+          return <MaterialIcons name="picture-as-pdf" size={24} color="#fff" />;
+        default:
+          return <Ionicons name="document" size={24} color="#fff" />; // Biểu tượng chung cho các loại tệp khác
       }
     };
-
+  
     return (
       <TouchableOpacity
-      onLongPress={() => {
-        setSelectedMessage(currentMessage);
-        setIsMessageModalVisible(true);
-      }}
-      style={{ flexDirection: 'row', alignItems: 'center', padding: 10, backgroundColor: '#f5f5f5', borderRadius: 8 }}
-    >
-      <Text>{fileName}</Text>
-      <TouchableOpacity onPress={handleDownload} style={{ marginLeft: 10, backgroundColor: '#7B61FF', padding: 5, borderRadius: 5 }}>
-        <Text style={{ color: '#fff' }}>Tải xuống</Text>
+        onLongPress={() => {
+          setSelectedMessage(currentMessage);
+          setIsMessageModalVisible(true);
+        }}
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          padding: 10,
+          backgroundColor: '#f5f5f5',
+          borderRadius: 8,
+          marginVertical: 5,
+        }}
+      >
+        {/* File Icon */}
+        <View
+          style={{
+            width: 40,
+            height: 40,
+            backgroundColor: '#0078D4', // Blue background
+            borderRadius: 5,
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginRight: 10,
+          }}
+        >
+          {renderFileIcon()}
+        </View>
+        <Text>{truncatedFileName}</Text>
+       
+  
+       
+        
+          <TouchableOpacity
+            onPress={handleDownload}
+            style={{
+              backgroundColor: '#7B61FF',
+              paddingVertical: 5,
+              paddingHorizontal: 10,
+              borderRadius: 5,
+            }}
+            disabled={isDownloading}
+          >
+            {isDownloading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={{ color: '#fff', fontSize: 12 }}>Tải xuống</Text>
+            )}
+          </TouchableOpacity>
+      
       </TouchableOpacity>
-    </TouchableOpacity>
     );
-    
   };
+
 
   // --- Xử lý tin nhắn (ghim, thu hồi, trả lời, xóa) ---
   // Ghim tin nhắn
@@ -1035,7 +966,7 @@ const renderPreviewItem = ({ item }) => (
               backgroundColor: isCurrentUser
                 ? isHighlighted
                   ? "red"
-                  : "#947bff"
+                  : "#007AFF"
                 : isHighlighted
                 ? "red"
                 : "#7B61FF",
@@ -1227,6 +1158,122 @@ const renderPreviewItem = ({ item }) => (
       alert("Đã xảy ra lỗi khi chuyển tiếp tin nhắn. Vui lòng thử lại.");
     }
   };
+
+  //Xử lý download file trên giao diện
+  const downloadFile = async (url, fileName) => {
+    setIsDownloading(true);
+    let fileUri = null; // Biến để lưu fileUri, dùng trong khối finally
+  
+    try {
+      // Kiểm tra URL hợp lệ
+      if (!url || !url.startsWith("http")) {
+        throw new Error("URL tải xuống không hợp lệ.");
+      }
+  
+      console.log("URL tải xuống:", url); // Debug URL
+  
+      const cleanFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const timestamp = Date.now(); // Thêm timestamp để tránh xung đột tên file
+      const uniqueFileName = `${timestamp}_${cleanFileName}`;
+      fileUri = `${FileSystem.documentDirectory}${uniqueFileName}`;
+  
+      console.log("fileUri:", fileUri); // Debug fileUri
+  
+      // Tải file từ URL về thư mục tạm
+      const downloadResult = await FileSystem.downloadAsync(url, fileUri);
+      if (downloadResult.status !== 200) {
+        throw new Error(`Lỗi khi tải file: HTTP status ${downloadResult.status}`);
+      }
+  
+      // Kiểm tra file có tồn tại không
+      const fileInfo = await FileSystem.getInfoAsync(fileUri);
+      if (!fileInfo.exists) {
+        throw new Error(`File tạm tại ${fileUri} không tồn tại sau khi tải.`);
+      }
+  
+      // Kiểm tra loại file dựa trên phần mở rộng
+      const fileExtension = cleanFileName.split(".").pop().toLowerCase();
+      const isMediaFile = ["jpg", "jpeg", "png", "mp4", "mov", "avi"].includes(fileExtension);
+  
+      if (isMediaFile) {
+        // Nếu là ảnh hoặc video, lưu vào Media Library
+        const { status } = await MediaLibrary.requestPermissionsAsync();
+        if (status !== "granted") {
+          throw new Error("Cần cấp quyền truy cập thư viện để lưu file!");
+        }
+  
+        const asset = await MediaLibrary.createAssetAsync(fileUri);
+        await MediaLibrary.createAlbumAsync("Downloads", asset, false);
+  
+        alert(`File ${cleanFileName} đã được tải về thành công! Kiểm tra trong thư viện ảnh/video.`);
+      } else {
+        // Nếu là file tài liệu (docx, pdf, v.v.), lưu vào thư mục công khai hoặc chia sẻ
+        if (Platform.OS === "android") {
+          // Trên Android, lưu vào thư mục Downloads công khai
+          const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+          if (!permissions.granted) {
+            throw new Error("Cần cấp quyền truy cập để lưu file!");
+          }
+  
+          const directoryUri = permissions.directoryUri;
+          const newFileUri = await FileSystem.StorageAccessFramework.createFileAsync(
+            directoryUri,
+            cleanFileName,
+            "application/octet-stream"
+          );
+  
+          // Đọc nội dung file tạm và ghi vào file mới
+          const fileContent = await FileSystem.readAsStringAsync(fileUri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          await FileSystem.StorageAccessFramework.writeAsStringAsync(
+            newFileUri,
+            fileContent,
+            { encoding: FileSystem.EncodingType.Base64 }
+          );
+  
+          alert(`File ${cleanFileName} đã được tải về thành công! Kiểm tra trong thư mục Downloads.`);
+        } else {
+          // Trên iOS, không cần di chuyển file vì fileUri đã nằm trong FileSystem.documentDirectory
+          // Kiểm tra thư mục FileSystem.documentDirectory
+          const dirInfo = await FileSystem.getInfoAsync(FileSystem.documentDirectory);
+          if (!dirInfo.exists) {
+            throw new Error(`Thư mục ${FileSystem.documentDirectory} không tồn tại.`);
+          }
+  
+          // Thông báo trước khi mở giao diện chia sẻ
+          alert(`File ${cleanFileName} đã được tải về. Vui lòng chọn nơi lưu file.`);
+  
+          // Sử dụng trực tiếp fileUri để chia sẻ
+          const isAvailable = await Sharing.isAvailableAsync();
+          if (isAvailable) {
+            // Mở giao diện chia sẻ để người dùng tự lưu file
+            await Sharing.shareAsync(fileUri);
+  
+            // Thông báo sau khi giao diện chia sẻ đóng
+            alert(
+              `Đã hoàn tất. Vui lòng kiểm tra file ${cleanFileName} tại nơi bạn đã chọn để lưu (ví dụ: Files app, iCloud). Nếu bạn không chọn lưu, file sẽ không được giữ lại.`
+            );
+          } else {
+            // Nếu không hỗ trợ chia sẻ, thông báo vị trí file
+            alert(
+              `File ${cleanFileName} đã được tải về thành công! File nằm trong thư mục tài liệu của ứng dụng.`
+            );
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Lỗi khi tải file:", error.message);
+      alert(`Không thể tải file: ${error.message}`);
+    } finally {
+      // Đảm bảo xóa file tạm trong mọi trường hợp (kể cả khi có lỗi)
+      if (fileUri) {
+        await FileSystem.deleteAsync(fileUri, { idempotent: true });
+        console.log("Đã xóa file tạm:", fileUri); // Debug xóa file
+      }
+      setIsDownloading(false);
+    }
+  };
   // --- Giao diện chính ---
   return (
     <SafeAreaView style={styles.container}>
@@ -1374,19 +1421,19 @@ const renderPreviewItem = ({ item }) => (
   renderActions={() => (
     <View style={styles.actionContainer}>
       <TouchableOpacity onPress={handleImagePick} style={styles.actionButton}>
-        <MaterialIcons name="image" size={24} color="#7B61FF" />
+        <MaterialIcons name="image" size={24} color="#007AFF" />
       </TouchableOpacity>
       <TouchableOpacity onPress={handleVideoPick} style={styles.actionButton}>
-        <MaterialIcons name="videocam" size={24} color="#7B61FF" />
+        <MaterialIcons name="videocam" size={24} color="#007AFF" />
       </TouchableOpacity>
       <TouchableOpacity onPress={handleFilePick} style={styles.actionButton}>
-        <MaterialIcons name="attach-file" size={24} color="#7B61FF" />
+        <MaterialIcons name="attach-file" size={24} color="#007AFF" />
       </TouchableOpacity>
       <TouchableOpacity
         style={styles.actionButton}
         onPress={() => setShowEmojiPicker(!showEmojiPicker)}
       >
-        <MaterialIcons name="insert-emoticon" size={24} color="#7B61FF" />
+        <MaterialIcons name="insert-emoticon" size={24} color="#007AFF" />
       </TouchableOpacity>
     </View>
   )}
@@ -1678,4 +1725,4 @@ previewRemoveButton: { position: "absolute", top: -10, right: -10 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
-});
+}); 
