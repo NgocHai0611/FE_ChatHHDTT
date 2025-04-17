@@ -1,27 +1,37 @@
 // src/services/apiService.ts
-import api from './api'; // Giả sử bạn đã cấu hình axios trong file api.ts hoặc api.js
+import api from "./api"; // Giả sử bạn đã cấu hình axios trong file api.ts hoặc api.js
 
-
-
-
-  
 //Hiển thị danh sách cuộc trò chuyện
-  export const getConversations = async (userId) => {
-    const response = await api.get(`/conversations/${userId}/search`);
-    return response.data;
-  };
+export const getConversations = async (userId) => {
+  const response = await api.get(`/conversations/${userId}/search`);
+  return response.data;
+};
 //Lấy All tin nhắn của cuộc trò chuyện
- export const getMessages = async (conversationId) => {
-    try {
-        const response = await api.get(`/messages/get/${conversationId}`);
-        return response.data;
-    } catch (error) {
-        console.error("Error fetching messages:", error);
-        throw error; // Propagate error to caller
-    }
+export const getMessages = async (conversationId) => {
+  try {
+    const response = await api.get(`/messages/get/${conversationId}`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching messages:", error);
+    throw error; // Propagate error to caller
+  }
 };
 
+// Lấy thông tin người dùng theo ID
+export const getUserById = async (userId) => {
+  try {
+    const response = await api.get(`/users/get/${userId}`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching user:", error);
+    throw error;
+  }
+};
 
+export const updateUser = async (userId, data) => {
+  const response = await api.put(`/users/update/${userId}`, data);
+  return response.data;
+};
 
 // Gửi tin nhắn
 export const sendMessages = async (
@@ -29,11 +39,11 @@ export const sendMessages = async (
   senderId,
   messageType,
   text,
-  imageUrl = '',
-  videoUrl = '',
-  fileUrl = '',
-  fileName = '',
-  iconCode = '',
+  imageUrl = "",
+  videoUrl = "",
+  fileUrl = "",
+  fileName = "",
+  iconCode = "",
   replyTo = null
 ) => {
   const messageData = {
@@ -50,10 +60,10 @@ export const sendMessages = async (
   };
 
   try {
-    const response = await api.post('/messages/create', messageData);
+    const response = await api.post("/messages/create", messageData);
     return response.data; // Trả về dữ liệu tin nhắn đã được gửi thành công
   } catch (error) {
-    console.error('Error sending message:', error);
+    console.error("Error sending message:", error);
     throw error; // Propagate error to caller
   }
 };
@@ -61,15 +71,15 @@ export const sendMessages = async (
 //Get List Friend
 export const getListFriend = async (userId) => {
   try {
-      const response = await api.get(`/friends/getfriend/${userId}`);
-      return response.data;
+    const response = await api.get(`/friends/getfriend/${userId}`);
+    return response.data;
   } catch (error) {
-      console.error("Error fetching messages:", error);
-      throw error; // Propagate error to caller
+    console.error("Error fetching messages:", error);
+    throw error; // Propagate error to caller
   }
 };
 
-//Tim kiem ban be 
+//Tim kiem ban be
 export const getFriendByPhone = async (phone) => {
   try {
     const response = await api.get(`/friends/search`, {
@@ -95,23 +105,24 @@ export const createConversation = async (members) => {
     console.log("Conversation created successfully:", response.data);
     return response.data; // Trả về dữ liệu cuộc trò chuyện
   } catch (error) {
-    console.error("Error creating conversation:", error.response?.data || error.message);
+    console.error(
+      "Error creating conversation:",
+      error.response?.data || error.message
+    );
     throw error; // Ném lỗi để xử lý tiếp
   }
 };
 
-
 // Ghim tin nhắn
 export const pinMessage = async (messageId, data) => {
   try {
-    const response = await api.put(`/messages/pin/${messageId}`,data);
+    const response = await api.put(`/messages/pin/${messageId}`, data);
     return response.data; // Trả về dữ liệu phản hồi từ API (nếu có)
   } catch (error) {
     console.error("Lỗi khi ghim tin nhắn:", error);
     throw error; // Ném lỗi để component gọi hàm có thể xử lý
   }
 };
-
 
 // Hủy kết bạn
 export const unfriend = async (userId, friendId) => {
@@ -123,96 +134,115 @@ export const unfriend = async (userId, friendId) => {
     console.log("Hủy kết bạn thành công:", response.data);
     return response.data; // Trả về dữ liệu phản hồi từ API
   } catch (error) {
-    console.error("Lỗi khi hủy kết bạn:", error.response?.data || error.message);
+    console.error(
+      "Lỗi khi hủy kết bạn:",
+      error.response?.data || error.message
+    );
     throw error; // Ném lỗi để component gọi hàm có thể xử lý
   }
 };
 
-
 //Kiểm tra trạng thái bạn bè
 export const checkFriendStatus = async (userId, friendId) => {
   try {
-      const response = await api.get(`/friends/checkfriend/${userId}/${friendId}`);
-      return response.data;
+    const response = await api.get(
+      `/friends/checkfriend/${userId}/${friendId}`
+    );
+    return response.data;
   } catch (error) {
-      console.error("Lỗi khi kiểm tra trạng thái bạn bè:", error);
-      throw error;
+    console.error("Lỗi khi kiểm tra trạng thái bạn bè:", error);
+    throw error;
   }
 };
 
 // Gửi yêu cầu kết bạn
 export const addFriend = async (senderId, receiverId) => {
   try {
-      const response = await api.post('/friends/send-request', {
-          senderId,
-          receiverId,
-      });
-      console.log("Gửi yêu cầu kết bạn thành công:", response.data);
-      return response.data;
+    const response = await api.post("/friends/send-request", {
+      senderId,
+      receiverId,
+    });
+    console.log("Gửi yêu cầu kết bạn thành công:", response.data);
+    return response.data;
   } catch (error) {
-      console.error("Lỗi khi gửi yêu cầu kết bạn:", error.response?.data || error.message);
-      throw error;
+    console.error(
+      "Lỗi khi gửi yêu cầu kết bạn:",
+      error.response?.data || error.message
+    );
+    throw error;
   }
 };
 // Từ chối yêu cầu kết bạn
 export const rejectFriendRequest = async (requestId) => {
   try {
-      const response = await api.post('/friends/reject-request', {
-          requestId,
-      });
-      console.log("Từ chối yêu cầu kết bạn thành công:", response.data);
-      return response.data;
+    const response = await api.post("/friends/reject-request", {
+      requestId,
+    });
+    console.log("Từ chối yêu cầu kết bạn thành công:", response.data);
+    return response.data;
   } catch (error) {
-      console.error("Lỗi khi từ chối yêu cầu kết bạn:", error.response?.data || error.message);
-      throw error;
+    console.error(
+      "Lỗi khi từ chối yêu cầu kết bạn:",
+      error.response?.data || error.message
+    );
+    throw error;
   }
 };
 
 // Hủy yêu cầu kết bạn (người gửi hủy)
-export const cancelFriendRequest = async (receiverId, senderId) => { // Chắc chắn có senderId ở đây
+export const cancelFriendRequest = async (receiverId, senderId) => {
+  // Chắc chắn có senderId ở đây
   try {
-    const response = await api.post('/friends/cancel-request', {
+    const response = await api.post("/friends/cancel-request", {
       senderId,
       receiverId,
     });
     console.log("Hủy yêu cầu kết bạn thành công:", response.data);
     return response.data;
   } catch (error) {
-    console.error("Lỗi khi hủy yêu cầu kết bạn:", error.response?.data || error.message);
+    console.error(
+      "Lỗi khi hủy yêu cầu kết bạn:",
+      error.response?.data || error.message
+    );
     throw error;
   }
 };
 // Lấy danh sách yêu cầu kết bạn
 export const getFriendRequests = async (userId) => {
   try {
-      const response = await api.get(`/friends/friend-requests/${userId}`);
-      return response.data;
+    const response = await api.get(`/friends/friend-requests/${userId}`);
+    return response.data;
   } catch (error) {
-      console.error("Lỗi khi lấy danh sách yêu cầu kết bạn:", error);
-      throw error;
+    console.error("Lỗi khi lấy danh sách yêu cầu kết bạn:", error);
+    throw error;
   }
 };
 
 // Chấp nhận yêu cầu kết bạn
 export const acceptFriendRequest = async (requestId, senderId, receiverId) => {
   try {
-      const response = await api.post('/friends/accept-request', {
-          requestId,
-          senderId,
-          receiverId,
-      });
-      console.log("Chấp nhận yêu cầu kết bạn thành công:", response.data);
-      return response.data;
+    const response = await api.post("/friends/accept-request", {
+      requestId,
+      senderId,
+      receiverId,
+    });
+    console.log("Chấp nhận yêu cầu kết bạn thành công:", response.data);
+    return response.data;
   } catch (error) {
-      console.error("Lỗi khi chấp nhận yêu cầu kết bạn:", error.response?.data || error.message);
-      throw error;
+    console.error(
+      "Lỗi khi chấp nhận yêu cầu kết bạn:",
+      error.response?.data || error.message
+    );
+    throw error;
   }
 };
 
 // Hàm call API thu hồi tin nhắn
 export const recallMessage = async (messageId, conversationId) => {
   try {
-    const response = await api.put(`/messages/recall/${messageId}`, { conversationId });
+    const response = await api.put(`/messages/recall/${messageId}`, {
+      conversationId,
+    });
     return response.data;
   } catch (error) {
     console.error("Lỗi khi thu hồi tin nhắn:", error);
@@ -220,7 +250,11 @@ export const recallMessage = async (messageId, conversationId) => {
   }
 };
 // Xóa tin nhắn ở phía người tôi
-export const deleteMessageForUser = async (messageId, userId, conversationId) => {
+export const deleteMessageForUser = async (
+  messageId,
+  userId,
+  conversationId
+) => {
   try {
     const response = await api.put(`/messages/deletefrom/${messageId}`, {
       userId,
@@ -235,7 +269,8 @@ export const deleteMessageForUser = async (messageId, userId, conversationId) =>
 
 
 
-// Hàm upload file, video, image
+// Hàm upload file, video, image nhiều file được
+
 export const uploadFiles = async (files, conversationId, senderId) => {
   try {
     const formData = new FormData();
@@ -309,13 +344,12 @@ export const uploadFiles = async (files, conversationId, senderId) => {
     }
     return response.data;
   } catch (error) {
-    console.error("Lỗi khi tải lên files:", error.response?.data || error.message);
+
+    console.error(
+      "Lỗi khi tải lên files:",
+      error.response?.data || error.message
+    );
     throw error;
   }
 };
 
-
-
-
-
-  
