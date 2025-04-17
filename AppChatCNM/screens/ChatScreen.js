@@ -83,12 +83,17 @@ export default function ChatScreen({ navigation, route }) {
         file: newMessage.fileUrl || undefined,
         fileName: newMessage.fileName || undefined,
         isRecalled: newMessage.isRecalled || false,
+        isPinned: newMessage.isPinned || false, // Thêm isPinned
         replyTo: newMessage.replyTo || null,
       };
       setMessages((prevMessages) => {
         if (prevMessages.find((msg) => msg._id === formattedMessage._id)) {
           return prevMessages;
         }
+        if (formattedMessage.isPinned) {
+        // Cập nhật pinnedMessage nếu tin nhắn mới được ghim
+        setPinnedMessage(formattedMessage);
+      }
         return GiftedChat.append(prevMessages, [formattedMessage]);
       });
     });
@@ -791,17 +796,37 @@ const renderPreviewItem = ({ item }) => (
   const handlePinMessage = async () => {
     if (selectedMessage) {
       try {
-        await pinMessage(selectedMessage._id, { isPinned: true });
-        setMessages((prevMessages) =>
-          prevMessages.map((msg) =>
-            msg._id === selectedMessage._id ? { ...msg, isPinned: true } : msg
-          )
-        );
-        setPinnedMessage(selectedMessage);
-        setIsMessageModalVisible(false);
+        const response = await pinMessage(selectedMessage._id, { isPinned: true });
+        console.log("pinMessage response:", response); // Debug API response
+        if (response.isPinned) {
+          // Bỏ ghim các tin nhắn cũ cục bộ
+          setMessages((prevMessages) =>
+            prevMessages.map((msg) =>
+              msg._id === selectedMessage._id
+                ? { ...msg, isPinned: true }
+                : { ...msg, isPinned: false }
+            )
+          );
+          setPinnedMessage({ ...selectedMessage, isPinned: true });
+          setIsMessageModalVisible(false);
+          if (socket.current && conversation._id && selectedMessage._id) {
+            console.log("Emitting messageUpdated for pin:", {
+              conversationId: conversation._id,
+              messageId: selectedMessage._id,
+              isSender: selectedMessage.user._id === currentUser._id,
+            });
+            socket.current.emit("messageUpdated", {
+              conversationId: conversation._id,
+              messageId: selectedMessage._id,
+            });
+          }
+        } else {
+          console.error("API pinMessage failed: isPinned not true", response);
+          alert("Không thể ghim tin nhắn. Phản hồi API không hợp lệ.");
+        }
       } catch (error) {
-        console.error("Lỗi khi ghim tin nhắn:", error);
-        alert("Đã xảy ra lỗi khi ghim tin nhắn. Vui lòng thử lại.");
+        console.error("Lỗi khi ghim tin nhắn:", error.response?.data || error.message);
+        alert("Đã xảy ra lỗi khi ghim tin nhắn: " + (error.response?.data?.error || error.message));
       }
     }
   };
@@ -809,19 +834,35 @@ const renderPreviewItem = ({ item }) => (
   // Bỏ ghim tin nhắn
   const handleUnpinMessage = async (messageId) => {
     try {
-      await pinMessage(messageId, { isPinned: false });
-      setMessages((prevMessages) =>
-        prevMessages.map((msg) =>
-          msg._id === messageId ? { ...msg, isPinned: false } : msg
-        )
-      );
-      setPinnedMessage(null);
-      if (selectedMessage && selectedMessage._id === messageId) {
-        setSelectedMessage(null);
+      const response = await pinMessage(messageId, { isPinned: false });
+      console.log("unpinMessage response:", response); // Debug API response
+      if (response.isPinned === false) {
+        setMessages((prevMessages) =>
+          prevMessages.map((msg) =>
+            msg._id === messageId ? { ...msg, isPinned: false } : msg
+          )
+        );
+        setPinnedMessage(null);
+        if (selectedMessage && selectedMessage._id === messageId) {
+          setSelectedMessage(null);
+        }
+        if (socket.current && conversation._id) {
+          console.log("Emitting messageUpdated for unpin:", {
+            conversationId: conversation._id,
+            messageId: messageId,
+          });
+          socket.current.emit("messageUpdated", {
+            conversationId: conversation._id,
+            messageId: messageId,
+          });
+        }
+      } else {
+        console.error("API unpinMessage failed: isPinned not false", response);
+        alert("Không thể bỏ ghim tin nhắn. Phản hồi API không hợp lệ.");
       }
     } catch (error) {
-      console.error("Lỗi khi bỏ ghim tin nhắn:", error);
-      alert("Đã xảy ra lỗi khi bỏ ghim tin nhắn. Vui lòng thử lại.");
+      console.error("Lỗi khi bỏ ghim tin nhắn:", error.response?.data || error.message);
+      alert("Đã xảy ra lỗi khi bỏ ghim tin nhắn: " + (error.response?.data?.error || error.message));
     }
   };
 
