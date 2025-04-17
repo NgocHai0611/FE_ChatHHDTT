@@ -214,40 +214,144 @@ export default function ChatScreen({ navigation, route }) {
   }, [conversation._id]);
 
   // --- Gửi tin nhắn ---
-  const onSend = useCallback(
-    async (newMessages = []) => {
-      const message = newMessages[0];
-      let messageType = "text";
-      if (message.image) messageType = "image";
-      else if (message.video) messageType = "video";
-      else if (message.file) messageType = "file";
-
-      const messageData = {
+  const onSend = useCallback(async (newMessages = []) => {
+    const message = newMessages[0];
+    let messageData = [];
+  
+    // Xử lý tin nhắn văn bản (nếu có)
+    if (message.text && message.text.trim() !== "") {
+      messageData.push({
         conversationId: conversation._id,
         senderId: currentUser._id,
-        messageType: messageType,
-        text: message.text || "",
-        imageUrl: message.image || "",
-        videoUrl: message.video || "",
-        fileUrl: message.file || "",
-        fileName: message.fileName || message.file?.split("/").pop() || "",
+        messageType: "text",
+        text: message.text,
+        imageUrl: "",
+        videoUrl: "",
+        fileUrl: "",
+        fileName: "",
         iconCode: "",
         replyTo: replyingMessage ? replyingMessage._id : null,
-      };
-
+      });
+    }
+  
+    // Xử lý media (ảnh, video, file) từ previews
+    if (previews.length > 0) {
       try {
-        socket.current.emit("sendMessage", messageData);
-        setReplyingMessage(null);
+        const files = previews.map((preview) => ({
+          uri: preview.uri,
+          name: preview.name,
+          type: preview.type,
+        }));
+  
+        console.log("Files to upload:", files);
+        const responseData = await uploadFiles(files, conversation._id, currentUser._id);
+  
+        if (responseData && responseData.success) {
+          // Xử lý ảnh
+          if (responseData.imageUrls && responseData.imageUrls.length > 0) {
+            responseData.imageUrls.forEach((url) => {
+              messageData.push({
+                conversationId: conversation._id,
+                senderId: currentUser._id,
+                messageType: "image",
+                text: "",
+                imageUrl: url,
+                videoUrl: "",
+                fileUrl: "",
+                fileName: "",
+                iconCode: "",
+                replyTo: replyingMessage ? replyingMessage._id : null,
+              });
+            });
+          }
+  
+          // Xử lý video
+          if (responseData.videoUrls && responseData.videoUrls.length > 0) {
+            responseData.videoUrls.forEach((url, index) => {
+              const videoPreview = previews.find((p) => p.type.includes("video"));
+              messageData.push({
+                conversationId: conversation._id,
+                senderId: currentUser._id,
+                messageType: "video",
+                text: "",
+                imageUrl: "",
+                videoUrl: url,
+                fileUrl: "",
+                fileName: videoPreview?.name || `video_${index}`,
+                iconCode: "",
+                replyTo: replyingMessage ? replyingMessage._id : null,
+              });
+            });
+          }
+  
+          // Xử lý file
+          if (responseData.fileUrls && responseData.fileUrls.length > 0) {
+            responseData.fileUrls.forEach((url, index) => {
+              const filePreview = previews.find((p) => p.type.includes("application") || p.type.includes("text"));
+              if (!filePreview) {
+                console.warn("No matching file preview found for index:", index);
+                return;
+              }
+              messageData.push({
+                conversationId: conversation._id,
+                senderId: currentUser._id,
+                messageType: "file",
+                text: `📄 ${filePreview.name}`,
+                imageUrl: "",
+                videoUrl: "",
+                fileUrl: url,
+                fileName: filePreview.name,
+                iconCode: "",
+                replyTo: replyingMessage ? replyingMessage._id : null,
+              });
+            });
+          }
+        } else {
+          console.error("Upload failed with response:", responseData);
+          alert(responseData?.message || "Lỗi khi tải lên files.");
+          return;
+        }
       } catch (error) {
-        console.error("Error sending message:", error);
-        alert("Failed to send message. Please try again.");
+        console.error("Lỗi khi gửi tin nhắn media:", error);
+        let errorMessage = "Không thể gửi tin nhắn.";
+        if (error.response?.data) {
+          if (typeof error.response.data === "string") {
+            if (error.response.data.includes("File type not allowed")) {
+              errorMessage = "Loại file không được phép. Chỉ hỗ trợ PDF, DOC, DOCX, TXT, ZIP, XLS, XLSX.";
+            } else {
+              errorMessage = "Lỗi server không xác định. Vui lòng thử lại.";
+            }
+          } else {
+            errorMessage = error.response.data.message || error.message;
+          }
+        } else {
+          errorMessage = error.message || "Lỗi kết nối server.";
+        }
+        alert(errorMessage);
+        return;
       }
+    }
+  
+    // Nếu không có tin nhắn văn bản hoặc media, không gửi
+    if (messageData.length === 0) {
+      return; // Không hiển thị alert để tránh làm phiền người dùng
+    }
+  
+    // Gửi tất cả tin nhắn qua socket
+    try {
+      messageData.forEach((data) => {
+        socket.current.emit("sendMessage", data);
+      });
+      setReplyingMessage(null);
+      setPreviews([]); // Xóa previews sau khi gửi
+      setText(""); // Xóa văn bản sau khi gửi
+    } catch (error) {
+      console.error("Error sending message:", error);
+      alert("Không thể gửi tin nhắn. Vui lòng thử lại.");
+    }
+  }, [conversation._id, currentUser._id, previews, replyingMessage]);
 
-      setText("");
-      setPreviews([]);
-    },
-    [conversation._id, currentUser._id, replyingMessage]
-  );
+
 
   // --- Xử lý media (ảnh, video, file) ---
   const handleImagePick = async () => {
@@ -445,133 +549,133 @@ const renderPreviewItem = ({ item }) => (
   </View>
 );
 
-  // Gửi media (ảnh, video, file) lên server
-  const sendMediaMessages = async () => {
-    if (previews.length === 0) return;
+  // // Gửi media (ảnh, video, file) lên server
+  // const sendMediaMessages = async () => {
+  //   if (previews.length === 0) return;
   
-    try {
-      const files = previews.map((preview) => ({
-        uri: preview.uri,
-        name: preview.name,
-        type: preview.type,
-      }));
+  //   try {
+  //     const files = previews.map((preview) => ({
+  //       uri: preview.uri,
+  //       name: preview.name,
+  //       type: preview.type,
+  //     }));
   
-      console.log("Files to upload:", files);
-      const responseData = await uploadFiles(files, conversation._id, currentUser._id);
-      if (responseData && responseData.success) {
-        const newMessages = [];
+  //     console.log("Files to upload:", files);
+  //     const responseData = await uploadFiles(files, conversation._id, currentUser._id);
+  //     if (responseData && responseData.success) {
+  //       const newMessages = [];
   
-        // Xử lý ảnh
-        if (responseData.imageUrls && responseData.imageUrls.length > 0) {
-          responseData.imageUrls.forEach((url) => {
-            newMessages.push({
-              _id: Math.random().toString(36).substring(7),
-              createdAt: new Date(),
-              user: {
-                _id: currentUser._id,
-                name: currentUser.username,
-                avatar: currentUser.avatar,
-              },
-              image: url,
-              text: "",
-              replyTo: replyingMessage
-                ? {
-                    _id: replyingMessage._id,
-                    user: replyingMessage.user,
-                    text: replyingMessage.text,
-                  }
-                : null,
-            });
-          });
-        }
+  //       // Xử lý ảnh
+  //       if (responseData.imageUrls && responseData.imageUrls.length > 0) {
+  //         responseData.imageUrls.forEach((url) => {
+  //           newMessages.push({
+  //             _id: Math.random().toString(36).substring(7),
+  //             createdAt: new Date(),
+  //             user: {
+  //               _id: currentUser._id,
+  //               name: currentUser.username,
+  //               avatar: currentUser.avatar,
+  //             },
+  //             image: url,
+  //             text: "",
+  //             replyTo: replyingMessage
+  //               ? {
+  //                   _id: replyingMessage._id,
+  //                   user: replyingMessage.user,
+  //                   text: replyingMessage.text,
+  //                 }
+  //               : null,
+  //           });
+  //         });
+  //       }
   
-        // Xử lý video
-        if (responseData.videoUrls && responseData.videoUrls.length > 0) {
-          responseData.videoUrls.forEach((url, index) => {
-            const videoPreview = previews.find((p) => p.type.includes("video"));
-            newMessages.push({
-              _id: Math.random().toString(36).substring(7),
-              createdAt: new Date(),
-              user: {
-                _id: currentUser._id,
-                name: currentUser.username,
-                avatar: currentUser.avatar,
-              },
-              video: url,
-              text: "",
-              fileName: videoPreview?.name || `video_${index}`,
-              replyTo: replyingMessage
-                ? {
-                    _id: replyingMessage._id,
-                    user: replyingMessage.user,
-                    text: replyingMessage.text,
-                  }
-                : null,
-            });
-          });
-        }
+  //       // Xử lý video
+  //       if (responseData.videoUrls && responseData.videoUrls.length > 0) {
+  //         responseData.videoUrls.forEach((url, index) => {
+  //           const videoPreview = previews.find((p) => p.type.includes("video"));
+  //           newMessages.push({
+  //             _id: Math.random().toString(36).substring(7),
+  //             createdAt: new Date(),
+  //             user: {
+  //               _id: currentUser._id,
+  //               name: currentUser.username,
+  //               avatar: currentUser.avatar,
+  //             },
+  //             video: url,
+  //             text: "",
+  //             fileName: videoPreview?.name || `video_${index}`,
+  //             replyTo: replyingMessage
+  //               ? {
+  //                   _id: replyingMessage._id,
+  //                   user: replyingMessage.user,
+  //                   text: replyingMessage.text,
+  //                 }
+  //               : null,
+  //           });
+  //         });
+  //       }
   
-        // Xử lý file
-        if (responseData.fileUrls && responseData.fileUrls.length > 0) {
-          responseData.fileUrls.forEach((url, index) => {
-            const filePreview = previews.find((p) => p.type.includes("application") || p.type.includes("text"));
-            if (!filePreview) {
-              console.warn("No matching file preview found for index:", index);
-              return;
-            }
-            newMessages.push({
-              _id: Math.random().toString(36).substring(7),
-              createdAt: new Date(),
-              user: {
-                _id: currentUser._id,
-                name: currentUser.username,
-                avatar: currentUser.avatar,
-              },
-              file: url,
-              text: `📄 ${filePreview.name}`,
-              fileName: filePreview.name,
-              replyTo: replyingMessage
-                ? {
-                    _id: replyingMessage._id,
-                    user: replyingMessage.user,
-                    text: replyingMessage.text,
-                  }
-                : null,
-            });
-          });
-        }
+  //       // Xử lý file
+  //       if (responseData.fileUrls && responseData.fileUrls.length > 0) {
+  //         responseData.fileUrls.forEach((url, index) => {
+  //           const filePreview = previews.find((p) => p.type.includes("application") || p.type.includes("text"));
+  //           if (!filePreview) {
+  //             console.warn("No matching file preview found for index:", index);
+  //             return;
+  //           }
+  //           newMessages.push({
+  //             _id: Math.random().toString(36).substring(7),
+  //             createdAt: new Date(),
+  //             user: {
+  //               _id: currentUser._id,
+  //               name: currentUser.username,
+  //               avatar: currentUser.avatar,
+  //             },
+  //             file: url,
+  //             text: `📄 ${filePreview.name}`,
+  //             fileName: filePreview.name,
+  //             replyTo: replyingMessage
+  //               ? {
+  //                   _id: replyingMessage._id,
+  //                   user: replyingMessage.user,
+  //                   text: replyingMessage.text,
+  //                 }
+  //               : null,
+  //           });
+  //         });
+  //       }
   
-        if (newMessages.length > 0) {
-          newMessages.forEach((msg) => onSend([msg]));
-        } else {
-          console.warn("No messages created from response:", responseData);
-          alert("Không có tin nhắn được tạo. Kiểm tra phản hồi server.");
-        }
-        setReplyingMessage(null);
-        setPreviews([]);
-      } else {
-        console.error("Upload failed with response:", responseData);
-        alert(responseData?.message || "Lỗi khi tải lên files.");
-      }
-    } catch (error) {
-      console.error("Lỗi khi gửi tin nhắn media:", error);
-      let errorMessage = "Không thể gửi tin nhắn.";
-      if (error.response?.data) {
-        if (typeof error.response.data === "string") {
-          if (error.response.data.includes("File type not allowed")) {
-            errorMessage = "Loại file không được phép. Chỉ hỗ trợ PDF, DOC, DOCX, TXT, ZIP, XLS, XLSX.";
-          } else {
-            errorMessage = "Lỗi server không xác định. Vui lòng thử lại.";
-          }
-        } else {
-          errorMessage = error.response.data.message || error.message;
-        }
-      } else {
-        errorMessage = error.message || "Lỗi kết nối server.";
-      }
-      alert(errorMessage);
-    }
-  };
+  //       if (newMessages.length > 0) {
+  //         newMessages.forEach((msg) => onSend([msg]));
+  //       } else {
+  //         console.warn("No messages created from response:", responseData);
+  //         alert("Không có tin nhắn được tạo. Kiểm tra phản hồi server.");
+  //       }
+  //       setReplyingMessage(null);
+  //       setPreviews([]);
+  //     } else {
+  //       console.error("Upload failed with response:", responseData);
+  //       alert(responseData?.message || "Lỗi khi tải lên files.");
+  //     }
+  //   } catch (error) {
+  //     console.error("Lỗi khi gửi tin nhắn media:", error);
+  //     let errorMessage = "Không thể gửi tin nhắn.";
+  //     if (error.response?.data) {
+  //       if (typeof error.response.data === "string") {
+  //         if (error.response.data.includes("File type not allowed")) {
+  //           errorMessage = "Loại file không được phép. Chỉ hỗ trợ PDF, DOC, DOCX, TXT, ZIP, XLS, XLSX.";
+  //         } else {
+  //           errorMessage = "Lỗi server không xác định. Vui lòng thử lại.";
+  //         }
+  //       } else {
+  //         errorMessage = error.response.data.message || error.message;
+  //       }
+  //     } else {
+  //       errorMessage = error.message || "Lỗi kết nối server.";
+  //     }
+  //     alert(errorMessage);
+  //   }
+  // };
 
   // --- Render các loại tin nhắn (ảnh, video, file) ---
   // Hiển thị tin nhắn ảnh
@@ -1189,12 +1293,7 @@ const renderPreviewItem = ({ item }) => (
               horizontal
               showsHorizontalScrollIndicator={false}
             />
-            <TouchableOpacity
-              style={styles.sendMediaButton}
-              onPress={sendMediaMessages}
-            >
-              <Ionicons name="send" size={24} color="#7B61FF" />
-            </TouchableOpacity>
+            
           </View>
         )}
 
@@ -1273,12 +1372,30 @@ const renderPreviewItem = ({ item }) => (
             </View>
           )}
           renderSend={(props) => (
-            <Send {...props}>
-              <View style={styles.sendButton}>
-                <Ionicons name="send" size={30} color="#7B61FF" />
-              </View>
-            </Send>
+            <TouchableOpacity
+              style={styles.sendButton}
+              disabled={!(text.trim().length > 0 || previews.length > 0)}
+              onPress={() => {
+                if (text.trim().length > 0 || previews.length > 0) {
+                  // Tạo tin nhắn giả nếu chỉ có media
+                  const message = {
+                    _id: Math.random().toString(36).substring(7),
+                    text: text.trim(), // Có thể là "" nếu không có văn bản
+                    createdAt: new Date(),
+                    user: { _id: currentUser._id },
+                  };
+                  props.onSend([message], true);
+                }
+              }}
+            >
+              <Ionicons
+                name="send"
+                size={30}
+                color={text.trim().length > 0 || previews.length > 0 ? "#7B61FF" : "#ccc"}
+              />
+            </TouchableOpacity>
           )}
+          alwaysShowSend={true}
           // messagesContainerStyle={{ paddingBottom: 10 }}
           renderCustomText={renderCustomText}
         />
@@ -1365,7 +1482,7 @@ previewImage: { width: 100, height: 100, borderRadius: 10 },
 previewVideo: { width: 100, height: 100, borderRadius: 10 },
 previewText: { fontSize: 14, marginVertical: 5 },
 previewRemoveButton: { position: "absolute", top: -10, right: -10 },
-sendMediaButton: { position: "absolute", right: 10, top: 10 },
+
   actionContainer: {
     flexDirection: "row",
     justifyContent: "center",
