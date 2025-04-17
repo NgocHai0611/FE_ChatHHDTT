@@ -91,16 +91,24 @@ export default function ChatListScreen({ navigation }) {
   const filteredConversations = conversations.filter((c) => {
     
     
-    const hasValidMessage = c.latestmessage && c.latestmessage.trim() !== "";
+    // Kiểm tra nếu cuộc trò chuyện có tin nhắn cuối cùng
+    const hasLatestMessage = c.latestmessage !== undefined && c.latestmessage !== null;
     const hasValidMembers = c.members && c.members.length > 0;
-
-    return (
-      hasValidMessage &&
-      hasValidMembers &&
-      (c.latestmessage.toLowerCase().includes(searchText.toLowerCase()) ||
-        c.members.join(" ").toLowerCase().includes(searchText.toLowerCase()))
+   const isLastMessageRecalled = c.isLastMessageRecalled || false;
+   
+    // Điều kiện để hiển thị cuộc trò chuyện:
+    const shouldShowConversation = hasValidMembers && (
+    hasLatestMessage && (
+    isLastMessageRecalled ||
+   c.latestmessage.trim() !== "" ||
+    c.latestMessageType !== 'text'
+    ) ||
+    c.members.join(" ").toLowerCase().includes(searchText.toLowerCase()) // Hiển thị nếu khớp với tìm kiếm
     );
-  });
+   
+    return shouldShowConversation;
+    });
+ 
 
   console.log("Filtered Conversations:", filteredConversations);
 
