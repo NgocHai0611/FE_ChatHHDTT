@@ -112,24 +112,9 @@ export default function ChatScreen({ navigation, route }) {
     });
 
     // Lắng nghe sự kiện tin nhắn được cập nhật (thu hồi)
-    socket.current.on("messageUpdated", (data) => {
-      if (data.conversationId === conversation._id && data.messageId) {
-        setMessages((prevMessages) =>
-          prevMessages.map((msg) =>
-            msg._id === data.messageId
-              ? {
-                  ...msg,
-                  text: "Tin nhắn đã bị thu hồi",
-                  image: null,
-                  video: null,
-                  file: null,
-                  isRecalled: true,
-                }
-              : msg
-          )
-        );
-      } else if (data.conversationId === conversation._id) {
-        fetchMessages();
+    socket.current.on("refreshMessages", (data) => {
+      if (data.conversationId === conversation._id) {
+        fetchMessages(); // Làm mới danh sách tin nhắn
       }
     });
     // Lấy danh sách bạn bè từ API
