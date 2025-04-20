@@ -17,6 +17,7 @@
   height: 100vh;
   margin-left: 70px;
   z-index: 1;
+  overflow-y: auto; /* thêm dòng này */
 }
 
 .sidebar-title {
@@ -70,9 +71,10 @@
 }
 
 .chat-message {
-  font-size: 0.9rem;
+  font-size: 14px;
   color: #6b7280;
   margin-top: -5px;
+
 }
 .chat-left {
   position: relative;
@@ -1749,7 +1751,8 @@
   color: rgb(255, 255, 255) !important;
   border: none;
   cursor: pointer;
-   right: 0;
+  right: 65px;
+
 }
 .disabled-member{
   opacity: 0.6; /* Giảm độ sáng */
@@ -2226,4 +2229,60 @@
   background-color: #fff;  /* Màu nền của phần nội dung tin nhắn */
   border-radius: 5px;  /* Bo góc phần nội dung */
   border: 1px solid #e1e4e8;  /* Viền nhẹ quanh nội dung */
+}
+
+.system-message-socket {
+  display: flex;
+  justify-content: center;
+  margin: 10px 0;
+  margin-left: 350px;
+  align-items: center;
+
+}
+
+.system-message-text-socket {
+  background-color: #f0f0f0;
+  color: #555;
+  padding: 6px 12px;
+  font-size: 18px;
+  text-align: center;
+  align-items: center;
+}
+/* Chế độ hiển thị file text */
+.txt-preview {
+  white-space: pre-wrap;
+  padding: 1rem;
+  background-color: #f9f9f9;
+  max-height: 80vh;
+  overflow-y: auto;
+  font-family: monospace;
+  width: 100%;
+}
+
+/* Style cho iframe khi mở file PDF, DOCX, PPTX, etc. */
+iframe.modal-media {
+  width: 800px;
+  height: 90vh; /* Điều chỉnh chiều cao iframe */
+  border: none;
+}
+.group-disband-menu {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.btn-disband-group:hover {
+  background-color: #e04040;
+}
+.chat-disabled-msg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #3498db;
+  background-color: #f0f8ff;
+  padding: 12px;
+  font-weight: 500;
+  border-radius: 8px;
+  margin: 10px;
+  font-size: 15px;
 }
