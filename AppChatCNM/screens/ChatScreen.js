@@ -550,6 +550,13 @@ const renderPreviewItem = ({ item }) => (
 
   const renderMessageImage = (props) => {
     const { currentMessage } = props;
+    if (currentMessage.isRecalled) {
+      return (
+        <Text style={{ color: "gray", fontStyle: "italic" }}>
+          Tin nhắn đã bị thu hồi
+        </Text>
+      );
+    }
     const imageUrl = currentMessage.image;
     const fileName = `image_${Date.now()}.jpg`; // Tạo tên file động
 
@@ -597,6 +604,13 @@ const renderPreviewItem = ({ item }) => (
   // Hiển thị tin nhắn video
   const renderMessageVideo = (props) => {
     const { currentMessage } = props;
+    if (currentMessage.isRecalled) {
+      return (
+        <Text style={{ color: "gray", fontStyle: "italic" }}>
+          Tin nhắn đã bị thu hồi
+        </Text>
+      );
+    }
     const videoUrl = currentMessage.video;
     const fileName = currentMessage.fileName || `video_${Date.now()}.mp4`;
     const handleDownload = async () => {
@@ -633,6 +647,13 @@ const renderPreviewItem = ({ item }) => (
   // Hiển thị tin nhắn file
   const renderMessageFile = (props) => {
     const { currentMessage } = props;
+    if (currentMessage.isRecalled) {
+      return (
+        <Text style={{ color: "gray", fontStyle: "italic" }}>
+          Tin nhắn đã bị thu hồi
+        </Text>
+      );
+    }
      const fileName =
       currentMessage.fileName ||
       currentMessage.text?.replace("📄 ", "") ||
