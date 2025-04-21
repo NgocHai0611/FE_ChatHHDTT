@@ -87,7 +87,7 @@ export const getFriendByPhone = async (phone) => {
     });
     return response.data;
   } catch (error) {
-    console.error("Lỗi khi tìm kiếm bạn bè:", error);
+    //console.error("Lỗi khi tìm kiếm bạn bè:", error);
     throw error;
   }
 };

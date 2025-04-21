@@ -81,20 +81,20 @@ const ContactItem = ({
         ) : isFriend === "pending" ? ( // Trường hợp bạn đã gửi yêu cầu (theo logic hiện tại của API checkFriendStatus)
           <View style={styles.actionButtonsContainer}>
             <View style={styles.sentRequestStatus}>
-                                         {" "}
-              <Text style={styles.sentRequestText}>Đã gửi</Text>               
-                     {" "}
+             
+              <Text style={styles.sentRequestText}>Đã gửi</Text>
+              
             </View>
-                                   {" "}
+           
             <TouchableOpacity
               style={[styles.actionButton, styles.cancelButton]}
               onPress={() => onCancelFriendRequest(item._id)}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-                                         {" "}
-              <Text style={styles.actionText}>Hủy</Text>                       {" "}
+              
+              <Text style={styles.actionText}>Hủy</Text>
             </TouchableOpacity>
-                               {" "}
+            
           </View>
         ) : (
           <TouchableOpacity
@@ -167,7 +167,7 @@ const AccessListPhone = ({ route }) => {
   useEffect(() => {
     const search = async () => {
       const query = searchQuery.trim();
-
+  
       if (!query) {
         setSearchedUser(null);
         setFriendStatus(null);
@@ -176,9 +176,20 @@ const AccessListPhone = ({ route }) => {
         return;
       }
 
+  
       if (/^\d+$/.test(query)) {
+        // Chỉ gọi API nếu số điện thoại có ít nhất 10 chữ số
+    if (query.length < 10) {
+      setSearchedUser(null);
+      setFriendStatus(null);
+      setIncomingRequest(null);
+      return;
+    }
         try {
+          console.log("Calling getFriendByPhone with phone:", query);
           const result = await getFriendByPhone(query);
+          console.log("getFriendByPhone result:", result);
+  
           if (result && currentUser && currentUser._id) {
             setSearchedUser(result);
             const isAlreadyFriend = friendList.some(
@@ -188,47 +199,60 @@ const AccessListPhone = ({ route }) => {
               setFriendStatus("accepted");
               setIncomingRequest(null);
             } else {
-              const statusResponse = await checkFriendStatus(
-                currentUser._id,
-                result._id
-              );
-              setFriendStatus(statusResponse?.status || "none");
-              // Nếu trạng thái là 'pending' (bạn đã gửi), API checkFriendStatus có thể trả về thêm requestId
-              if (
-                statusResponse?.status === "pending" &&
-                statusResponse?.requestId
-              ) {
-                // Lưu trữ requestId vào state hoặc searchedUser
-                setSearchedUser((prevUser) => ({
-                  ...prevUser,
-                  requestId: statusResponse.requestId,
-                }));
-              } else {
-                setSearchedUser((prevUser) => ({
-                  ...prevUser,
-                  requestId: null,
-                }));
-              }
-              const incomingRequestFound = incomingRequestsList.find(
-                (req) => req.senderId?._id === result._id
-              );
-              if (incomingRequestFound) {
-                setIncomingRequest(incomingRequestFound);
-                setFriendStatus("pending");
-              } else {
+              try {
+                console.log("Calling checkFriendStatus with:", currentUser._id, result._id);
+                const statusResponse = await checkFriendStatus(
+                  currentUser._id,
+                  result._id
+                );
+                console.log("checkFriendStatus result:", statusResponse);
+                setFriendStatus(statusResponse?.status || "none");
+                if (
+                  statusResponse?.status === "pending" &&
+                  statusResponse?.requestId
+                ) {
+                  setSearchedUser((prevUser) => ({
+                    ...prevUser,
+                    requestId: statusResponse.requestId,
+                  }));
+                } else {
+                  setSearchedUser((prevUser) => ({
+                    ...prevUser,
+                    requestId: null,
+                  }));
+                }
+                const incomingRequestFound = incomingRequestsList.find(
+                  (req) => req.senderId?._id === result._id
+                );
+                if (incomingRequestFound) {
+                  setIncomingRequest(incomingRequestFound);
+                  setFriendStatus("pending");
+                } else {
+                  setIncomingRequest(null);
+                }
+              } catch (statusError) {
+                console.error("Error in checkFriendStatus:", statusError.response?.data || statusError.message);
+                setFriendStatus("none");
                 setIncomingRequest(null);
+                Alert.alert("Lỗi", "Không thể kiểm tra trạng thái bạn bè.");
               }
             }
           } else {
             setSearchedUser(null);
             setFriendStatus(null);
             setIncomingRequest(null);
+            Alert.alert("Thông báo", "Không tìm thấy người dùng với số điện thoại này.");
           }
         } catch (error) {
-          console.error("Lỗi khi tìm bạn bè theo số điện thoại:", error);
+          //console.error("Error in getFriendByPhone:", error.response?.data || error.message);
           setSearchedUser(null);
           setFriendStatus(null);
           setIncomingRequest(null);
+          if (error.response?.status === 404) {
+            Alert.alert("Thông báo", "Không tìm thấy người dùng với số điện thoại này.");
+          } else {
+            Alert.alert("Lỗi", "Đã xảy ra lỗi khi tìm kiếm. Vui lòng thử lại.");
+          }
         }
       } else {
         const filteredFriends = friendList.filter((friend) =>
@@ -240,9 +264,11 @@ const AccessListPhone = ({ route }) => {
         setFriends(filteredFriends);
       }
     };
-
+  
     search();
   }, [searchQuery, currentUser, friendList, incomingRequestsList]);
+  
+ 
 
   const handleGoBack = () => {
     navigation.goBack();
@@ -455,7 +481,7 @@ const AccessListPhone = ({ route }) => {
   );
 
   const renderSearchResult = () => {
-    if (searchedUser) {
+    if (searchedUser && friendStatus !== null) {
       return (
         <ContactItem
           item={searchedUser}
@@ -465,7 +491,6 @@ const AccessListPhone = ({ route }) => {
           onAcceptFriend={handleAcceptFriend}
           onRejectFriend={handleRejectFriend}
           requestInfo={incomingRequest}
-          // Truyền hàm handleUnfriend vào đây nếu trạng thái là 'accepted'
           onUnfriend={friendStatus === "accepted" ? handleUnfriend : undefined}
           onCancelFriendRequest={handleCancelFriendRequest}
         />
@@ -565,14 +590,15 @@ const AccessListPhone = ({ route }) => {
 
       {renderSearchResult()}
 
-      {!searchedUser && (
-        <FlatList
-          data={searchQuery.trim() ? friends : friendList}
-          renderItem={renderItem}
-          keyExtractor={(item) => item._id}
-          showsVerticalScrollIndicator={true}
-        />
-      )}
+      {/* Chỉ hiển thị danh sách bạn bè nếu không có tìm kiếm hoặc không có kết quả tìm kiếm bằng số điện thoại */}
+    {(!searchQuery.trim() || (!searchedUser && !searchQuery.match(/^\d+$/))) && (
+      <FlatList
+        data={searchQuery.trim() ? friends : friendList}
+        renderItem={renderItem}
+        keyExtractor={(item) => item._id}
+        showsVerticalScrollIndicator={true}
+      />
+    )}
 
       {renderFriendRequestsModal()}
     </SafeAreaView>
