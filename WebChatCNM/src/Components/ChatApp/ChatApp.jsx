@@ -4093,10 +4093,6 @@ export default function ChatApp() {
                       })}`
                       : ""}
                   </span>
-
-
-
-
                 </div>
               </div>
             )}
