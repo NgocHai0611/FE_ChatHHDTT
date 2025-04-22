@@ -138,6 +138,7 @@ export default function ChatApp() {
   const [selectedChatsToForward, setSelectedChatsToForward] = useState([]);
   const [openOptionsMemberId, setOpenOptionsMemberId] = useState(null);
 
+
   {
     /* Lấy danh sách conversation từ server và cập nhật vào state */
   }
@@ -303,6 +304,8 @@ export default function ChatApp() {
       messageType: "text",
       text: inputText || "",
       replyTo: replyingMessage ? replyingMessage._id : null,
+    
+     
     };
     if (fileUrl && fileName) {
       const imageExtensions = ["jpg", "jpeg", "png", "gif"];
@@ -678,19 +681,7 @@ export default function ChatApp() {
       }
     }
   };
-  // useEffect(() => {
-  //   socket.on("groupUpdated", ({ conversationId }) => {
-  //     fetchConversations(); // Cập nhật danh sách cuộc trò chuyện
-  //     // const fetchMessages = async () => {
-  //     //   const messages = await fetchMessagesByConversationId(conversationId);
-  //     //   setMessages(messages);
-  //     // };
 
-  //     // fetchMessages(); // Gọi hàm async
-  //   });
-
-  //   return () => socket.off("groupUpdated");
-  // }, []);
 
   //Thêm thành viên mới vào nhóm
   const handleAddMembersSocket = async () => {
@@ -744,6 +735,7 @@ export default function ChatApp() {
           members: [...prev.members, ...uniqueNewMembers],
         };
       });
+
 
       toast.success("Đã thêm thành viên!");
 
@@ -1088,51 +1080,50 @@ export default function ChatApp() {
     setMediaUrl("");
     setMediaType("");
   };
-
-  //CHECK LỜI MỜI KB
+//Check lời mời kết bạn
   useEffect(() => {
-    const checkFriendRequestStatus = async () => {
+    const checkFriendRequestStatus = () => {
       if (!user || !searchResult || !user._id || !searchResult._id) return;
 
-      try {
-        const response = await fetch(
-          `http://localhost:8004/friends/checkfriend/${user._id}/${searchResult._id}`
-        );
-        const data = await response.json();
-
-        if (data.status === "pending") {
-          setIsFriendRequestSent(true);
-        } else {
-          setIsFriendRequestSent(false);
+      socket.emit(
+        "check_friend_status",
+        { senderId: user._id, receiverId: searchResult._id },
+        (response) => {
+          if (response?.status === "pending") {
+            setIsFriendRequestSent(true);
+          } else {
+            setIsFriendRequestSent(false);
+          }
         }
-      } catch (error) {
-        console.error("Lỗi khi kiểm tra lời mời kết bạn:", error);
-      }
+      );
     };
 
     checkFriendRequestStatus();
-  }, [searchResult?._id, user?._id]); // Chạy khi searchResult hoặc user thay đổi
+  }, [searchResult?._id, user?._id]);
 
   // Tìm kiếm user theo sđt
-  const handleSearchUser = async () => {
-    loadFriends();
-    try {
-      const response = await fetch(
-        `http://localhost:8004/friends/search?phone=${searchTerm}`
-      );
-      const data = await response.json();
-      if (response.ok) {
-        setSearchResult(data);
-        toast.success(data.message); // Hiển thị thông báo thành công
+  const handleSearchUser = () => {
+    if (!socket || !searchTerm) return;
+
+    // Gửi yêu cầu tìm kiếm qua socket
+    socket.emit("search_user", { phone: searchTerm }, (response) => {
+      if (response.success) {
+        setSearchResult(response.user);
+      
+        toast.success("Tìm kiếm thành công!");
       } else {
-        toast.error(data.message); // Hiển thị thông báo lỗi
+        setSearchResult(null); // hoặc set về {} nếu cần
+        toast.error(response.message);
       }
-    } catch (error) {
-      console.error("Lỗi khi tìm kiếm:", error);
-    }
+    });
+
+    // Load lại danh sách bạn bè
+    loadFriends();
   };
+
   //Gửi lời mời kết bạn
   const handleSendFriendRequest = async (receiverId) => {
+
     try {
       const response = await fetch(
         "http://localhost:8004/friends/send-request",
@@ -1145,16 +1136,15 @@ export default function ChatApp() {
 
       const data = await response.json();
       if (response.ok) {
+
         // Cập nhật trạng thái ngay lập tức để giao diện thay đổi
         setIsFriendRequestSent(true);
-        setFriendRequests((prev) => [
-          ...prev,
-          { senderId: user._id, receiverId },
-        ]); // Cập nhật danh sách request
+        setFriendRequests(prev => [...prev, { senderId: user._id, receiverId }]); // Cập nhật danh sách request
 
         // Gọi lại loadFriends để cập nhật danh sách bạn bè nếu API cập nhật ngay
         loadFriends();
         toast.success("Đã gửi lời mời kết bạn!"); // Hiển thị thông báo thành công
+
       } else {
         toast.error(data.message); // Hiển thị thông báo lỗi
       }
@@ -1163,17 +1153,14 @@ export default function ChatApp() {
     }
   };
 
-  //Thu hồi lời mời kết bạn
+  //Thu hồi lời mời kết bạn 
   const handleCancelFriendRequest = async (friendId) => {
     try {
-      const response = await fetch(
-        "http://localhost:8004/friends/cancel-request",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ senderId: user._id, receiverId: friendId }),
-        }
-      );
+      const response = await fetch("http://localhost:8004/friends/cancel-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ senderId: user._id, receiverId: friendId }),
+      });
 
       if (!response.ok) {
         throw new Error("Lỗi khi thu hồi lời mời kết bạn");
@@ -1181,57 +1168,49 @@ export default function ChatApp() {
 
       setIsFriendRequestSent(false); // Cập nhật lại trạng thái
 
-      setFriendRequests((prev) =>
-        prev.filter(
-          (req) => req.receiverId !== friendId && req._id !== friendId
-        )
+      setFriendRequests(prev =>
+        prev.filter(req => req.receiverId !== friendId && req._id !== friendId)
       ); // Cập nhật danh sách lời mời kết bạn
 
-      toast.success("Đã thu hồi lời mời kết bạn!");
-    } catch (error) {
-      console.error("Lỗi khi thu hồi lời mời kết bạn:", error);
-      toast.error("Không thể thu hồi lời mời!");
-    }
+          toast.success("Đã thu hồi lời mời kết bạn!");
+        } else {
+          toast.error(response?.message || "Không thể thu hồi lời mời!");
+        }
+      }
+    );
   };
+
   // Gọi hàm loadFriendRequests khi component được render
   useEffect(() => {
     loadFriendRequests();
   }, []);
 
-  const loadFriendRequests = async () => {
+  const loadFriendRequests = () => {
     if (!user || !user._id) return;
 
-    try {
-      const response = await fetch(
-        `http://localhost:8004/friends/friend-requests/${user._id}`
-      );
-      const data = await response.json();
-      setFriendRequests(data); // Lưu danh sách vào state
-    } catch (error) {
-      console.error("Lỗi khi tải danh sách lời mời kết bạn:", error);
-    }
-  };
-
-  const loadFriends = async () => {
-    try {
-      const response = await fetch(
-        `http://localhost:8004/friends/getfriend/${user._id}`,
-        {
-          // Gửi userId để lấy danh sách bạn bè
-          method: "GET",
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Lỗi khi tải danh sách bạn bè");
+    socket.emit("get_friend_requests", { userId: user._id }, (response) => {
+      if (response?.success) {
+        setFriendRequests(response.friendRequests); // Lưu danh sách vào state
+        console.log("Danh sách lời mời kết bạn:", response.friendRequests);
+       
+      } else {
+        console.error("Lỗi khi tải danh sách lời mời kết bạn:", response?.message);
       }
-
-      const data = await response.json();
-      setFriends(data);
-    } catch (error) {
-      console.error("Lỗi khi tải danh sách bạn bè:", error);
-    }
+    });
   };
+
+  const loadFriends = () => {
+    if (!user || !user._id) return;
+
+    socket.emit("get_friends_list", { userId: user._id }, (response) => {
+      if (response?.success) {
+        setFriends(response.friends);
+      } else {
+        console.error("Lỗi khi tải danh sách bạn bè:", response?.message);
+      }
+    });
+  };
+
 
   // useEffect để load danh sách bạn bè khi component mount hoặc user._id thay đổi
   useEffect(() => {
@@ -1240,33 +1219,29 @@ export default function ChatApp() {
     }
   }, [user._id]);
 
-  // Gọi API để hủy kết bạn
-  const handleRemoveFriend = async (friendId) => {
+
+  // Hủy kết bạn dùng socket
+  const handleRemoveFriend = (friendId) => {
     if (!user || !user._id) {
       console.error("Không tìm thấy thông tin người dùng.");
       return;
     }
 
-    // Hiển thị hộp thoại xác nhận
     const isConfirmed = window.confirm("Bạn có chắc chắn muốn hủy kết bạn?");
-    if (!isConfirmed) return; // Nếu người dùng chọn "Hủy", thoát khỏi hàm
+    if (!isConfirmed) return;
 
-    try {
-      const response = await fetch("http://localhost:8004/friends/unfriend", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user._id, friendId }),
-      });
-
-      if (!response.ok) throw new Error("Lỗi khi hủy kết bạn");
-
-      // Cập nhật danh sách bạn bè
-      setFriends(friends.filter((friend) => friend._id !== friendId));
-      setSelectedFriend(null);
-    } catch (error) {
-      console.error("Lỗi khi hủy kết bạn:", error);
-    }
+    socket.emit("unfriend", { userId: user._id, friendId }, (response) => {
+      if (response.success) {
+        // Cập nhật danh sách bạn bè sau khi hủy
+        setFriends((prev) => prev.filter((friend) => friend._id !== friendId));
+        setSelectedFriend(null);
+        toast.success("Đã hủy kết bạn thành công!");
+      } else {
+        console.error("Hủy kết bạn thất bại:", response.message);
+      }
+    });
   };
+
 
   const handleClick = (tab) => {
     setSearchResult(null); // Xóa kết quả tìm kiếm
@@ -1277,81 +1252,126 @@ export default function ChatApp() {
 
     if (tab === "Lời mời kết bạn") {
       setSelectedChat(null);
-      setShowFriendRequests(false); // Ẩn đi trước để React re-render
-      setTimeout(() => {
-        setShowFriendRequests(true);
-        if (friendRequests.length === 0) {
-          loadFriendRequests();
-        }
-      }, 0); // Có thể tăng lên 200 nếu vẫn lỗi
+      loadFriendRequests();
+      setHasNewFriendRequest(false);
+      
     } else if (tab === "Danh sách bạn bè") {
       loadFriends(); // Gọi API danh sách bạn bè
     } else {
       setShowFriendRequests(false);
     }
   };
+
+
+  const acceptRequest = (request) => {
+    console.log("requestacceptRequest", request);
+
+    socket.emit(
+      "accept_friend_request",
+      { senderId: request.senderId._id, receiverId: request.receiverId },
+      (response) => {
+        if (!response.success) {
+          toast.error(response.message || "Có lỗi xảy ra khi chấp nhận.");
+          return;
+        }
+
+        // Nếu thành công thì xử lý luôn:
+        setFriendRequests((prevRequests) =>
+          prevRequests.filter(
+            (r) =>
+              r.senderId._id !== response.request.senderId._id ||
+              r.receiverId !== response.request.receiverId
+          )
+        );
+
+        loadFriends();
+        loadFriendRequests(); // Tải lại danh sách lời mời kết bạn
+        setHasNewFriendRequest(false);
+        toast.success("Lời mời kết bạn đã được chấp nhận!");
+      }
+    );
+  };
+
   useEffect(() => {
-    if (selectedChat?.name === "Lời mời kết bạn") {
-      setShowFriendRequests(true);
-    } else {
-      setShowFriendRequests(false);
-    }
-  }, [selectedChat]);
+    if (!socket || !user || !user._id) return;
 
-  const acceptRequest = async (requestId) => {
-    try {
-      const response = await fetch(
-        "http://localhost:8004/friends/accept-request",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ requestId }),
-        }
+    const eventName = `friend_request_accepted_${user._id}`;
+
+    const handleAccepted = (request) => {
+      console.log("Đã được chấp nhận kết bạn:", request);
+
+      // Gỡ khỏi danh sách lời mời nếu đang ở màn hình đó
+      setFriendRequests((prev) =>
+        prev.filter(
+          (r) =>
+            r.senderId._id !== request.senderId._id ||
+            r.receiverId !== request.receiverId
+        )
       );
 
-      const data = await response.json();
-      if (response.ok) {
+      // Reload danh sách bạn bè mới
+      loadFriends();
+
+      toast.success(`Kết bạn thành công`);
+    };
+
+    socket.on(eventName, handleAccepted);
+
+    // Cleanup khi component unmount hoặc user thay đổi
+    return () => {
+      socket.off(eventName, handleAccepted);
+    };
+  }, [socket, user]);
+
+
+
+  const rejectRequest = ({ senderId, receiverId, _id: requestId }) => {
+    socket.emit("reject_friend_request", { senderId, receiverId }, (response) => {
+      if (response.success) {
+        // Xoá lời mời bị từ chối khỏi danh sách
         setFriendRequests((prevRequests) =>
           prevRequests.filter((request) => request._id !== requestId)
         );
 
-        toast.success(data.message);
-        loadFriendRequests(); // Cập nhật lại danh sách sau khi chấp nhận
+        // Hiển thị toast thông báo thành công
+        setHasNewFriendRequest(false);
+        toast.success(response.message || "Đã từ chối lời mời kết bạn.");
+
+        // Tải lại danh sách lời mời (nếu cần)
+        loadFriendRequests();
+       
       } else {
-        toast.error(data.message || "Có lỗi xảy ra!");
+        // Thông báo lỗi nếu có
+        toast.error(response.message || "Có lỗi xảy ra khi từ chối.");
       }
-    } catch (error) {
-      console.error("Lỗi:", error);
-      toast.error("Lỗi kết nối server!");
-    }
+    });
   };
 
-  const rejectRequest = async (requestId) => {
-    try {
-      const response = await fetch(
-        "http://localhost:8004/friends/reject-request",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ requestId }),
-        }
-      );
+  useEffect(() => {
+    if (!socket) return;
 
-      const data = await response.json();
-      if (response.ok) {
-        setFriendRequests((prevRequests) =>
-          prevRequests.filter((request) => request._id !== requestId)
-        );
-        toast.success(data.message);
-        loadFriendRequests(); // Cập nhật lại danh sách sau khi từ chối
-      } else {
-        toast.error(data.message || "Có lỗi xảy ra!");
+    socket.on("friend_request_rejected", ({ receiverId, senderId }) => {
+    
+      // Mình là người gửi → bị từ chối
+      if (senderId === user._id) {
+        handleSearchUser();
+        setIsFriendRequestSent(false);
+        toast.info("Lời mời kết bạn đã bị từ chối.");
       }
-    } catch (error) {
-      console.error("Lỗi:", error);
-      toast.error("Lỗi kết nối server!");
-    }
-  };
+
+      // Mình là người nhận → cập nhật lại danh sách lời mời
+      if (receiverId === user._id) {
+        loadFriendRequests(); // để badge hoạt động chính xác
+      }
+    });
+
+    return () => {
+      socket.off("friend_request_rejected");
+    };
+  }, [socket, user._id]);
+
+
+
   // Toggle menu ba chấm
   const toggleMenuXoa = (friendId) => {
     setSelectedFriend(selectedFriend === friendId ? null : friendId);
@@ -2071,6 +2091,13 @@ export default function ChatApp() {
     };
   }, [selectedChat]); // nhớ đưa selectedChat vào dependency nếu cần theo dõi thay đổi
 
+
+
+
+
+
+
+
   return (
     <div className="chat-app">
       <ToastContainer position="top-right" autoClose={3000} />
@@ -2479,6 +2506,7 @@ export default function ChatApp() {
           </div>
         )}
         {sidebarView === "contacts" && (
+          
           <div className="contacts-list">
             <div
               className="contacts-header"
@@ -2495,12 +2523,17 @@ export default function ChatApp() {
               <FaUsers className="icon-contacts" />
               <span>Danh sách nhóm</span>
             </div>
+         
             <div
               className="contacts-header"
               onClick={() => handleClick("Lời mời kết bạn")}
             >
               <FaUserPlus className="icon-contacts" />
               <span>Lời mời kết bạn</span>
+
+              {hasNewFriendRequest &&(
+                <span className="badge">{friendRequests.length}</span>
+              )}
             </div>
           </div>
         )}
@@ -2625,10 +2658,13 @@ export default function ChatApp() {
             </div>
           </div>
         )}
-
         <div className="icon-item" onClick={showChatlists}>
           <FaComments className="icon chat-icon" title="Chat" />
           <span className="chat-icon-text">Chats</span>
+
+          {hasNewFriendRequest &&(
+            <span className="badge-1">{friendRequests.length}</span>
+          )}
         </div>
         <div className="icon-item" onClick={showContacts}>
           <FaAddressBook className="icon group-icon" title="Contacts" />
@@ -2653,26 +2689,31 @@ export default function ChatApp() {
         <div className="friend-requests">
           <h2>Lời mời kết bạn</h2>
           {friendRequests.length > 0 ? (
-            friendRequests.map((request) => (
-              <div key={request.id} className="friend-request-item">
-                <div className="friend-info">
-                  <img
-                    src={request.senderId.avatar}
-                    alt="avatar"
-                    className="friend-avatar"
-                  />
-                  <p className="friend-name">{request.senderId.username}</p>
-                </div>
-                <div className="friend-actions">
-                  <button onClick={() => rejectRequest(request._id)}>
-                    Từ chối
-                  </button>
-                  <button onClick={() => acceptRequest(request._id)}>
-                    Chấp nhận
-                  </button>
-                </div>
-              </div>
-            ))
+            friendRequests.map(
+              (request) => (
+                (
+                  <div key={request.id} className="friend-request-item">
+                    <div className="friend-info">
+                      <img
+                        src={request.senderId.avatar}
+                        alt="avatar"
+                        className="friend-avatar"
+                      />
+                      <p className="friend-name">{request.senderId.username}</p>
+                    </div>
+                    <div className="friend-actions">
+
+                      <button onClick={() => rejectRequest(request._id)}>
+                        Từ chối
+                      </button>
+                      <button onClick={() => acceptRequest(request._id)}>
+                        Chấp nhận
+                      </button>
+                    </div>
+                  </div>
+                )
+              )
+            )
           ) : (
             <p className="not-requestfriend">Không có lời mời kết bạn nào.</p>
           )}
@@ -4134,19 +4175,11 @@ export default function ChatApp() {
                                                       )
                                                   );
 
-                                                // 3. Gắn type cho mỗi item
-                                                const mergedList = [
-                                                  ...chats.map((chat) => ({
-                                                    ...chat,
-                                                    type: "chat",
-                                                  })),
-                                                  ...filteredFriends.map(
-                                                    (friend) => ({
-                                                      ...friend,
-                                                      type: "friend",
-                                                    })
-                                                  ),
-                                                ];
+                                                  // 3. Gắn type cho mỗi item
+                                                  const mergedList = [
+                                                    ...chats.map(chat => ({ ...chat, type: "chat" })),
+                                                    ...filteredFriends.map(friend => ({ ...friend, type: "friend" }))
+                                                  ];
 
                                                 const filteredList =
                                                   mergedList.filter((item) =>
