@@ -13,10 +13,9 @@ import EditProfileScreen from "./screens/EditProfileScreen";
 const Stack = createStackNavigator();
 
 const linking = {
-  prefixes: ["http://192.168.100.60:8081"], // Prefix của URL
+  prefixes: ["http://192.168.2.20:8081"], // Prefix của URL
   config: {
     screens: {
-      
       Login: "login",
       SignUp: "signup",
       RecoverPasswordApp: "recover-password",
@@ -70,6 +69,11 @@ export default function App() {
         />
         <Stack.Screen
           name="EditProfileScreen"
+          component={EditProfileScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="InfoChat"
           component={EditProfileScreen}
           options={{ headerShown: false }}
         />

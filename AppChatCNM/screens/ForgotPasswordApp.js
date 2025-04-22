@@ -27,7 +27,7 @@ export default function ForgotPasswordApp() {
   const [modalMessage, setModalMessage] = useState("");
   const [token, setToken] = useState("");
 
-  const API_BASE_URL = `http://192.168.100.60:8004`;
+  const API_BASE_URL = `http://172.16.17.89:8004`;
 
   useEffect(() => {
     // Lấy token từ route.params (được truyền qua deep linking)

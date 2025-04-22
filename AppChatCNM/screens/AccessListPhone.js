@@ -28,6 +28,8 @@ import {
   cancelFriendRequest,
 } from "../services/apiServices";
 
+import { NETWORK } from "@env";
+
 const ContactItem = ({
   item,
   onPress,
@@ -131,6 +133,7 @@ const AccessListPhone = ({ route }) => {
   const [incomingRequest, setIncomingRequest] = useState(null); // State để lưu thông tin yêu cầu đến
   const [incomingRequestsList, setIncomingRequestsList] = useState([]);
   const [isRequestModalVisible, setIsRequestModalVisible] = useState(false);
+  
   const fetchFriendList = useCallback(async () => {
     if (currentUser && currentUser._id) {
       try {
@@ -251,7 +254,7 @@ const AccessListPhone = ({ route }) => {
   const getConversation = async (currentUser, contact) => {
     try {
       const response = await fetch(
-        `http://192.168.100.60:8004/conversations/${currentUser._id}/search`
+        `http://192.168.2.20:8004/conversations/${currentUser._id}/search`
       );
       if (!response.ok) {
         throw new Error("Không thể tải danh sách cuộc trò chuyện");
