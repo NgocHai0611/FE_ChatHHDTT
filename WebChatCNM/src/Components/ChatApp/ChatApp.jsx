@@ -142,8 +142,10 @@ export default function ChatApp() {
   const [selectedChatsToForward, setSelectedChatsToForward] = useState([]);
   const [openOptionsMemberId, setOpenOptionsMemberId] = useState(null);
   const [hasNewFriendRequest, setHasNewFriendRequest] = useState(false);
-  const [receivedRequests, setReceivedRequests] = useState([]);
+  const [showEditGroupModal, setShowEditGroupModal] = useState(false);
 
+  const [groupImageFile, setGroupImageFile] = useState(null);
+  const [groupImagePreview, setGroupImagePreview] = useState(null);
   {
     /* Lấy danh sách conversation từ server và cập nhật vào state */
   }
@@ -2148,6 +2150,70 @@ export default function ChatApp() {
     };
   }, []);
 
+
+  const handleGroupImageChange = (e) => {
+    const file = e.target.files[0];
+    setGroupImageFile(file);
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => setGroupImagePreview(reader.result);
+      reader.readAsDataURL(file);
+    }
+  };
+  const handleUpdateGroupInfo = async () => {
+    const formData = new FormData();
+    formData.append("name", groupName);
+    if (groupImageFile) {
+      formData.append("groupAvatar", groupImageFile);
+    }
+
+    try {
+      const res = await axios.put(
+        `http://localhost:8004/conversations/group/${selectedChat.conversationId}`,
+        formData
+      );
+      console.log("Cập nhật nhóm thành công:", res.data);
+
+     
+
+      // Nếu muốn cập nhật lại state nhóm ở client, có thể làm tại đây
+      handleSelectChat({
+        conversationId: res.data._id,
+        lastMessageId: res.data.lastMessageId?._id,
+        lastMessageSenderId: res.data.lastMessageSenderId?._id,
+        members: res.data.members,
+        groupLeader: res.data.groupLeader,
+        groupDeputies: res.data.groupDeputies,
+        isGroup: res.data.isGroup,
+        isDissolved: res.data.isDissolved,  // Cập nhật trạng thái giải tán nhóm
+        image:
+          res.data.groupAvatar ||
+          "https://file.hstatic.net/200000503583/file/tao-dang-chup-anh-nhom-lay-loi__5__34b470841bb840e3b2ce25cbe02533ec.jpg",
+        name: res.data.name,
+        lastMessage: res.data.latestmessage,
+        addedMembers: res.data.addMembers,
+      });
+      
+      toast.success("Cập nhật nhóm thành công!"); // Thông báo thành công
+      setShowEditGroupModal(false);
+      console.log("Selected chat:", selectedChat);
+
+    } catch (err) {
+      const errorMsg =
+        err.response?.data?.error || "Cập nhật thất bại. Vui lòng thử lại.";
+      toast.error(errorMsg); // Thông báo lỗi cụ thể
+      console.error("Lỗi khi cập nhật nhóm:", err);
+    }
+  };
+
+  // Khi modal mở, cập nhật groupName từ selectedChat nếu có
+  useEffect(() => {
+    if (selectedChat && showEditGroupModal) {
+      setGroupName(selectedChat.name); // Đảm bảo luôn cập nhật đúng tên nhóm
+    }
+  }, [selectedChat, showEditGroupModal]);
+
+
   return (
     <div className="chat-app">
       <ToastContainer position="top-right" autoClose={3000} />
@@ -2932,208 +2998,211 @@ export default function ChatApp() {
                       <hr />
                     </div>
                     <div className="user-conservation">
-                      <div className="container-conservation">
-                        <div className="avatar-conservation">
-                          <img
-                            src={selectedChat.image}
-                            alt="img"
-                            className="avatar-conservation-img"
-                          />
-                        </div>
-                        <div className="info-conservation">
-                          <p className="name-conservation">
-                            {selectedChat.name}
-                          </p>
-                        </div>
-
-                        {/* Thêm thành viên vô nhóm  */}
-                        {showAddMembersModal && !selectedChat?.isDissolved && (
-                          <div className="add-members-modal">
-                            <FaTimes
-                              className="icon-outmedia-addmember"
+                    <div className="container-conservation">
+                            <div
+                              className="avatar-conservation"
                               onClick={() => {
-                                setShowAddMembersModal(false);
-                                setPhoneSearchTerm(""); // Reset input khi đóng modal
-                                setSearchResults([]); // (Tùy chọn) Xóa kết quả tìm kiếm
-                                setSelectedPhoneUsers([]); // (Tùy chọn) Bỏ checkbox nếu cần
-                              }}
-                            />
-                            <h4>Chọn thành viên để thêm</h4>
-                            <div className="member-list">
-                              <div className="add-by-phone-wrapper">
-                                <input
-                                  type="text"
-                                  placeholder="Nhập số điện thoại để thêm thành viên"
-                                  value={phoneSearchTerm}
-                                  onChange={(e) =>
-                                    setPhoneSearchTerm(e.target.value)
-                                  }
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") {
-                                      e.preventDefault();
-                                      if (phoneSearchTerm.trim() !== "") {
-                                        handleSearchByPhone();
-                                      }
-                                    }
-                                  }}
-                                  className="add-member-phone-input"
-                                />
-                              </div>
-
-                              <h5>Kết quả tìm kiếm</h5>
-                              {searchResults
-                                .filter((user) => {
-                                  const isInputEmpty =
-                                    phoneSearchTerm.trim() === ""; // Giả sử bạn có state searchKeyword
-                                  const isAlreadyInGroup =
-                                    selectedChat?.members?.some(
-                                      (m) => m._id === user._id
-                                    );
-                                  return isInputEmpty
-                                    ? !isAlreadyInGroup
-                                    : true; // Chỉ lọc khi input trống
-                                })
-                                .map((user) => {
-                                  const isAlreadyInGroup =
-                                    selectedChat?.members?.some(
-                                      (m) => m._id === user._id
-                                    );
-                                  return (
-                                    <div
-                                      key={user._id}
-                                      className={`search-user-info-addgroup ${
-                                        isAlreadyInGroup
-                                          ? "disabled-member"
-                                          : ""
-                                      }`}
-                                    >
-                                      <input
-                                        type="checkbox"
-                                        disabled={isAlreadyInGroup}
-                                        checked={
-                                          isAlreadyInGroup ||
-                                          selectedPhoneUsers.includes(user._id)
-                                        }
-                                        onChange={(e) => {
-                                          setSelectedPhoneUsers((prev) => {
-                                            const safePrev = Array.isArray(prev)
-                                              ? prev
-                                              : [];
-                                            return e.target.checked
-                                              ? [...safePrev, user._id]
-                                              : safePrev.filter(
-                                                  (id) => id !== user._id
-                                                );
-                                          });
-                                        }}
-                                      />
-                                      <div className="img-user-search-addgroup">
-                                        <img
-                                          src={user.avatar}
-                                          alt={user.username}
-                                          className="avatar-addgroup"
-                                        />
-                                      </div>
-                                      <div className="info-user-search-addgroup">
-                                        <p className="search-username-addgroup">
-                                          {user.username}
-                                        </p>
-                                        {isAlreadyInGroup && (
-                                          <p className="already-text">
-                                            (Đã tham gia)
-                                          </p>
-                                        )}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-
-                              <h5>Danh sách bạn bè</h5>
-                              {friends.map((friend) => {
-                                const isAlreadyInGroup =
-                                  selectedChat?.members?.some(
-                                    (member) => member._id === friend._id
-                                  );
-                                const isSelected =
-                                  isAlreadyInGroup ||
-                                  selectedMembers.includes(friend._id);
-
-                                return (
-                                  <div
-                                    key={friend._id}
-                                    className={`member-item-wrapper ${
-                                      isAlreadyInGroup ? "disabled-member" : ""
-                                    }`}
-                                  >
-                                    <div className="member-item-add">
-                                      <div className="info-item-add">
-                                        <input
-                                          type="checkbox"
-                                          disabled={isAlreadyInGroup}
-                                          checked={isSelected}
-                                          onChange={() =>
-                                            toggleSelectMember(friend._id)
-                                          }
-                                        />
-                                        <img
-                                          src={friend.avatar}
-                                          alt={friend.username}
-                                          className="avatar-small-addgroup"
-                                        />
-                                      </div>
-                                      <div className="member-text-wrapper">
-                                        <span className="username-add">
-                                          {friend.username}
-                                        </span>
-                                        {isAlreadyInGroup && (
-                                          <span className="already-text">
-                                            (Đã tham gia)
-                                          </span>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-
-                            <div className="modal-actions">
-                              <span
-                                className="cancel-btn-add"
-                                onClick={() => setShowAddMembersModal(false)}
-                              >
-                                Đóng
-                              </span>
-                              <span
-                                className="confirm-btn-add"
-                                onClick={() =>
-                                  handleAddMembersSocket(selectedMembers)
+                                if (selectedChat.isGroup) {
+                                  setShowEditGroupModal(true);
                                 }
-                              >
-                                Xác nhận thêm
-                              </span>
-                            </div>
-                          </div>
-                        )}
+                              }}
+                              style={{ cursor: selectedChat.isGroup ? "pointer" : "default" }}
+                            >
 
-                        <div
-                          className="add-group-conservation"
-                          onClick={() => {
-                            if (selectedChat.isGroup) {
-                              setShowAddMembersModal(true);
-                            } else {
-                              setShowGroupModal(true);
-                            }
-                          }}
-                        >
-                          <FaUsers className="icon-addgroups" />
-                          <h4>
-                            {selectedChat.isGroup
-                              ? "Thêm thành viên"
-                              : "Tạo nhóm trò chuyện"}
-                          </h4>
-                        </div>
-                      </div>
+
+                              <img src={selectedChat.image} alt="img" className="avatar-conservation-img" />
+                            </div>
+                            <div className="info-conservation">
+                              <p className="name-conservation">{selectedChat.name}</p>
+                            </div>
+                            {showEditGroupModal && !selectedChat?.isDissolved && (
+                              <div
+                                className="modal-overlayuser"
+                                onClick={(e) => {
+                                  if (e.target === e.currentTarget) {
+                                    setShowEditGroupModal(false);
+                                  }
+                                }}
+                              >
+                                <div className="modal-contentuser-group">
+                                  <span className="close-btnuser" onClick={() => setShowEditGroupModal(false)}>
+                                    &times;
+                                  </span>
+                                  <h3>Chỉnh sửa nhóm</h3>
+
+                                  <div className="profile-use-group">
+                                    <img
+                                      src={groupImagePreview || selectedChat.image}
+                                      alt="Avatar nhóm"
+                                      className="profile-avataruser"
+                                    />
+
+                                    {/* Icon đổi ảnh */}
+                                    <label htmlFor="group-avatar-upload" className="avatar-icon-label">
+                                      <FaCamera size={25} color="black" />
+                                    </label>
+                                    <input
+                                      id="group-avatar-upload"
+                                      type="file"
+                                      accept="image/*"
+                                      onChange={handleGroupImageChange}
+                                      className="avatar-upload"
+                                      style={{ display: "none" }}
+                                    />
+
+                                    <p>
+                                      <input
+                                        type="text"
+                                        name="groupName"
+                                        value={groupName}
+                                        onChange={(e) => setGroupName(e.target.value)}
+                                        placeholder="Nhập tên nhóm"
+                                        className="username-input"
+                                      />
+                                    </p>
+                                  </div>
+
+                                  <button onClick={handleUpdateGroupInfo} className="update-btn">
+                                    Cập nhật
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+
+                            {/* Thêm thành viên vô nhóm  */}
+                            {showAddMembersModal && !selectedChat?.isDissolved && (
+
+                              <div className="add-members-modal">
+                                <FaTimes className="icon-outmedia-addmember" onClick={() => {
+                                  setShowAddMembersModal(false);
+                                  setPhoneSearchTerm(""); // Reset input khi đóng modal
+                                  setSearchResults([]); // (Tùy chọn) Xóa kết quả tìm kiếm
+                                  setSelectedPhoneUsers([]); // (Tùy chọn) Bỏ checkbox nếu cần
+                                }} />
+                                <h4>Chọn thành viên để thêm</h4>
+                                <div className="member-list">
+
+                                  <div className="add-by-phone-wrapper">
+                                    <input
+                                      type="text"
+                                      placeholder="Nhập số điện thoại để thêm thành viên"
+                                      value={phoneSearchTerm}
+                                      onChange={(e) => setPhoneSearchTerm(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          e.preventDefault();
+                                          if (phoneSearchTerm.trim() !== "") {
+                                            handleSearchByPhone();
+                                          }
+                                        }
+                                      }}
+                                      className="add-member-phone-input"
+                                    />
+
+                                  </div>
+
+
+                                  <h5>Kết quả tìm kiếm</h5>
+                                  {searchResults
+                                    .filter(user => {
+                                      const isInputEmpty = phoneSearchTerm.trim() === ""; // Giả sử bạn có state searchKeyword
+                                      const isAlreadyInGroup = selectedChat?.members?.some(m => m._id === user._id);
+                                      return isInputEmpty ? !isAlreadyInGroup : true; // Chỉ lọc khi input trống
+                                    })
+                                    .map(user => {
+                                      const isAlreadyInGroup = selectedChat?.members?.some(m => m._id === user._id);
+                                      return (
+                                        <div
+                                          key={user._id}
+                                          className={`search-user-info-addgroup ${isAlreadyInGroup ? 'disabled-member' : ''}`}
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            disabled={isAlreadyInGroup}
+                                            checked={isAlreadyInGroup || selectedPhoneUsers.includes(user._id)}
+                                            onChange={(e) => {
+                                              setSelectedPhoneUsers(prev => {
+                                                const safePrev = Array.isArray(prev) ? prev : [];
+                                                return e.target.checked
+                                                  ? [...safePrev, user._id]
+                                                  : safePrev.filter(id => id !== user._id);
+                                              });
+                                            }}
+                                          />
+                                          <div className="img-user-search-addgroup">
+                                            <img
+                                              src={user.avatar}
+                                              alt={user.username}
+                                              className="avatar-addgroup"
+                                            />
+                                          </div>
+                                          <div className="info-user-search-addgroup">
+                                            <p className="search-username-addgroup">{user.username}</p>
+                                            {isAlreadyInGroup && <p className="already-text">(Đã tham gia)</p>}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+
+
+                                  <h5>Danh sách bạn bè</h5>
+                                  {friends.map((friend) => {
+
+                                    const isAlreadyInGroup = selectedChat?.members?.some(
+                                      (member) => member._id === friend._id
+                                    );
+                                    const isSelected = isAlreadyInGroup || selectedMembers.includes(friend._id);
+
+                                    return (
+                                      <div
+                                        key={friend._id}
+                                        className={`member-item-wrapper ${isAlreadyInGroup ? "disabled-member" : ""}`}
+                                      >
+
+                                        <div className="member-item-add">
+                                          <div className="info-item-add">
+                                            <input
+                                              type="checkbox"
+                                              disabled={isAlreadyInGroup}
+                                              checked={isSelected}
+                                              onChange={() => toggleSelectMember(friend._id)}
+                                            />
+                                            <img src={friend.avatar} alt={friend.username} className="avatar-small-addgroup" />
+                                          </div>
+                                          <div className="member-text-wrapper">
+                                            <span className="username-add">{friend.username}</span>
+                                            {isAlreadyInGroup && <span className="already-text">(Đã tham gia)</span>}
+                                          </div>
+                                        </div>
+
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+
+                                <div className="modal-actions">
+                                  <span className="cancel-btn-add" onClick={() => setShowAddMembersModal(false)}>Đóng</span>
+                                  <span className="confirm-btn-add" onClick={() => handleAddMembersSocket(selectedMembers)}>Xác nhận thêm</span>
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="add-group-conservation"
+                              onClick={() => {
+                                if (selectedChat.isGroup) {
+                                  setShowAddMembersModal(true);
+                                } else {
+                                  setShowGroupModal(true);
+                                }
+                              }}>
+
+                              <FaUsers className="icon-addgroups" />
+                              <h4>{selectedChat.isGroup ? "Thêm thành viên" : "Tạo nhóm trò chuyện"}</h4>
+
+                            </div>
+
+                          </div>
 
                       {selectedChat?.isGroup && !selectedChat?.isDissolved && (
                         <div className="container-conservation-member">

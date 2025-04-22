@@ -2365,3 +2365,30 @@ iframe.modal-media {
   transform: translate(50%, -50%);
   z-index: 1;
 }
+
+.modal-contentuser-group {
+  background-color: #ecedef;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 500px;
+  padding: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 9999;  /* Đảm bảo modal sẽ ở trên các phần tử khác */
+  animation: modal-show 0.3s ease-in-out;
+  align-items: flex-start;
+  border: 1px solid #ccc; /* Viền nhẹ */
+}
+
+.profile-use-group{
+ z-index: 1002; /* Đảm bảo avatar ở trên modal */
+ margin-top: 20px;
+ display: flex;
+  flex-direction: row;
+}
+.profile-use-group p{
+  margin-top: 30px;
+  margin-left: 10px;
+}
