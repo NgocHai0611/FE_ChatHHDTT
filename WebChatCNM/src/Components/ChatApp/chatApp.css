@@ -1740,7 +1740,7 @@
   color: rgb(255, 255, 255)!important;
   border: none;
   cursor: pointer;
-  right: 0;
+  right: 65px;
 }
 .add-friend{
   position: absolute;
@@ -2285,4 +2285,26 @@ iframe.modal-media {
   border-radius: 8px;
   margin: 10px;
   font-size: 15px;
+}
+.badge {
+  background-color: red;
+  color: white;
+  border-radius: 50%;
+  padding: 2px 6px;
+  font-size: 10px;
+  margin-left: 8px;
+  min-width: 18px;
+  text-align: center;
+}
+.badge-1 {
+  position: absolute;
+  top: 190px;
+  right: 12px;
+  background-color: red;
+  color: white;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 50%;
+  transform: translate(50%, -50%);
+  z-index: 1;
 }
