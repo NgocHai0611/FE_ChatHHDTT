@@ -28,7 +28,7 @@ export default function ChatListScreen({ navigation }) {
   const [user, setUser] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [searchText, setSearchText] = useState("");
-  const socket = io("http://192.168.2.20:8004", {
+  const socket = io("http://192.168.137.74:8004", {
     transports: ["websocket"],
   });
   const [isDeleteModalVisible, setDeleteModalVisible] = useState(false);
@@ -157,7 +157,7 @@ export default function ChatListScreen({ navigation }) {
   const fetchMessagesByConversationId = async (conversationId) => {
     try {
       const response = await fetch(
-        `http://192.168.2.20:8004/messages/get/${conversationId}`
+        `http://192.168.137.74:8004/messages/get/${conversationId}`
       );
       const data = await response.json();
       const pinnedMessage = data.find((msg) => msg.isPinned === true);
@@ -178,14 +178,14 @@ export default function ChatListScreen({ navigation }) {
 
       // 2. Gọi API lấy chi tiết cuộc trò chuyện (xem có phải group không)
       const res1 = await axios.get(
-        `http://192.168.2.20:8004/conversations/get/${conversation._id}`
+        `http://192.168.137.74:8004/conversations/get/${conversation._id}`
       );
       const fullConversation = res1.data;
 
       // 3. Nếu là group chat thì lấy thông tin người tạo nhóm
       if (fullConversation.createGroup?.userId) {
         const res2 = await axios.get(
-          `http://192.168.2.20:8004/users/get/${fullConversation.createGroup.userId}`
+          `http://192.168.137.74:8004/users/get/${fullConversation.createGroup.userId}`
         );
         const userAdd = res2.data;
 
@@ -264,6 +264,7 @@ export default function ChatListScreen({ navigation }) {
             size={24}
             color="black"
             visible={isModalVisible}
+            typeAction="create"
             onPress={() => setModalVisible(true)}
           />
           <Text style={styles.title}>Chats</Text>
@@ -299,8 +300,6 @@ export default function ChatListScreen({ navigation }) {
         data={filteredConversations}
         keyExtractor={(item) => item._id}
         renderItem={({ item }) => {
-          console.log(item); // In ra item để kiểm tra dữ liệu
-
           // Kiểm tra loại cuộc trò chuyện là nhóm hay cá nhân bằng item.isGroup
           const isGroupChat = item.isGroup;
 
@@ -437,10 +436,12 @@ export default function ChatListScreen({ navigation }) {
           <ModalAddUserToGroup
             idUser={user._id}
             visible={isModalVisible}
+            typeAction={"create"}
             onClose={() => {
               setModalVisible(false);
               setRefreshFlag((prev) => !prev);
             }}
+            existingMembers={[]}
           >
             Tạo Nhóm
           </ModalAddUserToGroup>

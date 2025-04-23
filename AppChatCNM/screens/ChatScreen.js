@@ -38,36 +38,31 @@ import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
 import { v4 as uuidv4 } from "uuid";
 
-// const id = uuidv4();
-
-// Component chính cho màn hình chat
 export default function ChatScreen({ navigation, route }) {
-  // --- Khởi tạo state và ref ---
-  const [messages, setMessages] = useState([]); // Danh sách tin nhắn
-  const [previews, setPreviews] = useState([]); // Xem trước nhiều media
-  const [text, setText] = useState(""); // Nội dung tin nhắn đang nhập
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false); // Hiển thị bảng chọn emoji
-  const [selectedMessage, setSelectedMessage] = useState(null); // Tin nhắn được chọn khi nhấn giữ
-  const [isMessageModalVisible, setIsMessageModalVisible] = useState(false); // Hiển thị modal tùy chọn tin nhắn
-  const [pinnedMessage, setPinnedMessage] = useState(null); // Tin nhắn được ghim
-  const [replyingMessage, setReplyingMessage] = useState(null); // Tin nhắn đang trả lời
-  const [highlightedMessageId, setHighlightedMessageId] = useState(null); // ID tin nhắn được làm nổi bật
-  const [scrollCompleted, setScrollCompleted] = useState(false); // Trạng thái cuộn hoàn tất
-  const flatListRef = useRef(null); // Ref cho danh sách tin nhắn
-
-  const socket = useRef(null); // Ref cho socket.io
-  const { conversation, currentUser, otherUser } = route.params; // Thông tin cuộc trò chuyện, người dùng hiện tại và đối phương
-
-  const [isForwardModalVisible, setIsForwardModalVisible] = useState(false); // Hiển thị modal chọn bạn bè
-  const [friendList, setFriendList] = useState([]); // Danh sách bạn bè (cuộc trò chuyện)
+  const [messages, setMessages] = useState([]);
+  const [previews, setPreviews] = useState([]);
+  const [text, setText] = useState("");
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState(null);
+  const [isMessageModalVisible, setIsMessageModalVisible] = useState(false);
+  const [pinnedMessage, setPinnedMessage] = useState(null);
+  const [replyingMessage, setReplyingMessage] = useState(null);
+  const [highlightedMessageId, setHighlightedMessageId] = useState(null);
+  const [scrollCompleted, setScrollCompleted] = useState(false);
+  const flatListRef = useRef(null);
+  const socket = useRef(null);
+  const { conversation, currentUser, otherUser } = route.params;
+  const [isForwardModalVisible, setIsForwardModalVisible] = useState(false);
+  const [friendList, setFriendList] = useState([]);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isGroupActive, setIsGroupActive] = useState(true); // Giả sử nhóm đang hoạt động ban đầu
 
-  // --- Kết nối và xử lý socket ---
+  // Kết nối socket và xử lý các sự kiện
   useEffect(() => {
-    // Khởi tạo socket và kết nối tới server
-    socket.current = io("http://192.168.2.20:8004", {
+    socket.current = io("http://192.168.137.74:8004", {
       transports: ["websocket"],
     });
+
     socket.current.on("connect", () => {
       console.log("Socket connected: ", socket.current.id);
       socket.current.emit("markAsSeen", {
@@ -83,24 +78,24 @@ export default function ChatScreen({ navigation, route }) {
         text: newMessage.text || "",
         createdAt: new Date(newMessage.createdAt),
         user: {
-          _id: newMessage.sender._id,
-          name: newMessage.sender.username,
-          avatar: newMessage.sender.avatar,
+          _id: newMessage.sender?._id || "system",
+          name: newMessage.sender?.username || "Hệ thống",
+          avatar: newMessage.sender?.avatar || "",
         },
         image: newMessage.imageUrl || undefined,
         video: newMessage.videoUrl || undefined,
         file: newMessage.fileUrl || undefined,
         fileName: newMessage.fileName || undefined,
         isRecalled: newMessage.isRecalled || false,
-        isPinned: newMessage.isPinned || false, // Thêm isPinned
+        isPinned: newMessage.isPinned || false,
         replyTo: newMessage.replyTo || null,
+        messageType: newMessage.messageType || "text",
       };
       setMessages((prevMessages) => {
         if (prevMessages.find((msg) => msg._id === formattedMessage._id)) {
           return prevMessages;
         }
         if (formattedMessage.isPinned) {
-          // Cập nhật pinnedMessage nếu tin nhắn mới được ghim
           setPinnedMessage(formattedMessage);
         }
         return GiftedChat.append(prevMessages, [formattedMessage]);
@@ -128,10 +123,18 @@ export default function ChatScreen({ navigation, route }) {
     // Lắng nghe sự kiện tin nhắn được cập nhật (thu hồi)
     socket.current.on("refreshMessages", (data) => {
       if (data.conversationId === conversation._id) {
-        fetchMessages(); // Làm mới danh sách tin nhắn
+        fetchMessages();
       }
     });
-    // Lấy danh sách bạn bè từ API
+
+    // Lắng nghe sự kiện cập nhật phó nhóm
+    socket.current.on("groupUpdatedToggleDeputy", ({ conversationId }) => {
+      if (conversationId === conversation._id) {
+        fetchMessages(); // Làm mới tin nhắn để hiển thị thông báo hệ thống
+      }
+    });
+
+    // Lấy danh sách bạn bè
     const fetchFriends = async () => {
       try {
         const friends = await getListFriend(currentUser._id);
@@ -143,13 +146,20 @@ export default function ChatScreen({ navigation, route }) {
     };
     fetchFriends();
 
-    // Ngắt kết nối socket khi component unmount
     return () => {
       if (socket.current) {
         socket.current.disconnect();
       }
     };
   }, [conversation._id]);
+
+  useEffect(() => {
+    if (conversation.isDissolved === true) {
+      setIsGroupActive(false);
+    } else {
+      setIsGroupActive(true); // Nếu nhóm hoạt động lại
+    }
+  }, [conversation.isDissolved]);
 
   // Đánh dấu tin nhắn là đã xem khi màn hình được focus
   useFocusEffect(
@@ -168,20 +178,23 @@ export default function ChatScreen({ navigation, route }) {
     }, [messages, currentUser._id])
   );
 
-  // --- Lấy danh sách tin nhắn từ server ---
+  // Lấy danh sách tin nhắn từ server
   const fetchMessages = async () => {
     try {
       const data = await getMessages(conversation._id);
       console.log("📥 Data Fetch message", data);
 
+      if (conversation.isDissolved === true) {
+        setIsGroupActive(false);
+      }
+
       const formattedMessages = data
         .map((msg) => {
-          // Kiểm tra loại tin nhắn (system, text, ... )
           let userInfo;
 
           if (msg.messageType === "system") {
             userInfo = {
-              _id: "system", // Hệ thống không có user _id thực
+              _id: "system",
               name: "Hệ thống",
             };
           } else {
@@ -209,7 +222,6 @@ export default function ChatScreen({ navigation, route }) {
             messageType: msg.messageType || "text",
           };
 
-          // Nếu không có user thì bỏ qua tin nhắn này
           if (!formattedMsg.user || !formattedMsg.user._id) {
             console.warn("❌ Bỏ qua message thiếu user._id:", formattedMsg);
             return null;
@@ -217,15 +229,13 @@ export default function ChatScreen({ navigation, route }) {
 
           return formattedMsg;
         })
-        .filter(Boolean); // Bỏ qua tin nhắn không hợp lệ
+        .filter(Boolean);
 
-      // Lọc tin nhắn đã xóa
       const filteredMessages = formattedMessages.filter((msg) => {
         if (!currentUser || !currentUser._id) return true;
         return !msg.deletedFrom?.includes(currentUser._id);
       });
 
-      // Gán tin nhắn vào state
       setMessages(filteredMessages.reverse());
     } catch (error) {
       console.error("🚨 Failed to fetch messages:", error);
@@ -239,13 +249,20 @@ export default function ChatScreen({ navigation, route }) {
     }
   }, [conversation._id, currentUser]);
 
-  // --- Gửi tin nhắn ---
+  const handleEditGroup = () => {
+    navigation.navigate("InfoChat", {
+      conversation,
+      currentUser,
+      otherUser,
+    });
+  };
+
+  // Gửi tin nhắn
   const onSend = useCallback(
     async (newMessages = []) => {
       const message = newMessages[0];
       let messageData = [];
 
-      // Xử lý tin nhắn văn bản (nếu có)
       if (message.text && message.text.trim() !== "") {
         messageData.push({
           conversationId: conversation._id,
@@ -261,7 +278,6 @@ export default function ChatScreen({ navigation, route }) {
         });
       }
 
-      // Xử lý media (ảnh, video, file) từ previews
       if (previews.length > 0) {
         try {
           const files = previews.map((preview) => ({
@@ -278,7 +294,6 @@ export default function ChatScreen({ navigation, route }) {
           );
 
           if (responseData && responseData.success) {
-            // Xử lý ảnh
             if (responseData.imageUrls && responseData.imageUrls.length > 0) {
               responseData.imageUrls.forEach((url) => {
                 messageData.push({
@@ -296,7 +311,6 @@ export default function ChatScreen({ navigation, route }) {
               });
             }
 
-            // Xử lý video
             if (responseData.videoUrls && responseData.videoUrls.length > 0) {
               responseData.videoUrls.forEach((url, index) => {
                 const videoPreview = previews.find((p) =>
@@ -317,7 +331,6 @@ export default function ChatScreen({ navigation, route }) {
               });
             }
 
-            // Xử lý file
             if (responseData.fileUrls && responseData.fileUrls.length > 0) {
               responseData.fileUrls.forEach((url, index) => {
                 const filePreview = previews.find(
@@ -372,19 +385,17 @@ export default function ChatScreen({ navigation, route }) {
         }
       }
 
-      // Nếu không có tin nhắn văn bản hoặc media, không gửi
       if (messageData.length === 0) {
-        return; // Không hiển thị alert để tránh làm phiền người dùng
+        return;
       }
 
-      // Gửi tất cả tin nhắn qua socket
       try {
         messageData.forEach((data) => {
           socket.current.emit("sendMessage", data);
         });
         setReplyingMessage(null);
-        setPreviews([]); // Xóa previews sau khi gửi
-        setText(""); // Xóa văn bản sau khi gửi
+        setPreviews([]);
+        setText("");
       } catch (error) {
         console.error("Error sending message:", error);
         alert("Không thể gửi tin nhắn. Vui lòng thử lại.");
@@ -393,7 +404,7 @@ export default function ChatScreen({ navigation, route }) {
     [conversation._id, currentUser._id, previews, replyingMessage]
   );
 
-  // --- Xử lý media (ảnh, video, file) ---
+  // Xử lý chọn ảnh
   const handleImagePick = async () => {
     try {
       const { status } =
@@ -413,7 +424,7 @@ export default function ChatScreen({ navigation, route }) {
       if (!result.canceled) {
         const selectedImages = result.assets.map((asset) => {
           const extension = asset.uri.split(".").pop()?.toLowerCase();
-          const mimeType = extension === "png" ? "image/png" : "image/jpeg"; // Đảm bảo MIME type chính xác
+          const mimeType = extension === "png" ? "image/png" : "image/jpeg";
           return {
             uri: asset.uri,
             name: asset.fileName || `image_${Date.now()}.${extension}`,
@@ -427,6 +438,8 @@ export default function ChatScreen({ navigation, route }) {
       alert("Lỗi khi chọn ảnh: " + error.message);
     }
   };
+
+  // Xử lý chọn video
   const handleVideoPick = async () => {
     try {
       const { status } =
@@ -446,7 +459,7 @@ export default function ChatScreen({ navigation, route }) {
       if (!result.canceled) {
         const selectedVideos = result.assets.map((asset) => {
           const extension = asset.uri.split(".").pop()?.toLowerCase();
-          let mimeType = "video/mp4"; // Mặc định
+          let mimeType = "video/mp4";
           switch (extension) {
             case "mov":
               mimeType = "video/quicktime";
@@ -476,6 +489,8 @@ export default function ChatScreen({ navigation, route }) {
       alert("Lỗi khi chọn video: " + error.message);
     }
   };
+
+  // Xử lý chọn file
   const handleFilePick = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -496,11 +511,9 @@ export default function ChatScreen({ navigation, route }) {
       }
 
       const selectedFiles = result.assets.map((asset) => {
-        // Lấy MIME type từ DocumentPicker
         let mimeType = asset.mimeType || "application/octet-stream";
         const name = asset.name || `file_${Date.now()}`;
 
-        // Kiểm tra MIME type hợp lệ
         const validMimeTypes = [
           "application/pdf",
           "application/msword",
@@ -515,7 +528,6 @@ export default function ChatScreen({ navigation, route }) {
           throw new Error(`Loại file không được hỗ trợ: ${name}`);
         }
 
-        // Xử lý tên file
         let extension = "bin";
         switch (mimeType) {
           case "application/pdf":
@@ -543,7 +555,6 @@ export default function ChatScreen({ navigation, route }) {
             console.warn(`No extension mapped for MIME type: ${mimeType}`);
         }
 
-        // Đảm bảo tên file có phần mở rộng đúng
         const fileName = name.includes(".") ? name : `${name}.${extension}`;
 
         const fileData = {
@@ -565,7 +576,8 @@ export default function ChatScreen({ navigation, route }) {
       alert(`Lỗi khi chọn tài liệu: ${error.message}`);
     }
   };
-  // --- Render preview item ---
+
+  // Render preview item
   const renderPreviewItem = ({ item }) => (
     <View style={styles.previewItem}>
       {item.type.includes("image") && (
@@ -591,13 +603,27 @@ export default function ChatScreen({ navigation, route }) {
       </TouchableOpacity>
     </View>
   );
-  // --- Render các loại tin nhắn (ảnh, video, file) ---
-  // Hiển thị tin nhắn ảnh
 
+  const renderGroupStatus = () => {
+    if (conversation.isDissolved) {
+      setIsGroupActive(false);
+
+      return (
+        <View style={styles.dissolvedNotification}>
+          <Text style={styles.dissolvedText}>
+            Nhóm này đã bị giải tán. Bạn không thể gửi tin nhắn hoặc ảnh.
+          </Text>
+        </View>
+      );
+    }
+    return null;
+  };
+
+  // Render tin nhắn ảnh
   const renderMessageImage = (props) => {
     const { currentMessage } = props;
     const imageUrl = currentMessage.image;
-    const fileName = `image_${Date.now()}.jpg`; // Tạo tên file động
+    const fileName = `image_${Date.now()}.jpg`;
 
     const handleDownload = async () => {
       if (!imageUrl) {
@@ -640,7 +666,7 @@ export default function ChatScreen({ navigation, route }) {
     );
   };
 
-  // Hiển thị tin nhắn video
+  // Render tin nhắn video
   const renderMessageVideo = (props) => {
     const { currentMessage } = props;
     const videoUrl = currentMessage.video;
@@ -676,19 +702,18 @@ export default function ChatScreen({ navigation, route }) {
     );
   };
 
-  // Hiển thị tin nhắn file
+  // Render tin nhắn file
   const renderMessageFile = (props) => {
     const { currentMessage } = props;
     const fileName =
       currentMessage.fileName ||
       currentMessage.text?.replace("📄 ", "") ||
       "Tệp không xác định";
-    const fileType = fileName.split(".").pop().toUpperCase() || "UNKNOWN";
+    const fileType = fileName.split(".").portable.toUpperCase() || "UNKNOWN";
 
     const fileUrl = currentMessage.file;
-    // Giới hạn tên file (ví dụ: 20 ký tự)
     const truncatedFileName =
-      fileName.length > 10 ? `${fileName.substring(0, 17)}...` : fileName;
+      fileName.length > 20 ? `${fileName.substring(0, 17)}...` : fileName;
 
     const handleDownload = async () => {
       if (!fileUrl) {
@@ -698,7 +723,6 @@ export default function ChatScreen({ navigation, route }) {
       await downloadFile(fileUrl, fileName);
     };
 
-    // Hàm để chọn biểu tượng hoặc văn bản dựa trên loại tệp
     const renderFileIcon = () => {
       switch (fileType.toLowerCase()) {
         case "doc":
@@ -707,7 +731,7 @@ export default function ChatScreen({ navigation, route }) {
         case "pdf":
           return <MaterialIcons name="picture-as-pdf" size={24} color="#fff" />;
         default:
-          return <Ionicons name="document" size={24} color="#fff" />; // Biểu tượng chung cho các loại tệp khác
+          return <Ionicons name="document" size={24} color="#fff" />;
       }
     };
 
@@ -726,12 +750,11 @@ export default function ChatScreen({ navigation, route }) {
           marginVertical: 5,
         }}
       >
-        {/* File Icon */}
         <View
           style={{
             width: 40,
             height: 40,
-            backgroundColor: "#0078D4", // Blue background
+            backgroundColor: "#0078D4",
             borderRadius: 5,
             justifyContent: "center",
             alignItems: "center",
@@ -762,7 +785,6 @@ export default function ChatScreen({ navigation, route }) {
     );
   };
 
-  // --- Xử lý tin nhắn (ghim, thu hồi, trả lời, xóa) ---
   // Ghim tin nhắn
   const handlePinMessage = async () => {
     if (selectedMessage) {
@@ -770,9 +792,8 @@ export default function ChatScreen({ navigation, route }) {
         const response = await pinMessage(selectedMessage._id, {
           isPinned: true,
         });
-        console.log("pinMessage response:", response); // Debug API response
+        console.log("pinMessage response:", response);
         if (response.isPinned) {
-          // Bỏ ghim các tin nhắn cũ cục bộ
           setMessages((prevMessages) =>
             prevMessages.map((msg) =>
               msg._id === selectedMessage._id
@@ -814,7 +835,7 @@ export default function ChatScreen({ navigation, route }) {
   const handleUnpinMessage = async (messageId) => {
     try {
       const response = await pinMessage(messageId, { isPinned: false });
-      console.log("unpinMessage response:", response); // Debug API response
+      console.log("unpinMessage response:", response);
       if (response.isPinned === false) {
         setMessages((prevMessages) =>
           prevMessages.map((msg) =>
@@ -910,7 +931,6 @@ export default function ChatScreen({ navigation, route }) {
     }
   };
 
-  // --- Xử lý giao diện tin nhắn ---
   // Hiển thị tùy chọn khi nhấn giữ tin nhắn
   const renderMessageOptions = () => {
     const isCurrentUserMessage = selectedMessage?.user?._id === currentUser._id;
@@ -980,7 +1000,8 @@ export default function ChatScreen({ navigation, route }) {
       </View>
     );
   };
-  // Hiển thị nội dung tin nhắn (văn bản hoặc thông báo thu hồi)
+
+  // Hiển thị nội dung tin nhắn
   const renderCustomText = (props) => {
     if (props.currentMessage.isRecalled) {
       return (
@@ -995,15 +1016,9 @@ export default function ChatScreen({ navigation, route }) {
   // Hiển thị bubble tin nhắn
   const renderBubble = (props) => {
     const { currentMessage } = props;
-    console.log("Props trong render bubble", currentMessage);
-
-    // Kiểm tra xem tin nhắn có phải của người dùng hiện tại không
     const isCurrentUser = currentMessage.user._id === currentUser._id;
-
-    // Kiểm tra tin nhắn có phải là hệ thống không
     const isSystemMessage = currentMessage.messageType === "system";
 
-    // Nếu là tin nhắn hệ thống, hiển thị theo kiểu riêng biệt
     if (isSystemMessage) {
       return (
         <View
@@ -1027,7 +1042,6 @@ export default function ChatScreen({ navigation, route }) {
       );
     }
 
-    // Nếu là tin nhắn bình thường, hiển thị bằng Bubble
     return (
       <View>
         <Bubble
@@ -1101,7 +1115,6 @@ export default function ChatScreen({ navigation, route }) {
 
   useEffect(() => {
     if (highlightedMessageId) {
-      // Tạo một bản sao mới của messages để ép re-render
       setMessages((prevMessages) => [...prevMessages]);
     }
   }, [highlightedMessageId]);
@@ -1123,7 +1136,6 @@ export default function ChatScreen({ navigation, route }) {
     }
   }, [highlightedMessageId, messages]);
 
-  // --- Xử lý emoji ---
   // Thêm emoji vào nội dung tin nhắn
   const handleEmojiSelect = (emoji) => {
     setText((prevText) => prevText + emoji);
@@ -1146,7 +1158,6 @@ export default function ChatScreen({ navigation, route }) {
 
       const existingConversation = userConversations.find((conv) => {
         console.log("Conversation members:", conv.members);
-        // Kiểm tra xem trong conv.members có chứa cả currentUser._id và friend._id không
         const hasCurrentUser = conv.members.some(
           (member) => member._id === currentUser._id
         );
@@ -1202,27 +1213,23 @@ export default function ChatScreen({ navigation, route }) {
     }
   };
 
-  //Xử lý download file trên giao diện
+  // Xử lý download file
   const downloadFile = async (url, fileName) => {
     setIsDownloading(true);
-    let fileUri = null; // Biến để lưu fileUri, dùng trong khối finally
+    let fileUri = null;
 
     try {
-      // Kiểm tra URL hợp lệ
       if (!url || !url.startsWith("http")) {
         throw new Error("URL tải xuống không hợp lệ.");
       }
 
-      console.log("URL tải xuống:", url); // Debug URL
-
+      console.log("URL tải xuống:", url);
       const cleanFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const timestamp = Date.now(); // Thêm timestamp để tránh xung đột tên file
+      const timestamp = Date.now();
       const uniqueFileName = `${timestamp}_${cleanFileName}`;
       fileUri = `${FileSystem.documentDirectory}${uniqueFileName}`;
 
-      console.log("fileUri:", fileUri); // Debug fileUri
-
-      // Tải file từ URL về thư mục tạm
+      console.log("fileUri:", fileUri);
       const downloadResult = await FileSystem.downloadAsync(url, fileUri);
       if (downloadResult.status !== 200) {
         throw new Error(
@@ -1230,20 +1237,17 @@ export default function ChatScreen({ navigation, route }) {
         );
       }
 
-      // Kiểm tra file có tồn tại không
       const fileInfo = await FileSystem.getInfoAsync(fileUri);
       if (!fileInfo.exists) {
         throw new Error(`File tạm tại ${fileUri} không tồn tại sau khi tải.`);
       }
 
-      // Kiểm tra loại file dựa trên phần mở rộng
       const fileExtension = cleanFileName.split(".").pop().toLowerCase();
       const isMediaFile = ["jpg", "jpeg", "png", "mp4", "mov", "avi"].includes(
         fileExtension
       );
 
       if (isMediaFile) {
-        // Nếu là ảnh hoặc video, lưu vào Media Library
         const { status } = await MediaLibrary.requestPermissionsAsync();
         if (status !== "granted") {
           throw new Error("Cần cấp quyền truy cập thư viện để lưu file!");
@@ -1256,9 +1260,7 @@ export default function ChatScreen({ navigation, route }) {
           `File ${cleanFileName} đã được tải về thành công! Kiểm tra trong thư viện ảnh/video.`
         );
       } else {
-        // Nếu là file tài liệu (docx, pdf, v.v.), lưu vào thư mục công khai hoặc chia sẻ
         if (Platform.OS === "android") {
-          // Trên Android, lưu vào thư mục Downloads công khai
           const permissions =
             await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
           if (!permissions.granted) {
@@ -1273,7 +1275,6 @@ export default function ChatScreen({ navigation, route }) {
               "application/octet-stream"
             );
 
-          // Đọc nội dung file tạm và ghi vào file mới
           const fileContent = await FileSystem.readAsStringAsync(fileUri, {
             encoding: FileSystem.EncodingType.Base64,
           });
@@ -1284,11 +1285,9 @@ export default function ChatScreen({ navigation, route }) {
           );
 
           alert(
-            `File ${cleanFileName} đã được tải về thành công! Kiểm tra trong thư mục Downloads.`
+            `File ${cleanFileName} đã được tải về thành công! - Kiểm tra trong thư mục Downloads.`
           );
         } else {
-          // Trên iOS, không cần di chuyển file vì fileUri đã nằm trong FileSystem.documentDirectory
-          // Kiểm tra thư mục FileSystem.documentDirectory
           const dirInfo = await FileSystem.getInfoAsync(
             FileSystem.documentDirectory
           );
@@ -1298,23 +1297,17 @@ export default function ChatScreen({ navigation, route }) {
             );
           }
 
-          // Thông báo trước khi mở giao diện chia sẻ
           alert(
             `File ${cleanFileName} đã được tải về. Vui lòng chọn nơi lưu file.`
           );
 
-          // Sử dụng trực tiếp fileUri để chia sẻ
           const isAvailable = await Sharing.isAvailableAsync();
           if (isAvailable) {
-            // Mở giao diện chia sẻ để người dùng tự lưu file
             await Sharing.shareAsync(fileUri);
-
-            // Thông báo sau khi giao diện chia sẻ đóng
             alert(
               `Đã hoàn tất. Vui lòng kiểm tra file ${cleanFileName} tại nơi bạn đã chọn để lưu (ví dụ: Files app, iCloud). Nếu bạn không chọn lưu, file sẽ không được giữ lại.`
             );
           } else {
-            // Nếu không hỗ trợ chia sẻ, thông báo vị trí file
             alert(
               `File ${cleanFileName} đã được tải về thành công! File nằm trong thư mục tài liệu của ứng dụng.`
             );
@@ -1325,15 +1318,14 @@ export default function ChatScreen({ navigation, route }) {
       console.error("Lỗi khi tải file:", error.message);
       alert(`Không thể tải file: ${error.message}`);
     } finally {
-      // Đảm bảo xóa file tạm trong mọi trường hợp (kể cả khi có lỗi)
       if (fileUri) {
         await FileSystem.deleteAsync(fileUri, { idempotent: true });
-        console.log("Đã xóa file tạm:", fileUri); // Debug xóa file
+        console.log("Đã xóa file tạm:", fileUri);
       }
       setIsDownloading(false);
     }
   };
-  // --- Giao diện chính ---
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -1341,9 +1333,10 @@ export default function ChatScreen({ navigation, route }) {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={Platform.OS === "ios" ? -300 : 0}
       >
-        {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate("ChatListScreen")}
+          >
             <Ionicons name="arrow-back" size={24} color="black" />
           </TouchableOpacity>
           <Image
@@ -1382,11 +1375,11 @@ export default function ChatScreen({ navigation, route }) {
               size={24}
               color="black"
               style={styles.icon}
+              onPress={handleEditGroup}
             />
           </View>
         </View>
 
-        {/* Hiển thị tin nhắn đang trả lời */}
         {replyingMessage && (
           <View style={styles.replyingContainer}>
             <Text style={styles.replyingToText}>Đang trả lời:</Text>
@@ -1402,7 +1395,6 @@ export default function ChatScreen({ navigation, route }) {
           </View>
         )}
 
-        {/* Hiển thị tin nhắn đã ghim */}
         {pinnedMessage && (
           <TouchableOpacity
             style={styles.pinnedMessageContainer}
@@ -1426,7 +1418,6 @@ export default function ChatScreen({ navigation, route }) {
           </TouchableOpacity>
         )}
 
-        {/* Hiển thị xem trước media */}
         {previews.length > 0 && (
           <View style={styles.previewContainer}>
             <FlatList
@@ -1439,7 +1430,6 @@ export default function ChatScreen({ navigation, route }) {
           </View>
         )}
 
-        {/* Danh sách tin nhắn */}
         <GiftedChat
           listViewProps={{
             ref: flatListRef,
@@ -1479,42 +1469,51 @@ export default function ChatScreen({ navigation, route }) {
           renderMessageImage={renderMessageImage}
           renderMessageFile={renderMessageFile}
           renderBubble={renderBubble}
-          renderActions={() => (
-            <View style={styles.actionContainer}>
-              <TouchableOpacity
-                onPress={handleImagePick}
-                style={styles.actionButton}
-              >
-                <MaterialIcons name="image" size={24} color="#007AFF" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleVideoPick}
-                style={styles.actionButton}
-              >
-                <MaterialIcons name="videocam" size={24} color="#007AFF" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleFilePick}
-                style={styles.actionButton}
-              >
-                <MaterialIcons name="attach-file" size={24} color="#007AFF" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => setShowEmojiPicker(!showEmojiPicker)}
-              >
-                <MaterialIcons
-                  name="insert-emoticon"
-                  size={24}
-                  color="#007AFF"
-                />
-              </TouchableOpacity>
-            </View>
-          )}
+          renderActions={() =>
+            isGroupActive ? (
+              <View style={styles.actionContainer}>
+                <TouchableOpacity
+                  onPress={handleImagePick}
+                  style={styles.actionButton}
+                  disabled={!isGroupActive} // Vô hiệu hóa nếu nhóm không hoạt động
+                >
+                  <MaterialIcons name="image" size={24} color="#007AFF" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleVideoPick}
+                  style={styles.actionButton}
+                  disabled={!isGroupActive} // Vô hiệu hóa nếu nhóm không hoạt động
+                >
+                  <MaterialIcons name="videocam" size={24} color="#007AFF" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleFilePick}
+                  style={styles.actionButton}
+                  disabled={!isGroupActive} // Vô hiệu hóa nếu nhóm không hoạt động
+                >
+                  <MaterialIcons name="attach-file" size={24} color="#007AFF" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => setShowEmojiPicker(!showEmojiPicker)}
+                  disabled={!isGroupActive} // Vô hiệu hóa nếu nhóm không hoạt động
+                >
+                  <MaterialIcons
+                    name="insert-emoticon"
+                    size={24}
+                    color="#007AFF"
+                  />
+                </TouchableOpacity>
+              </View>
+            ) : null
+          }
           renderSend={(props) => (
             <TouchableOpacity
               style={styles.sendButton}
-              disabled={!(text.trim().length > 0 || previews.length > 0)}
+              disabled={
+                !(text.trim().length > 0 || previews.length > 0) ||
+                !isGroupActive // Vô hiệu hóa nếu nhóm không hoạt động
+              }
               onPress={() => {
                 if (text.trim().length > 0 || previews.length > 0) {
                   const message = {
@@ -1531,14 +1530,14 @@ export default function ChatScreen({ navigation, route }) {
                 name="send"
                 size={30}
                 color={
-                  text.trim().length > 0 || previews.length > 0
+                  (text.trim().length > 0 || previews.length > 0) &&
+                  isGroupActive
                     ? "#7B61FF"
                     : "#ccc"
                 }
               />
             </TouchableOpacity>
           )}
-          alwaysShowSend={true}
           shouldUpdateMessage={(props, nextProps) =>
             props.currentMessage._id === highlightedMessageId ||
             nextProps.currentMessage._id === highlightedMessageId
@@ -1546,7 +1545,6 @@ export default function ChatScreen({ navigation, route }) {
           renderCustomText={renderCustomText}
         />
 
-        {/* Modal chọn emoji */}
         {showEmojiPicker && (
           <Modal
             animationType="slide"
@@ -1565,7 +1563,6 @@ export default function ChatScreen({ navigation, route }) {
           </Modal>
         )}
 
-        {/* Modal tùy chọn tin nhắn */}
         <Modal
           animationType="slide"
           transparent={true}
@@ -1588,7 +1585,6 @@ export default function ChatScreen({ navigation, route }) {
   );
 }
 
-// --- Styles ---
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1632,7 +1628,6 @@ const styles = StyleSheet.create({
   previewVideo: { width: 100, height: 100, borderRadius: 10 },
   previewText: { fontSize: 14, marginVertical: 5 },
   previewRemoveButton: { position: "absolute", top: -10, right: -10 },
-
   actionContainer: {
     flexDirection: "row",
     justifyContent: "center",
@@ -1734,21 +1729,9 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     marginBottom: 5,
   },
-  embeddedRepliedMessageRight: {
-    backgroundColor: "#d3d3d3",
-    alignSelf: "flex-end",
-  },
-  embeddedRepliedMessageLeft: {
-    backgroundColor: "#e0e0e0",
-    alignSelf: "flex-start",
-  },
   embeddedRepliedToText: {
     fontSize: 12,
     color: "gray",
-  },
-  embeddedRepliedToName: {
-    fontWeight: "bold",
-    color: "black",
   },
   fileContainer: {
     flexDirection: "row",
@@ -1756,7 +1739,6 @@ const styles = StyleSheet.create({
     padding: 10,
     backgroundColor: "#f5f5f5",
     borderRadius: 8,
-    borderWidth: 1, // Thêm border để debug
     marginVertical: 5,
   },
   fileInfo: {
@@ -1779,7 +1761,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#7B61FF",
     paddingVertical: 6,
     paddingHorizontal: 10,
-    borderWidth: 1, // Thêm border để debug
     borderRadius: 6,
   },
   downloadText: {
@@ -1787,13 +1768,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginLeft: 4,
   },
-
   friendAvatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
     marginRight: 10,
-    backgroundColor: "lightgray", // Thêm màu nền để kiểm tra xem component có hiển thị không
+    backgroundColor: "lightgray",
   },
   friendItem: {
     flexDirection: "row",

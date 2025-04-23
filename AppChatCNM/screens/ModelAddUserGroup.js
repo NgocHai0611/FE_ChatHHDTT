@@ -11,76 +11,100 @@ import {
   Alert,
   FlatList,
 } from "react-native";
-import {
-  getListFriend,
-  getFriendByPhone,
-  createConversation,
-  unfriend,
-  checkFriendStatus,
-  addFriend,
-  acceptFriendRequest,
-  rejectFriendRequest,
-  getFriendRequests,
-  cancelFriendRequest,
-} from "../services/apiServices";
+import { getListFriend, createConversation } from "../services/apiServices";
 import * as ImagePicker from "expo-image-picker";
 import Entypo from "@expo/vector-icons/Entypo";
-import { CheckBox } from "react-native";
+import { CheckBox } from "react-native-elements";
 import axios from "axios";
 import io from "socket.io-client";
+import { useNavigation } from "@react-navigation/native";
 
-const ModalAddUserToGroup = ({ visible, onClose, idUser, children }) => {
+const ModalAddUserToGroup = ({
+  visible,
+  onClose,
+  idUser,
+  children, // children: nếu typeAction là 'update' thì đây là conversationId
+  typeAction, // 'create' hoặc 'update'
+  existingMembers = [],
+  idUserSelect = "",
+  idGroup = "",
+}) => {
   const [friends, setFriends] = useState([]);
   const [selectedFriends, setSelectedFriends] = useState([]);
   const [avatar, setAvatar] = useState(null);
   const [nameGroup, setNameGroup] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [loading, setLoading] = useState(false);
-  const socket = useRef(null); // Ref cho socket.io
+  const [alreadyInGroup, setAlreadyInGroup] = useState(new Set());
+  const [friendNotToGroup, setFriendNotToGroup] = useState([]);
+
+  const socket = useRef(null);
+  const navigation = useNavigation();
+
+  useEffect(() => {
+    socket.current = io("http://192.168.137.74:8004", {
+      transports: ["websocket"],
+    });
+
+    return () => {
+      if (socket.current) socket.current.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (visible) {
+      fetchFriends();
+      setAlreadyInGroup(new Set(existingMembers)); // existingMembers là danh sách thành viên hiện tại
+    }
+  }, [visible]);
+
+  useEffect(() => {
+    const groupMembersIds = Array.from(alreadyInGroup).map(
+      (member) => member._id
+    );
+
+    const friendsNotInGroup = friends.filter(
+      (friend) => !groupMembersIds.includes(friend._id)
+    );
+
+    setFriendNotToGroup(friendsNotInGroup);
+  }, [friends, alreadyInGroup]); // Re-run when friends or alreadyInGroup changes
+
+  const fetchFriends = async () => {
+    try {
+      setLoading(true);
+      const friendsList = await getListFriend(idUser);
+      setFriends(friendsList);
+    } catch (err) {
+      console.error("Lỗi lấy danh sách bạn:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (friends.length > 0 && idUserSelect) {
+      const found = friends.find((friend) => friend._id === idUserSelect);
+      if (found) {
+        setSelectedFriends((prev) => {
+          if (!prev.includes(idUserSelect)) {
+            return [...prev, idUserSelect];
+          }
+          return prev;
+        });
+      }
+    }
+  }, [friends, idUserSelect]);
 
   const toggleFriendSelection = (id) => {
     setSelectedFriends((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
     );
   };
 
-  // const handlePhoneBlur = async () => {
-  //   if (!phoneNumber.trim()) return;
-
-  //   try {
-  //     const response = await axios.get(
-  //       `http://192.168.2.20:8004/friends/search?phone=${phoneNumber}`
-  //     );
-  //     const user = response.data;
-
-  //     const alreadyExists =
-  //       friends.some((f) => f._id === user._id) ||
-  //       selectedFriends.includes(user._id);
-
-  //     if (!alreadyExists && user._id !== idUser) {
-  //       setFriends((prev) => [...prev, user]);
-  //       setSelectedFriends((prev) => [...prev, user._id]);
-  //     } else {
-  //       Alert.alert("Người dùng đã có trong danh sách hoặc bạn đã chọn rồi.");
-  //     }
-  //   } catch (error) {
-  //     Alert.alert("Không tìm thấy người dùng với số điện thoại này.");
-  //   }
-  // };
-
   const pickImage = async () => {
-    const permissionResult =
-      await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert(
-        "Quyền truy cập bị từ chối",
-        "Vui lòng cấp quyền truy cập thư viện ảnh."
-      );
-      return;
-    }
-
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ImagePicker.MediaType, // Use 'All' or 'Images' directly
       allowsEditing: true,
       aspect: [1, 1],
       quality: 1,
@@ -91,60 +115,41 @@ const ModalAddUserToGroup = ({ visible, onClose, idUser, children }) => {
     }
   };
 
-  useEffect(() => {
-    socket.current = io("http://192.168.2.20:8004", {
-      transports: ["websocket"],
-    });
-
-    const fetchFriends = async () => {
-      setLoading(true);
-      try {
-        const friendsList = await getListFriend(idUser);
-        setFriends(friendsList);
-      } catch (error) {
-        console.error("Failed to fetch friends:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (visible) {
-      fetchFriends();
-    }
-
-    return () => {
-      socket.current.disconnect();
-    };
-  }, [idUser, visible]);
-
   const handleCreateGroupChat = async () => {
     if (!nameGroup.trim()) {
       Alert.alert("Vui lòng nhập tên nhóm.");
       return;
     }
-
     if (selectedFriends.length < 2) {
-      Alert.alert("Cần chọn ít nhất 3 thành viên.");
+      Alert.alert("Cần ít nhất 3 thành viên (bao gồm bạn).");
       return;
     }
-    const fullMemberList = [...new Set([...selectedFriends, idUser])]; // đảm bảo không trùng
+
+    const fullMembers = [...new Set([...selectedFriends, idUser])];
 
     try {
       const formData = new FormData();
       formData.append("name", nameGroup);
       formData.append("isGroup", "true");
       formData.append("groupLeaderId", idUser);
-      formData.append("members", JSON.stringify(fullMemberList));
+      formData.append("members", JSON.stringify(fullMembers));
+
+      // Kiểm tra nếu có avatar thì upload
       if (avatar) {
-        formData.append(
-          "groupAvatar",
-          avatar ||
-            "https://file.hstatic.net/200000503583/file/tao-dang-chup-anh-nhom-lay-loi__5__34b470841bb840e3b2ce25cbe02533ec.jpg"
-        );
+        const fileName = avatar.split("/").pop();
+        const fileType = "image/jpeg"; // fallback type
+
+        console.log(avatar);
+
+        formData.append("groupAvatar", {
+          uri: avatar,
+          name: fileName,
+          type: fileType,
+        });
       }
 
-      const response = await axios.post(
-        "http://192.168.2.20:8004/conversations/createwithimage",
+      const res = await axios.post(
+        "http://192.168.137.74:8004/conversations/createwithimage",
         formData,
         {
           headers: {
@@ -153,22 +158,55 @@ const ModalAddUserToGroup = ({ visible, onClose, idUser, children }) => {
         }
       );
 
+      console.log("Group Info", res.data);
+
       socket.current.emit("createGroup", {
-        conversationId: response.data._id,
+        conversationId: res.data._id,
         userId: idUser,
       });
 
-      console.log("Tạo nhóm thành công!");
-      setNameGroup("");
-      setAvatar(null);
-      setSelectedFriends([]);
-      setPhoneNumber("");
+      resetState();
       onClose();
     } catch (err) {
-      console.error("Lỗi khi tạo nhóm:", err.response?.data || err.message);
-      Alert.alert("Tạo nhóm thất bại. Vui lòng thử lại.");
+      console.error("Tạo nhóm thất bại:", err.response?.data || err.message);
+      Alert.alert("Không thể tạo nhóm.");
     }
   };
+
+  const resetState = () => {
+    setNameGroup("");
+    setAvatar(null);
+    setSelectedFriends([]);
+    setPhoneNumber("");
+  };
+
+  const handleAddUsersToGroup = async () => {
+    console.log(selectedFriends);
+
+    socket.current.emit("addMembersToGroup", {
+      conversationId: idGroup,
+      newMemberIds: selectedFriends,
+      addedBy: idUser,
+    });
+
+    // Reset và đóng modal trước khi điều hướng
+    resetState();
+    onClose();
+
+    // Đảm bảo modal đã được đóng trước khi điều hướng
+    setTimeout(() => {
+      navigation.navigate("ChatListScreen");
+    }, 300); // Chờ một chút để đảm bảo modal đã đóng
+  };
+
+  const renderPhoneInput = () => (
+    <TextInput
+      placeholder="Nhập SĐT để thêm bạn"
+      style={styles.input}
+      value={phoneNumber}
+      onChangeText={setPhoneNumber}
+    />
+  );
 
   return (
     <Modal
@@ -179,61 +217,92 @@ const ModalAddUserToGroup = ({ visible, onClose, idUser, children }) => {
     >
       <View style={styles.overlay}>
         <View style={styles.modal}>
-          <Text style={styles.text}>{children}</Text>
+          <Text style={styles.text}>
+            {typeAction === "create" ? "Tạo Nhóm Mới" : "Thêm Thành Viên"}
+          </Text>
 
-          <TouchableOpacity style={styles.editIcon} onPress={pickImage}>
-            <Entypo name="image-inverted" size={24} color="black" />
-          </TouchableOpacity>
+          {typeAction === "create" && (
+            <>
+              <TouchableOpacity style={styles.editIcon} onPress={pickImage}>
+                <Entypo name="image-inverted" size={24} color="black" />
+              </TouchableOpacity>
 
-          {avatar && (
-            <Image source={{ uri: avatar }} style={styles.avatarPreview} />
-          )}
+              {avatar && (
+                <Image source={{ uri: avatar }} style={styles.avatarPreview} />
+              )}
 
-          <TextInput
-            placeholder="Nhập Tên Nhóm"
-            style={styles.input}
-            value={nameGroup}
-            onChangeText={setNameGroup}
-          />
-          <TextInput
-            placeholder="Nhập Số Điện Thoại Thêm Vào Nhóm"
-            style={styles.input}
-            value={phoneNumber}
-            onChangeText={setPhoneNumber}
-            // onBlur={handlePhoneBlur}
-          />
-
-          {friends.length > 0 ? (
-            <View style={{ height: 300 }}>
-              <FlatList
-                data={friends}
-                keyExtractor={(item) => item._id}
-                renderItem={({ item }) => (
-                  <View style={styles.friendItem}>
-                    <CheckBox
-                      value={selectedFriends.includes(item._id)}
-                      onValueChange={() => toggleFriendSelection(item._id)}
-                    />
-                    <Image
-                      source={{ uri: item.avatar }}
-                      style={styles.friendAvatar}
-                    />
-                    <Text style={styles.friendName}>{item.username}</Text>
-                  </View>
-                )}
-                ListHeaderComponent={() => (
-                  <Text style={{ fontWeight: "bold", marginBottom: 5 }}>
-                    Chọn bạn bè thêm vào nhóm:
-                  </Text>
-                )}
+              <TextInput
+                placeholder="Tên Nhóm"
+                style={styles.input}
+                value={nameGroup}
+                onChangeText={setNameGroup}
               />
-            </View>
-          ) : (
-            <Text>Không có bạn bè nào để thêm vào nhóm.</Text>
+
+              {renderPhoneInput()}
+            </>
           )}
+
+          {typeAction === "update" && renderPhoneInput()}
+
+          {console.log("Danh Sach Ban Be", friends)}
+          {console.log("Danh Sach Nguoi Trong Nhom", alreadyInGroup)}
+
+          <FlatList
+            style={{ maxHeight: 300 }}
+            data={friendNotToGroup}
+            keyExtractor={(item) => item._id}
+            ListHeaderComponent={() => (
+              <Text style={{ fontWeight: "bold", marginBottom: 5 }}>
+                Danh sách bạn:
+              </Text>
+            )}
+            renderItem={({ item }) => {
+              const isExisting = alreadyInGroup.has(item._id);
+              const isSelectedUser = item._id === idUserSelect;
+
+              return (
+                <View style={styles.friendItem}>
+                  {isExisting ? (
+                    <Text style={styles.friendName}>
+                      {item.username}{" "}
+                      <Text style={{ color: "gray" }}>(Đã có)</Text>
+                    </Text>
+                  ) : (
+                    <>
+                      <CheckBox
+                        checked={selectedFriends.includes(item._id)}
+                        onPress={() => {
+                          if (item._id !== idUserSelect)
+                            toggleFriendSelection(item._id);
+                        }}
+                        disabled={item._id === idUserSelect}
+                        containerStyle={{ padding: 0, margin: 0 }}
+                      />
+
+                      <Text style={styles.friendName}>
+                        {item.username}{" "}
+                        {isSelectedUser && (
+                          <Text style={{ color: "gray" }}>(Đã chọn)</Text>
+                        )}
+                      </Text>
+                    </>
+                  )}
+                  <Image
+                    source={{ uri: item.avatar }}
+                    style={styles.friendAvatar}
+                  />
+                </View>
+              );
+            }}
+          />
 
           <View style={styles.buttonRow}>
-            <Button title="Tạo Nhóm" onPress={handleCreateGroupChat} />
+            {typeAction === "create" && (
+              <Button title="Tạo Nhóm" onPress={handleCreateGroupChat} />
+            )}
+            {typeAction === "update" && (
+              <Button title="Thêm" onPress={handleAddUsersToGroup} />
+            )}
             <Button title="Đóng" onPress={onClose} />
           </View>
         </View>
