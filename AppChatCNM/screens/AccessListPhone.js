@@ -28,6 +28,8 @@ import {
   cancelFriendRequest,
 } from "../services/apiServices";
 
+import { NETWORK } from "@env";
+
 const ContactItem = ({
   item,
   onPress,
@@ -131,6 +133,7 @@ const AccessListPhone = ({ route }) => {
   const [incomingRequest, setIncomingRequest] = useState(null); // State để lưu thông tin yêu cầu đến
   const [incomingRequestsList, setIncomingRequestsList] = useState([]);
   const [isRequestModalVisible, setIsRequestModalVisible] = useState(false);
+
   const fetchFriendList = useCallback(async () => {
     if (currentUser && currentUser._id) {
       try {

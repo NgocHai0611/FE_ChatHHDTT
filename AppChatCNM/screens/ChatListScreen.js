@@ -20,6 +20,8 @@ import { getConversations, getUserById } from "../services/apiServices";
 import { io } from "socket.io-client";
 import dayjs from "dayjs";
 import { SwipeListView } from "react-native-swipe-list-view";
+import axios from "axios";
+import ModalAddUserToGroup from "./ModelAddUserGroup";
 
 export default function ChatListScreen({ navigation }) {
   const [hoveredId, setHoveredId] = useState(null);
@@ -31,6 +33,9 @@ export default function ChatListScreen({ navigation }) {
   });
   const [isDeleteModalVisible, setDeleteModalVisible] = useState(false);
   const [selectedConversationId, setSelectedConversationId] = useState(null);
+  const [pinnedMessage, setPinnedMessage] = useState(null);
+  const [isModalVisible, setModalVisible] = useState(false);
+  const [refreshFlag, setRefreshFlag] = useState(true);
 
   // Fetch thông tin user khi đăng nhập
   useEffect(() => {
@@ -68,7 +73,7 @@ export default function ChatListScreen({ navigation }) {
     if (user) {
       fetchConversations();
     }
-  }, [user]);
+  }, [user, isModalVisible]);
 
   // Socket Listener
   useEffect(() => {
@@ -92,19 +97,23 @@ export default function ChatListScreen({ navigation }) {
     return conversations
       .filter((c) => {
         // Kiểm tra nếu cuộc trò chuyện có tin nhắn cuối cùng
-        const hasLatestMessage = c.latestmessage !== undefined && c.latestmessage !== null;
+        const hasLatestMessage =
+          c.latestmessage !== undefined && c.latestmessage !== null;
         const hasValidMembers = c.members && c.members.length > 0;
         const isLastMessageRecalled = c.isLastMessageRecalled || false;
-  
+
         // Điều kiện để hiển thị cuộc trò chuyện:
         const shouldShowConversation =
           hasValidMembers &&
-          (hasLatestMessage &&
+          ((hasLatestMessage &&
             (isLastMessageRecalled ||
               c.latestmessage.trim() !== "" ||
-              c.latestMessageType !== "text") ||
-            c.members.join(" ").toLowerCase().includes(searchText.toLowerCase()));
-  
+              c.latestMessageType !== "text")) ||
+            c.members
+              .join(" ")
+              .toLowerCase()
+              .includes(searchText.toLowerCase()));
+
         return shouldShowConversation;
       })
       .sort((a, b) => {
@@ -112,7 +121,6 @@ export default function ChatListScreen({ navigation }) {
         return new Date(b.lastMessageTime) - new Date(a.lastMessageTime);
       });
   }, [conversations, searchText]);
-
 
   console.log("Filtered Conversations:", filteredConversations);
 
@@ -146,16 +154,75 @@ export default function ChatListScreen({ navigation }) {
     }
   };
 
-  const handleConversationClick = (conversation, otherMember) => {
-    socket.emit("markAsSeen", {
-      conversationId: conversation._id,
-      userId: user._id,
-    });
-    navigation.navigate("ChatScreen", {
-      conversation: conversation,
-      currentUser: user,
-      otherUser: otherMember,
-    });
+  const fetchMessagesByConversationId = async (conversationId) => {
+    try {
+      const response = await fetch(
+        `http://192.168.100.60:8004/messages/get/${conversationId}`
+      );
+      const data = await response.json();
+      const pinnedMessage = data.find((msg) => msg.isPinned === true);
+      setPinnedMessage(pinnedMessage);
+      return data; // data sẽ là mảng messages
+    } catch (error) {
+      console.error("Lỗi khi lấy messages:", error);
+      return [];
+    }
+  };
+
+  const handleConversationClick = async (conversation, otherMember) => {
+    try {
+      // 1. Gọi API lấy danh sách tin nhắn
+      const messages = await fetchMessagesByConversationId(conversation._id);
+
+      let createGroupData = null;
+
+      // 2. Gọi API lấy chi tiết cuộc trò chuyện (xem có phải group không)
+      const res1 = await axios.get(
+        `http://192.168.100.60:8004/conversations/get/${conversation._id}`
+      );
+      const fullConversation = res1.data;
+
+      // 3. Nếu là group chat thì lấy thông tin người tạo nhóm
+      if (fullConversation.createGroup?.userId) {
+        const res2 = await axios.get(
+          `http://192.168.100.60:8004/users/get/${fullConversation.createGroup.userId}`
+        );
+        const userAdd = res2.data;
+
+        createGroupData = {
+          conversationId: conversation._id,
+          userId: userAdd._id,
+          username: userAdd.username,
+          lastMessageId: fullConversation.createGroup.lastMessageId,
+        };
+      }
+
+      // 4. Cập nhật trạng thái đã xem
+      socket.emit("markAsSeen", {
+        conversationId: conversation._id,
+        userId: user._id,
+      });
+
+      if (conversation.lastMessageSenderId !== user._id) {
+        socket.emit("messageSeen", {
+          messageId: conversation.lastMessageId,
+          userId: user._id,
+        });
+      }
+
+      // 5. Điều hướng đến màn hình ChatScreen
+      navigation.navigate("ChatScreen", {
+        conversation: {
+          ...conversation,
+          ...(createGroupData && { createGroup: createGroupData }),
+        },
+        currentUser: user,
+        otherUser: otherMember,
+        messages: messages,
+      });
+    } catch (error) {
+      console.error("Lỗi khi chọn đoạn chat:", error);
+    }
   };
 
   const handleDeleteChat = (conversationId) => {
@@ -190,7 +257,18 @@ export default function ChatListScreen({ navigation }) {
           <Image source={{ uri: user.avatar }} style={styles.headerAvatar} />
           <Text style={styles.username}>{user.username}</Text>
         </View>
-        <Text style={styles.title}>Chats</Text>
+
+        <View>
+          <MaterialIcons
+            name="group-add"
+            size={24}
+            color="black"
+            visible={isModalVisible}
+            typeAction="create"
+            onPress={() => setModalVisible(true)}
+          />
+          <Text style={styles.title}>Chats</Text>
+        </View>
       </View>
 
       {/* Phần body */}
@@ -222,12 +300,35 @@ export default function ChatListScreen({ navigation }) {
         data={filteredConversations}
         keyExtractor={(item) => item._id}
         renderItem={({ item }) => {
-          const otherMember = item.members.find(
-            (member) => member._id !== user._id
-          );
+          // Kiểm tra loại cuộc trò chuyện là nhóm hay cá nhân bằng item.isGroup
+          const isGroupChat = item.isGroup;
+
+          // Tìm thành viên khác nếu không phải nhóm
+          const otherMember = !isGroupChat
+            ? item.members.find((member) => member._id !== user._id)
+            : null;
+
+          // Định nghĩa avatar cho nhóm hoặc cá nhân
+          const avatarSource = isGroupChat
+            ? {
+                uri:
+                  item.groupAvatar ||
+                  "https://file.hstatic.net/200000503583/file/tao-dang-chup-anh-nhom-lay-loi__5__34b470841bb840e3b2ce25cbe02533ec.jpg", // Fallback cho avatar nhóm
+              }
+            : {
+                uri:
+                  otherMember?.avatar ||
+                  "https://res.cloudinary.com/dkmwjkajj/image/upload/v1744086751/rdlye9nsldaprn40ozmd.jpg", // Fallback cho avatar cá nhân
+              };
+
+          // Thời gian của tin nhắn cuối cùng
           const lastMessageTime = formatMessageTime(item.lastMessageTime);
+
+          // Kiểm tra xem tin nhắn cuối cùng có phải từ người dùng hiện tại không
           const isLastMessageFromCurrentUser =
             item.lastMessageSenderId === user._id;
+
+          // Số tin nhắn chưa đọc
           const unreadCountObject = item.unreadCounts.find(
             (uc) => uc.userId === user._id
           );
@@ -244,15 +345,18 @@ export default function ChatListScreen({ navigation }) {
               onPress={() => handleConversationClick(item, otherMember)}
             >
               <View style={styles.avatarContainer}>
-                <Image
-                  source={{ uri: otherMember.avatar }}
-                  style={styles.chatAvatar}
-                />
-                {item.isOnline && <View style={styles.onlineIndicator} />}
+                <Image source={avatarSource} style={styles.chatAvatar} />
+                {/* Nếu không phải nhóm và người này đang online, hiển thị vòng tròn xanh */}
+                {!isGroupChat && item.isOnline && (
+                  <View style={styles.onlineIndicator} />
+                )}
               </View>
               <View style={styles.chatDetails}>
                 <View style={styles.chatInfo}>
-                  <Text style={styles.name}>{otherMember.username}</Text>
+                  <Text style={styles.name}>
+                    {isGroupChat ? item.name : otherMember?.username}
+                  </Text>
+
                   <Text style={styles.lastMessage}>
                     {isLastMessageFromCurrentUser
                       ? `Bạn: ${item.latestmessage}`
@@ -328,6 +432,19 @@ export default function ChatListScreen({ navigation }) {
       <View style={styles.footer}>
         <TouchableOpacity style={styles.iconFooter}>
           <MaterialIcons name="chat" size={30} color="#b73bff" />
+
+          <ModalAddUserToGroup
+            idUser={user._id}
+            visible={isModalVisible}
+            typeAction={"create"}
+            onClose={() => {
+              setModalVisible(false);
+              setRefreshFlag((prev) => !prev);
+            }}
+            existingMembers={[]}
+          >
+            Tạo Nhóm
+          </ModalAddUserToGroup>
           <Text style={styles.textFooter}>Chats</Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -588,5 +705,10 @@ const styles = StyleSheet.create({
   },
   backTextWhite: {
     color: "#FFF",
+  },
+  systemMessageText: {
+    fontStyle: "italic",
+    color: "gray",
+    textAlign: "center",
   },
 });

@@ -12,7 +12,7 @@ import {
   Platform,
   Dimensions,
   FlatList,
-  ActivityIndicator
+  ActivityIndicator,
 } from "react-native";
 import { GiftedChat, Bubble, Send } from "react-native-gifted-chat";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
@@ -36,35 +36,33 @@ import io from "socket.io-client";
 import * as FileSystem from "expo-file-system";
 import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
+import { v4 as uuidv4 } from "uuid";
 
-// Component chính cho màn hình chat
 export default function ChatScreen({ navigation, route }) {
-  // --- Khởi tạo state và ref ---
-  const [messages, setMessages] = useState([]); // Danh sách tin nhắn
-  const [previews, setPreviews] = useState([]); // Xem trước nhiều media
-  const [text, setText] = useState(""); // Nội dung tin nhắn đang nhập
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false); // Hiển thị bảng chọn emoji
-  const [selectedMessage, setSelectedMessage] = useState(null); // Tin nhắn được chọn khi nhấn giữ
-  const [isMessageModalVisible, setIsMessageModalVisible] = useState(false); // Hiển thị modal tùy chọn tin nhắn
-  const [pinnedMessage, setPinnedMessage] = useState(null); // Tin nhắn được ghim
-  const [replyingMessage, setReplyingMessage] = useState(null); // Tin nhắn đang trả lời
-  const [highlightedMessageId, setHighlightedMessageId] = useState(null); // ID tin nhắn được làm nổi bật
-  const [scrollCompleted, setScrollCompleted] = useState(false); // Trạng thái cuộn hoàn tất
-  const flatListRef = useRef(null); // Ref cho danh sách tin nhắn
- 
-  const socket = useRef(null); // Ref cho socket.io
-  const { conversation, currentUser, otherUser } = route.params; // Thông tin cuộc trò chuyện, người dùng hiện tại và đối phương
-
-  const [isForwardModalVisible, setIsForwardModalVisible] = useState(false); // Hiển thị modal chọn bạn bè
-  const [friendList, setFriendList] = useState([]); // Danh sách bạn bè (cuộc trò chuyện)
+  const [messages, setMessages] = useState([]);
+  const [previews, setPreviews] = useState([]);
+  const [text, setText] = useState("");
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState(null);
+  const [isMessageModalVisible, setIsMessageModalVisible] = useState(false);
+  const [pinnedMessage, setPinnedMessage] = useState(null);
+  const [replyingMessage, setReplyingMessage] = useState(null);
+  const [highlightedMessageId, setHighlightedMessageId] = useState(null);
+  const [scrollCompleted, setScrollCompleted] = useState(false);
+  const flatListRef = useRef(null);
+  const socket = useRef(null);
+  const { conversation, currentUser, otherUser } = route.params;
+  const [isForwardModalVisible, setIsForwardModalVisible] = useState(false);
+  const [friendList, setFriendList] = useState([]);
   const [isDownloading, setIsDownloading] = useState(false);
-  
-  // --- Kết nối và xử lý socket ---
+  const [isGroupActive, setIsGroupActive] = useState(true); // Giả sử nhóm đang hoạt động ban đầu
+
+  // Kết nối socket và xử lý các sự kiện
   useEffect(() => {
-    // Khởi tạo socket và kết nối tới server
     socket.current = io("http://192.168.100.60:8004", {
       transports: ["websocket"],
     });
+
     socket.current.on("connect", () => {
       console.log("Socket connected: ", socket.current.id);
       socket.current.emit("markAsSeen", {
@@ -80,26 +78,26 @@ export default function ChatScreen({ navigation, route }) {
         text: newMessage.text || "",
         createdAt: new Date(newMessage.createdAt),
         user: {
-          _id: newMessage.sender._id,
-          name: newMessage.sender.username,
-          avatar: newMessage.sender.avatar,
+          _id: newMessage.sender?._id || "system",
+          name: newMessage.sender?.username || "Hệ thống",
+          avatar: newMessage.sender?.avatar || "",
         },
         image: newMessage.imageUrl || undefined,
         video: newMessage.videoUrl || undefined,
         file: newMessage.fileUrl || undefined,
         fileName: newMessage.fileName || undefined,
         isRecalled: newMessage.isRecalled || false,
-        isPinned: newMessage.isPinned || false, // Thêm isPinned
+        isPinned: newMessage.isPinned || false,
         replyTo: newMessage.replyTo || null,
+        messageType: newMessage.messageType || "text",
       };
       setMessages((prevMessages) => {
         if (prevMessages.find((msg) => msg._id === formattedMessage._id)) {
           return prevMessages;
         }
         if (formattedMessage.isPinned) {
-        // Cập nhật pinnedMessage nếu tin nhắn mới được ghim
-        setPinnedMessage(formattedMessage);
-      }
+          setPinnedMessage(formattedMessage);
+        }
         return GiftedChat.append(prevMessages, [formattedMessage]);
       });
     });
@@ -125,10 +123,18 @@ export default function ChatScreen({ navigation, route }) {
     // Lắng nghe sự kiện tin nhắn được cập nhật (thu hồi)
     socket.current.on("refreshMessages", (data) => {
       if (data.conversationId === conversation._id) {
-        fetchMessages(); // Làm mới danh sách tin nhắn
+        fetchMessages();
       }
     });
-    // Lấy danh sách bạn bè từ API
+
+    // Lắng nghe sự kiện cập nhật phó nhóm
+    socket.current.on("groupUpdatedToggleDeputy", ({ conversationId }) => {
+      if (conversationId === conversation._id) {
+        fetchMessages(); // Làm mới tin nhắn để hiển thị thông báo hệ thống
+      }
+    });
+
+    // Lấy danh sách bạn bè
     const fetchFriends = async () => {
       try {
         const friends = await getListFriend(currentUser._id);
@@ -140,13 +146,20 @@ export default function ChatScreen({ navigation, route }) {
     };
     fetchFriends();
 
-    // Ngắt kết nối socket khi component unmount
     return () => {
       if (socket.current) {
         socket.current.disconnect();
       }
     };
   }, [conversation._id]);
+
+  useEffect(() => {
+    if (conversation.isDissolved === true) {
+      setIsGroupActive(false);
+    } else {
+      setIsGroupActive(true); // Nếu nhóm hoạt động lại
+    }
+  }, [conversation.isDissolved]);
 
   // Đánh dấu tin nhắn là đã xem khi màn hình được focus
   useFocusEffect(
@@ -165,211 +178,254 @@ export default function ChatScreen({ navigation, route }) {
     }, [messages, currentUser._id])
   );
 
-  // --- Lấy danh sách tin nhắn từ server ---
+  // Lấy danh sách tin nhắn từ server
   const fetchMessages = async () => {
     try {
       const data = await getMessages(conversation._id);
-      const formattedMessages = data.map((msg) => {
-        const formattedMsg = {
-          _id: msg._id,
-          text: msg.isRecalled ? "Tin nhắn đã bị thu hồi" : msg.text || "",
-          createdAt: new Date(msg.createdAt),
-          user: {
-            _id: msg.senderId._id,
-            name: msg.senderId.username,
-            avatar: msg.senderId.avatar,
-          },
-          image: msg.imageUrl || undefined,
-          video: msg.videoUrl || undefined,
-          file: msg.fileUrl || undefined,
-          fileName: msg.fileName || undefined,
-          seenBy: msg.seenBy || [],
-          isPinned: msg.isPinned || false,
-          isRecalled: msg.isRecalled || false,
-          deletedFrom: msg.deletedFrom || [],
-          replyTo: msg.replyTo || null,
-        };
-        console.log("Formatted message:", formattedMsg);
-        return formattedMsg;
-      });
+      console.log("📥 Data Fetch message", data);
 
-      const filteredMessages = formattedMessages.filter(
-        (msg) => !msg.deletedFrom?.includes(currentUser._id)
-      );
+      if (conversation.isDissolved === true) {
+        setIsGroupActive(false);
+      }
+
+      const formattedMessages = data
+        .map((msg) => {
+          let userInfo;
+
+          if (msg.messageType === "system") {
+            userInfo = {
+              _id: "system",
+              name: "Hệ thống",
+            };
+          } else {
+            userInfo = {
+              _id: msg.senderId?._id ?? "unknown",
+              name: msg.senderId?.username ?? "Không xác định",
+              avatar: msg.senderId?.avatar ?? "",
+            };
+          }
+
+          const formattedMsg = {
+            _id: msg._id ?? `${Date.now()}-${Math.random()}`,
+            text: msg.isRecalled ? "Tin nhắn đã bị thu hồi" : msg.text || "",
+            createdAt: msg.createdAt ? new Date(msg.createdAt) : new Date(),
+            user: userInfo,
+            image: msg.imageUrl || undefined,
+            video: msg.videoUrl || undefined,
+            file: msg.fileUrl || undefined,
+            fileName: msg.fileName || undefined,
+            seenBy: msg.seenBy || [],
+            isPinned: msg.isPinned || false,
+            isRecalled: msg.isRecalled || false,
+            deletedFrom: msg.deletedFrom || [],
+            replyTo: msg.replyTo || null,
+            messageType: msg.messageType || "text",
+          };
+
+          if (!formattedMsg.user || !formattedMsg.user._id) {
+            console.warn("❌ Bỏ qua message thiếu user._id:", formattedMsg);
+            return null;
+          }
+
+          return formattedMsg;
+        })
+        .filter(Boolean);
+
+      const filteredMessages = formattedMessages.filter((msg) => {
+        if (!currentUser || !currentUser._id) return true;
+        return !msg.deletedFrom?.includes(currentUser._id);
+      });
       const pinned = formattedMessages.find((msg) => msg.isPinned);
       setPinnedMessage(pinned || null);
       setMessages(filteredMessages.reverse());
     } catch (error) {
-      console.error("Failed to fetch messages:", error);
-      alert("Failed to fetch messages. Please try again.");
+      console.error("🚨 Failed to fetch messages:", error);
+      alert("Không thể tải tin nhắn. Vui lòng thử lại.");
     }
   };
 
   useEffect(() => {
-    fetchMessages();
-  }, [conversation._id]);
-
-  // --- Gửi tin nhắn ---
-  const onSend = useCallback(async (newMessages = []) => {
-    const message = newMessages[0];
-    let messageData = [];
-  
-    // Xử lý tin nhắn văn bản (nếu có)
-    if (message.text && message.text.trim() !== "") {
-      messageData.push({
-        conversationId: conversation._id,
-        senderId: currentUser._id,
-        messageType: "text",
-        text: message.text,
-        imageUrl: "",
-        videoUrl: "",
-        fileUrl: "",
-        fileName: "",
-        iconCode: "",
-        replyTo: replyingMessage ? replyingMessage._id : null,
-      });
+    if (conversation._id && currentUser) {
+      fetchMessages();
     }
-  
-    // Xử lý media (ảnh, video, file) từ previews
-    if (previews.length > 0) {
-      try {
-        const files = previews.map((preview) => ({
-          uri: preview.uri,
-          name: preview.name,
-          type: preview.type,
-        }));
-  
-        console.log("Files to upload:", files);
-        const responseData = await uploadFiles(files, conversation._id, currentUser._id);
-  
-        if (responseData && responseData.success) {
-          // Xử lý ảnh
-          if (responseData.imageUrls && responseData.imageUrls.length > 0) {
-            responseData.imageUrls.forEach((url) => {
-              messageData.push({
-                conversationId: conversation._id,
-                senderId: currentUser._id,
-                messageType: "image",
-                text: "",
-                imageUrl: url,
-                videoUrl: "",
-                fileUrl: "",
-                fileName: "",
-                iconCode: "",
-                replyTo: replyingMessage ? replyingMessage._id : null,
+  }, [conversation._id, currentUser]);
+
+  const handleEditGroup = () => {
+    navigation.navigate("InfoChat", {
+      conversation,
+      currentUser,
+      otherUser,
+    });
+  };
+
+  // Gửi tin nhắn
+  const onSend = useCallback(
+    async (newMessages = []) => {
+      const message = newMessages[0];
+      let messageData = [];
+
+      if (message.text && message.text.trim() !== "") {
+        messageData.push({
+          conversationId: conversation._id,
+          senderId: currentUser._id,
+          messageType: "text",
+          text: message.text,
+          imageUrl: "",
+          videoUrl: "",
+          fileUrl: "",
+          fileName: "",
+          iconCode: "",
+          replyTo: replyingMessage ? replyingMessage._id : null,
+        });
+      }
+
+      if (previews.length > 0) {
+        try {
+          const files = previews.map((preview) => ({
+            uri: preview.uri,
+            name: preview.name,
+            type: preview.type,
+          }));
+
+          console.log("Files to upload:", files);
+          const responseData = await uploadFiles(
+            files,
+            conversation._id,
+            currentUser._id
+          );
+
+          if (responseData && responseData.success) {
+            if (responseData.imageUrls && responseData.imageUrls.length > 0) {
+              responseData.imageUrls.forEach((url) => {
+                messageData.push({
+                  conversationId: conversation._id,
+                  senderId: currentUser._id,
+                  messageType: "image",
+                  text: "",
+                  imageUrl: url,
+                  videoUrl: "",
+                  fileUrl: "",
+                  fileName: "",
+                  iconCode: "",
+                  replyTo: replyingMessage ? replyingMessage._id : null,
+                });
               });
-            });
-          }
-  
-          // Xử lý video
-          if (responseData.videoUrls && responseData.videoUrls.length > 0) {
-            responseData.videoUrls.forEach((url, index) => {
-              const videoPreview = previews.find((p) => p.type.includes("video"));
-              messageData.push({
-                conversationId: conversation._id,
-                senderId: currentUser._id,
-                messageType: "video",
-                text: "",
-                imageUrl: "",
-                videoUrl: url,
-                fileUrl: "",
-                fileName: videoPreview?.name || `video_${index}`,
-                iconCode: "",
-                replyTo: replyingMessage ? replyingMessage._id : null,
+            }
+
+            if (responseData.videoUrls && responseData.videoUrls.length > 0) {
+              responseData.videoUrls.forEach((url, index) => {
+                const videoPreview = previews.find((p) =>
+                  p.type.includes("video")
+                );
+                messageData.push({
+                  conversationId: conversation._id,
+                  senderId: currentUser._id,
+                  messageType: "video",
+                  text: "",
+                  imageUrl: "",
+                  videoUrl: url,
+                  fileUrl: "",
+                  fileName: videoPreview?.name || `video_${index}`,
+                  iconCode: "",
+                  replyTo: replyingMessage ? replyingMessage._id : null,
+                });
               });
-            });
-          }
-  
-          // Xử lý file
-          if (responseData.fileUrls && responseData.fileUrls.length > 0) {
-            responseData.fileUrls.forEach((url, index) => {
-              const filePreview = previews.find((p) => p.type.includes("application") || p.type.includes("text"));
-              if (!filePreview) {
-                console.warn("No matching file preview found for index:", index);
-                return;
-              }
-              messageData.push({
-                conversationId: conversation._id,
-                senderId: currentUser._id,
-                messageType: "file",
-                text: `📄 ${filePreview.name}`,
-                imageUrl: "",
-                videoUrl: "",
-                fileUrl: url,
-                fileName: filePreview.name,
-                iconCode: "",
-                replyTo: replyingMessage ? replyingMessage._id : null,
+            }
+
+            if (responseData.fileUrls && responseData.fileUrls.length > 0) {
+              responseData.fileUrls.forEach((url, index) => {
+                const filePreview = previews.find(
+                  (p) =>
+                    p.type.includes("application") || p.type.includes("text")
+                );
+                if (!filePreview) {
+                  console.warn(
+                    "No matching file preview found for index:",
+                    index
+                  );
+                  return;
+                }
+                messageData.push({
+                  conversationId: conversation._id,
+                  senderId: currentUser._id,
+                  messageType: "file",
+                  text: `📄 ${filePreview.name}`,
+                  imageUrl: "",
+                  videoUrl: "",
+                  fileUrl: url,
+                  fileName: filePreview.name,
+                  iconCode: "",
+                  replyTo: replyingMessage ? replyingMessage._id : null,
+                });
               });
-            });
-          }
-        } else {
-          console.error("Upload failed with response:", responseData);
-          alert(responseData?.message || "Lỗi khi tải lên files.");
-          return;
-        }
-      } catch (error) {
-        console.error("Lỗi khi gửi tin nhắn media:", error);
-        let errorMessage = "Không thể gửi tin nhắn.";
-        if (error.response?.data) {
-          if (typeof error.response.data === "string") {
-            if (error.response.data.includes("File type not allowed")) {
-              errorMessage = "Loại file không được phép. Chỉ hỗ trợ PDF, DOC, DOCX, TXT, ZIP, XLS, XLSX.";
-            } else {
-              errorMessage = "Lỗi server không xác định. Vui lòng thử lại.";
             }
           } else {
-            errorMessage = error.response.data.message || error.message;
+            console.error("Upload failed with response:", responseData);
+            alert(responseData?.message || "Lỗi khi tải lên files.");
+            return;
           }
-        } else {
-          errorMessage = error.message || "Lỗi kết nối server.";
+        } catch (error) {
+          console.error("Lỗi khi gửi tin nhắn media:", error);
+          let errorMessage = "Không thể gửi tin nhắn.";
+          if (error.response?.data) {
+            if (typeof error.response.data === "string") {
+              if (error.response.data.includes("File type not allowed")) {
+                errorMessage =
+                  "Loại file không được phép. Chỉ hỗ trợ PDF, DOC, DOCX, TXT, ZIP, XLS, XLSX.";
+              } else {
+                errorMessage = "Lỗi server không xác định. Vui lòng thử lại.";
+              }
+            } else {
+              errorMessage = error.response.data.message || error.message;
+            }
+          } else {
+            errorMessage = error.message || "Lỗi kết nối server.";
+          }
+          alert(errorMessage);
+          return;
         }
-        alert(errorMessage);
+      }
+
+      if (messageData.length === 0) {
         return;
       }
-    }
-  
-    // Nếu không có tin nhắn văn bản hoặc media, không gửi
-    if (messageData.length === 0) {
-      return; // Không hiển thị alert để tránh làm phiền người dùng
-    }
-  
-    // Gửi tất cả tin nhắn qua socket
-    try {
-      messageData.forEach((data) => {
-        socket.current.emit("sendMessage", data);
-      });
-      setReplyingMessage(null);
-      setPreviews([]); // Xóa previews sau khi gửi
-      setText(""); // Xóa văn bản sau khi gửi
-    } catch (error) {
-      console.error("Error sending message:", error);
-      alert("Không thể gửi tin nhắn. Vui lòng thử lại.");
-    }
-  }, [conversation._id, currentUser._id, previews, replyingMessage]);
 
+      try {
+        messageData.forEach((data) => {
+          socket.current.emit("sendMessage", data);
+        });
+        setReplyingMessage(null);
+        setPreviews([]);
+        setText("");
+      } catch (error) {
+        console.error("Error sending message:", error);
+        alert("Không thể gửi tin nhắn. Vui lòng thử lại.");
+      }
+    },
+    [conversation._id, currentUser._id, previews, replyingMessage]
+  );
 
-
-  // --- Xử lý media (ảnh, video, file) ---
+  // Xử lý chọn ảnh
   const handleImagePick = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
         alert("Cần cấp quyền truy cập thư viện để chọn ảnh!");
         return;
       }
-  
+
       let result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         quality: 1,
         base64: false,
       });
-  
+
       if (!result.canceled) {
         const selectedImages = result.assets.map((asset) => {
           const extension = asset.uri.split(".").pop()?.toLowerCase();
-          const mimeType =
-            extension === "png" ? "image/png" : "image/jpeg"; // Đảm bảo MIME type chính xác
+          const mimeType = extension === "png" ? "image/png" : "image/jpeg";
           return {
             uri: asset.uri,
             name: asset.fileName || `image_${Date.now()}.${extension}`,
@@ -383,25 +439,28 @@ export default function ChatScreen({ navigation, route }) {
       alert("Lỗi khi chọn ảnh: " + error.message);
     }
   };
+
+  // Xử lý chọn video
   const handleVideoPick = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
         alert("Cần cấp quyền truy cập thư viện để chọn video!");
         return;
       }
-  
+
       let result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Videos,
         allowsEditing: true,
         quality: 1,
         base64: false,
       });
-  
+
       if (!result.canceled) {
         const selectedVideos = result.assets.map((asset) => {
           const extension = asset.uri.split(".").pop()?.toLowerCase();
-          let mimeType = "video/mp4"; // Mặc định
+          let mimeType = "video/mp4";
           switch (extension) {
             case "mov":
               mimeType = "video/quicktime";
@@ -431,6 +490,8 @@ export default function ChatScreen({ navigation, route }) {
       alert("Lỗi khi chọn video: " + error.message);
     }
   };
+
+  // Xử lý chọn file
   const handleFilePick = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -449,13 +510,11 @@ export default function ChatScreen({ navigation, route }) {
         console.log("File pick canceled");
         return;
       }
-  
+
       const selectedFiles = result.assets.map((asset) => {
-        // Lấy MIME type từ DocumentPicker
         let mimeType = asset.mimeType || "application/octet-stream";
         const name = asset.name || `file_${Date.now()}`;
-  
-        // Kiểm tra MIME type hợp lệ
+
         const validMimeTypes = [
           "application/pdf",
           "application/msword",
@@ -469,8 +528,7 @@ export default function ChatScreen({ navigation, route }) {
           console.error(`Unsupported MIME type: ${mimeType}`);
           throw new Error(`Loại file không được hỗ trợ: ${name}`);
         }
-  
-        // Xử lý tên file
+
         let extension = "bin";
         switch (mimeType) {
           case "application/pdf":
@@ -497,10 +555,9 @@ export default function ChatScreen({ navigation, route }) {
           default:
             console.warn(`No extension mapped for MIME type: ${mimeType}`);
         }
-  
-        // Đảm bảo tên file có phần mở rộng đúng
+
         const fileName = name.includes(".") ? name : `${name}.${extension}`;
-  
+
         const fileData = {
           uri: asset.uri,
           name: fileName,
@@ -513,41 +570,57 @@ export default function ChatScreen({ navigation, route }) {
         }
         return fileData;
       });
-  
+
       setPreviews((prev) => [...prev, ...selectedFiles]);
     } catch (error) {
       console.error("Error picking document:", error);
       alert(`Lỗi khi chọn tài liệu: ${error.message}`);
     }
   };
-// --- Render preview item ---
-const renderPreviewItem = ({ item }) => (
-  <View style={styles.previewItem}>
-    {item.type.includes("image") && (
-      <Image source={{ uri: item.uri }} style={styles.previewImage} />
-    )}
-    {item.type.includes("video") && (
-      <Video
-        source={{ uri: item.uri }}
-        style={styles.previewVideo}
-        useNativeControls
-      />
-    )}
-    {item.type.includes("application") && (
-      <Text style={styles.previewText}>📄 {item.name}</Text>
-    )}
-    <TouchableOpacity
-      style={styles.previewRemoveButton}
-      onPress={() => setPreviews((prev) => prev.filter((p) => p.uri !== item.uri))}
-    >
-      <Ionicons name="close-circle" size={24} color="red" />
-    </TouchableOpacity>
-  </View>
-);
-  // --- Render các loại tin nhắn (ảnh, video, file) ---
-  // Hiển thị tin nhắn ảnh
- 
 
+  // Render preview item
+  const renderPreviewItem = ({ item }) => (
+    <View style={styles.previewItem}>
+      {item.type.includes("image") && (
+        <Image source={{ uri: item.uri }} style={styles.previewImage} />
+      )}
+      {item.type.includes("video") && (
+        <Video
+          source={{ uri: item.uri }}
+          style={styles.previewVideo}
+          useNativeControls
+        />
+      )}
+      {item.type.includes("application") && (
+        <Text style={styles.previewText}>📄 {item.name}</Text>
+      )}
+      <TouchableOpacity
+        style={styles.previewRemoveButton}
+        onPress={() =>
+          setPreviews((prev) => prev.filter((p) => p.uri !== item.uri))
+        }
+      >
+        <Ionicons name="close-circle" size={24} color="red" />
+      </TouchableOpacity>
+    </View>
+  );
+
+  const renderGroupStatus = () => {
+    if (conversation.isDissolved) {
+      setIsGroupActive(false);
+
+      return (
+        <View style={styles.dissolvedNotification}>
+          <Text style={styles.dissolvedText}>
+            Nhóm này đã bị giải tán. Bạn không thể gửi tin nhắn hoặc ảnh.
+          </Text>
+        </View>
+      );
+    }
+    return null;
+  };
+
+  // Render tin nhắn ảnh
   const renderMessageImage = (props) => {
     const { currentMessage } = props;
     if (currentMessage.isRecalled) {
@@ -558,14 +631,14 @@ const renderPreviewItem = ({ item }) => (
       );
     }
     const imageUrl = currentMessage.image;
-    const fileName = `image_${Date.now()}.jpg`; // Tạo tên file động
+    const fileName = `image_${Date.now()}.jpg`;
 
     const handleDownload = async () => {
       if (!imageUrl) {
         alert("Không tìm thấy link tải xuống cho hình ảnh này.");
         return;
       }
-     await downloadFile(imageUrl, fileName);
+      await downloadFile(imageUrl, fileName);
     };
 
     return (
@@ -591,17 +664,17 @@ const renderPreviewItem = ({ item }) => (
           style={styles.downloadIconContainer}
           disabled={isDownloading}
         >
-              {isDownloading ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <MaterialIcons name="file-download" size={20} color="#fff" />
-                )}
+          {isDownloading ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <MaterialIcons name="file-download" size={20} color="#fff" />
+          )}
         </TouchableOpacity>
       </View>
     );
   };
 
-  // Hiển thị tin nhắn video
+  // Render tin nhắn video
   const renderMessageVideo = (props) => {
     const { currentMessage } = props;
     if (currentMessage.isRecalled) {
@@ -635,16 +708,16 @@ const renderPreviewItem = ({ item }) => (
           disabled={isDownloading}
         >
           {isDownloading ? (
-    <ActivityIndicator size="small" color="#fff" />
-  ) : (
-    <MaterialIcons name="file-download" size={20} color="#fff" />
-  )}
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <MaterialIcons name="file-download" size={20} color="#fff" />
+          )}
         </TouchableOpacity>
       </View>
     );
   };
 
-  // Hiển thị tin nhắn file
+  // Render tin nhắn file
   const renderMessageFile = (props) => {
     const { currentMessage } = props;
     if (currentMessage.isRecalled) {
@@ -654,39 +727,36 @@ const renderPreviewItem = ({ item }) => (
         </Text>
       );
     }
-     const fileName =
+    const fileName =
       currentMessage.fileName ||
       currentMessage.text?.replace("📄 ", "") ||
       "Tệp không xác định";
-      const fileType = fileName.split('.').pop().toUpperCase() || 'UNKNOWN';
+    const fileType = fileName.split(".").pop().toUpperCase() || "UNKNOWN";
 
     const fileUrl = currentMessage.file;
-    // Giới hạn tên file (ví dụ: 20 ký tự)
     const truncatedFileName =
       fileName.length > 10 ? `${fileName.substring(0, 17)}...` : fileName;
 
     const handleDownload = async () => {
       if (!fileUrl) {
-        alert('Không tìm thấy link tải xuống cho file này.');
+        alert("Không tìm thấy link tải xuống cho file này.");
         return;
       }
       await downloadFile(fileUrl, fileName);
     };
-  
-    // Hàm để chọn biểu tượng hoặc văn bản dựa trên loại tệp
+
     const renderFileIcon = () => {
-     
       switch (fileType.toLowerCase()) {
-        case 'doc':
-        case 'docx':
+        case "doc":
+        case "docx":
           return <MaterialIcons name="description" size={24} color="#fff" />;
-        case 'pdf':
+        case "pdf":
           return <MaterialIcons name="picture-as-pdf" size={24} color="#fff" />;
         default:
-          return <Ionicons name="document" size={24} color="#fff" />; // Biểu tượng chung cho các loại tệp khác
+          return <Ionicons name="document" size={24} color="#fff" />;
       }
     };
-  
+
     return (
       <TouchableOpacity
         onLongPress={() => {
@@ -694,64 +764,58 @@ const renderPreviewItem = ({ item }) => (
           setIsMessageModalVisible(true);
         }}
         style={{
-          flexDirection: 'row',
-          alignItems: 'center',
+          flexDirection: "row",
+          alignItems: "center",
           padding: 10,
-          backgroundColor: '#f5f5f5',
+          backgroundColor: "#f5f5f5",
           borderRadius: 8,
           marginVertical: 5,
         }}
       >
-        {/* File Icon */}
         <View
           style={{
             width: 40,
             height: 40,
-            backgroundColor: '#0078D4', // Blue background
+            backgroundColor: "#0078D4",
             borderRadius: 5,
-            justifyContent: 'center',
-            alignItems: 'center',
+            justifyContent: "center",
+            alignItems: "center",
             marginRight: 10,
           }}
         >
           {renderFileIcon()}
         </View>
         <Text>{truncatedFileName}</Text>
-       
-  
-       
-        
-          <TouchableOpacity
-            onPress={handleDownload}
-            style={{
-              backgroundColor: '#7B61FF',
-              paddingVertical: 5,
-              paddingHorizontal: 10,
-              borderRadius: 5,
-            }}
-            disabled={isDownloading}
-          >
-            {isDownloading ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={{ color: '#fff', fontSize: 12 }}>Tải xuống</Text>
-            )}
-          </TouchableOpacity>
-      
+
+        <TouchableOpacity
+          onPress={handleDownload}
+          style={{
+            backgroundColor: "#7B61FF",
+            paddingVertical: 5,
+            paddingHorizontal: 10,
+            borderRadius: 5,
+          }}
+          disabled={isDownloading}
+        >
+          {isDownloading ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={{ color: "#fff", fontSize: 12 }}>Tải xuống</Text>
+          )}
+        </TouchableOpacity>
       </TouchableOpacity>
     );
   };
 
-
-  // --- Xử lý tin nhắn (ghim, thu hồi, trả lời, xóa) ---
   // Ghim tin nhắn
   const handlePinMessage = async () => {
     if (selectedMessage) {
       try {
-        const response = await pinMessage(selectedMessage._id, { isPinned: true });
-        console.log("pinMessage response:", response); // Debug API response
+        const response = await pinMessage(selectedMessage._id, {
+          isPinned: true,
+        });
+        console.log("pinMessage response:", response);
         if (response.isPinned) {
-          // Bỏ ghim các tin nhắn cũ cục bộ
           setMessages((prevMessages) =>
             prevMessages.map((msg) =>
               msg._id === selectedMessage._id
@@ -777,8 +841,14 @@ const renderPreviewItem = ({ item }) => (
           alert("Không thể ghim tin nhắn. Phản hồi API không hợp lệ.");
         }
       } catch (error) {
-        console.error("Lỗi khi ghim tin nhắn:", error.response?.data || error.message);
-        alert("Đã xảy ra lỗi khi ghim tin nhắn: " + (error.response?.data?.error || error.message));
+        console.error(
+          "Lỗi khi ghim tin nhắn:",
+          error.response?.data || error.message
+        );
+        alert(
+          "Đã xảy ra lỗi khi ghim tin nhắn: " +
+            (error.response?.data?.error || error.message)
+        );
       }
     }
   };
@@ -787,7 +857,7 @@ const renderPreviewItem = ({ item }) => (
   const handleUnpinMessage = async (messageId) => {
     try {
       const response = await pinMessage(messageId, { isPinned: false });
-      console.log("unpinMessage response:", response); // Debug API response
+      console.log("unpinMessage response:", response);
       if (response.isPinned === false) {
         setMessages((prevMessages) =>
           prevMessages.map((msg) =>
@@ -813,8 +883,14 @@ const renderPreviewItem = ({ item }) => (
         alert("Không thể bỏ ghim tin nhắn. Phản hồi API không hợp lệ.");
       }
     } catch (error) {
-      console.error("Lỗi khi bỏ ghim tin nhắn:", error.response?.data || error.message);
-      alert("Đã xảy ra lỗi khi bỏ ghim tin nhắn: " + (error.response?.data?.error || error.message));
+      console.error(
+        "Lỗi khi bỏ ghim tin nhắn:",
+        error.response?.data || error.message
+      );
+      alert(
+        "Đã xảy ra lỗi khi bỏ ghim tin nhắn: " +
+          (error.response?.data?.error || error.message)
+      );
     }
   };
 
@@ -877,7 +953,6 @@ const renderPreviewItem = ({ item }) => (
     }
   };
 
-  // --- Xử lý giao diện tin nhắn ---
   // Hiển thị tùy chọn khi nhấn giữ tin nhắn
   const renderMessageOptions = () => {
     const isCurrentUserMessage = selectedMessage?.user?._id === currentUser._id;
@@ -947,7 +1022,8 @@ const renderPreviewItem = ({ item }) => (
       </View>
     );
   };
-  // Hiển thị nội dung tin nhắn (văn bản hoặc thông báo thu hồi)
+
+  // Hiển thị nội dung tin nhắn
   const renderCustomText = (props) => {
     if (props.currentMessage.isRecalled) {
       return (
@@ -963,9 +1039,10 @@ const renderPreviewItem = ({ item }) => (
   const renderBubble = (props) => {
     const { currentMessage } = props;
     const isCurrentUser = currentMessage.user._id === currentUser._id;
-    const repliedToMessage = messages.find(
-      (msg) => msg._id === currentMessage.replyTo?._id
-    );
+    const isSystemMessage = currentMessage.messageType === "system";
+    const repliedToMessage = currentMessage.replyTo && currentMessage.replyTo._id
+  ? messages.find((msg) => msg._id === currentMessage.replyTo._id)
+  : null;
     const isHighlighted = currentMessage._id === highlightedMessageId;
 
     // Nếu là tin nhắn file, không hiển thị bubble mặc định
@@ -974,79 +1051,103 @@ const renderPreviewItem = ({ item }) => (
         <View style={{ marginVertical: 5 }}>{renderMessageFile(props)}</View>
       );
     }
-
+    if (isSystemMessage) {
+      return (
+        <View
+          style={{
+            flexDirection: "column",
+            width: "100%",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Text
+            style={{
+              color: "#999",
+              fontStyle: "italic",
+              textAlign: "center",
+            }}
+          >
+            {currentMessage.text}
+          </Text>
+        </View>
+      );
+    }
+// Kiểm tra trạng thái "Đã xem" cho cả nhóm và cuộc trò chuyện 1-1
+const isSeenByOthers = isCurrentUser && currentMessage.seenBy?.some(
+  (s) => s.user !== currentUser._id // Kiểm tra nếu có người khác đã xem
+);
     return (
       <View>
-        <Bubble
-          {...props}
-          wrapperStyle={{
-            right: {
-              padding: 10,
-              borderRadius: 15,
-              alignSelf: "flex-end",
-              backgroundColor: isCurrentUser
-                ? isHighlighted
-                  ? "red"
-                  : "#007AFF"
-                : isHighlighted
+      <Bubble
+        {...props}
+        wrapperStyle={{
+          right: {
+            padding: 10,
+            borderRadius: 15,
+            alignSelf: "flex-end",
+            backgroundColor: isCurrentUser
+              ? isHighlighted
                 ? "red"
-                : "#7B61FF",
-            },
-            left: {
-              padding: 10,
-              borderRadius: 15,
-              alignSelf: "flex-start",
-              backgroundColor: isCurrentUser
-                ? isHighlighted
-                  ? "red"
-                  : "#e0e0e0"
-                : isHighlighted
+                : "#007AFF"
+              : isHighlighted
+              ? "red"
+              : "#7B61FF",
+          },
+          left: {
+            padding: 10,
+            borderRadius: 15,
+            alignSelf: "flex-start",
+            backgroundColor: isCurrentUser
+              ? isHighlighted
                 ? "red"
-                : "#f0f0f0",
-            },
-          }}
-          textStyle={{
-            right: { color: "#fff" },
-            left: { color: "#000" },
-          }}
-          onLongPress={(context, message) => {
-            setSelectedMessage(message);
-            setIsMessageModalVisible(true);
-          }}
-          renderCustomView={() =>
-            repliedToMessage && repliedToMessage._id ? (
-              <TouchableOpacity
-                onPress={() => handleReplyToPress(repliedToMessage._id)}
+                : "#e0e0e0"
+              : isHighlighted
+              ? "red"
+              : "#f0f0f0",
+          },
+        }}
+        textStyle={{
+          right: { color: "#fff" },
+          left: { color: "#000" },
+        }}
+        onLongPress={(context, message) => {
+          setSelectedMessage(message);
+          setIsMessageModalVisible(true);
+        }}
+        renderCustomView={() =>
+          repliedToMessage && repliedToMessage._id ? (
+            <TouchableOpacity
+              onPress={() => handleReplyToPress(repliedToMessage._id)}
+            >
+              <View
+                style={[
+                  styles.embeddedRepliedMessageContainer,
+                  isCurrentUser
+                    ? styles.embeddedRepliedMessageRight
+                    : styles.embeddedRepliedMessageLeft,
+                ]}
               >
-                <View
-                  style={[
-                    styles.embeddedRepliedMessageContainer,
-                    isCurrentUser
-                      ? styles.embeddedRepliedMessageRight
-                      : styles.embeddedRepliedMessageLeft,
-                  ]}
-                >
-                  <Text style={styles.embeddedRepliedToText}>
-                    {repliedToMessage.user._id !== currentUser._id && (
-                      <Text style={styles.embeddedRepliedToName}>
-                        {repliedToMessage.user.name}:{" "}
-                      </Text>
-                    )}
-                    {repliedToMessage.text ||
-                      (repliedToMessage.image && "Ảnh") ||
-                      (repliedToMessage.video && "Video") ||
-                      (repliedToMessage.file && "Tệp")}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ) : null
-          }
-        />
-        {isCurrentUser &&
-          currentMessage.seenBy?.some((s) => s.user === otherUser._id) && (
-            <Text style={styles.seenText}>Đã xem</Text>
-          )}
-      </View>
+                <Text style={styles.embeddedRepliedToText}>
+                  {repliedToMessage.user._id !== currentUser._id && (
+                    <Text style={styles.embeddedRepliedToName}>
+                      {repliedToMessage.user.name}:{" "}
+                    </Text>
+                  )}
+                  {repliedToMessage.text ||
+                    (repliedToMessage.image && "Ảnh") ||
+                    (repliedToMessage.video && "Video") ||
+                    (repliedToMessage.file && "Tệp")}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          ) : null
+        }
+      />
+     {isSeenByOthers && (
+        <Text style={styles.seenText}>Đã xem</Text>
+      )}
+    </View>
     );
   };
 
@@ -1079,7 +1180,6 @@ const renderPreviewItem = ({ item }) => (
 
   useEffect(() => {
     if (highlightedMessageId) {
-      // Tạo một bản sao mới của messages để ép re-render
       setMessages((prevMessages) => [...prevMessages]);
     }
   }, [highlightedMessageId]);
@@ -1101,7 +1201,6 @@ const renderPreviewItem = ({ item }) => (
     }
   }, [highlightedMessageId, messages]);
 
-  // --- Xử lý emoji ---
   // Thêm emoji vào nội dung tin nhắn
   const handleEmojiSelect = (emoji) => {
     setText((prevText) => prevText + emoji);
@@ -1124,7 +1223,6 @@ const renderPreviewItem = ({ item }) => (
 
       const existingConversation = userConversations.find((conv) => {
         console.log("Conversation members:", conv.members);
-        // Kiểm tra xem trong conv.members có chứa cả currentUser._id và friend._id không
         const hasCurrentUser = conv.members.some(
           (member) => member._id === currentUser._id
         );
@@ -1180,70 +1278,68 @@ const renderPreviewItem = ({ item }) => (
     }
   };
 
-  //Xử lý download file trên giao diện
+  // Xử lý download file
   const downloadFile = async (url, fileName) => {
     setIsDownloading(true);
-    let fileUri = null; // Biến để lưu fileUri, dùng trong khối finally
-  
+    let fileUri = null;
+
     try {
-      // Kiểm tra URL hợp lệ
       if (!url || !url.startsWith("http")) {
         throw new Error("URL tải xuống không hợp lệ.");
       }
-  
-      console.log("URL tải xuống:", url); // Debug URL
-  
+
+      console.log("URL tải xuống:", url);
       const cleanFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const timestamp = Date.now(); // Thêm timestamp để tránh xung đột tên file
+      const timestamp = Date.now();
       const uniqueFileName = `${timestamp}_${cleanFileName}`;
       fileUri = `${FileSystem.documentDirectory}${uniqueFileName}`;
-  
-      console.log("fileUri:", fileUri); // Debug fileUri
-  
-      // Tải file từ URL về thư mục tạm
+
+      console.log("fileUri:", fileUri);
       const downloadResult = await FileSystem.downloadAsync(url, fileUri);
       if (downloadResult.status !== 200) {
-        throw new Error(`Lỗi khi tải file: HTTP status ${downloadResult.status}`);
+        throw new Error(
+          `Lỗi khi tải file: HTTP status ${downloadResult.status}`
+        );
       }
-  
-      // Kiểm tra file có tồn tại không
+
       const fileInfo = await FileSystem.getInfoAsync(fileUri);
       if (!fileInfo.exists) {
         throw new Error(`File tạm tại ${fileUri} không tồn tại sau khi tải.`);
       }
-  
-      // Kiểm tra loại file dựa trên phần mở rộng
+
       const fileExtension = cleanFileName.split(".").pop().toLowerCase();
-      const isMediaFile = ["jpg", "jpeg", "png", "mp4", "mov", "avi"].includes(fileExtension);
-  
+      const isMediaFile = ["jpg", "jpeg", "png", "mp4", "mov", "avi"].includes(
+        fileExtension
+      );
+
       if (isMediaFile) {
-        // Nếu là ảnh hoặc video, lưu vào Media Library
         const { status } = await MediaLibrary.requestPermissionsAsync();
         if (status !== "granted") {
           throw new Error("Cần cấp quyền truy cập thư viện để lưu file!");
         }
-  
+
         const asset = await MediaLibrary.createAssetAsync(fileUri);
         await MediaLibrary.createAlbumAsync("Downloads", asset, false);
-  
-        alert(`File ${cleanFileName} đã được tải về thành công! Kiểm tra trong thư viện ảnh/video.`);
+
+        alert(
+          `File ${cleanFileName} đã được tải về thành công! Kiểm tra trong thư viện ảnh/video.`
+        );
       } else {
-        // Nếu là file tài liệu (docx, pdf, v.v.), lưu vào thư mục công khai hoặc chia sẻ
         if (Platform.OS === "android") {
-          // Trên Android, lưu vào thư mục Downloads công khai
-          const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+          const permissions =
+            await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
           if (!permissions.granted) {
             throw new Error("Cần cấp quyền truy cập để lưu file!");
           }
-  
+
           const directoryUri = permissions.directoryUri;
-          const newFileUri = await FileSystem.StorageAccessFramework.createFileAsync(
-            directoryUri,
-            cleanFileName,
-            "application/octet-stream"
-          );
-  
-          // Đọc nội dung file tạm và ghi vào file mới
+          const newFileUri =
+            await FileSystem.StorageAccessFramework.createFileAsync(
+              directoryUri,
+              cleanFileName,
+              "application/octet-stream"
+            );
+
           const fileContent = await FileSystem.readAsStringAsync(fileUri, {
             encoding: FileSystem.EncodingType.Base64,
           });
@@ -1252,31 +1348,31 @@ const renderPreviewItem = ({ item }) => (
             fileContent,
             { encoding: FileSystem.EncodingType.Base64 }
           );
-  
-          alert(`File ${cleanFileName} đã được tải về thành công! Kiểm tra trong thư mục Downloads.`);
+
+          alert(
+            `File ${cleanFileName} đã được tải về thành công! - Kiểm tra trong thư mục Downloads.`
+          );
         } else {
-          // Trên iOS, không cần di chuyển file vì fileUri đã nằm trong FileSystem.documentDirectory
-          // Kiểm tra thư mục FileSystem.documentDirectory
-          const dirInfo = await FileSystem.getInfoAsync(FileSystem.documentDirectory);
+          const dirInfo = await FileSystem.getInfoAsync(
+            FileSystem.documentDirectory
+          );
           if (!dirInfo.exists) {
-            throw new Error(`Thư mục ${FileSystem.documentDirectory} không tồn tại.`);
+            throw new Error(
+              `Thư mục ${FileSystem.documentDirectory} không tồn tại.`
+            );
           }
-  
-          // Thông báo trước khi mở giao diện chia sẻ
-          alert(`File ${cleanFileName} đã được tải về. Vui lòng chọn nơi lưu file.`);
-  
-          // Sử dụng trực tiếp fileUri để chia sẻ
+
+          alert(
+            `File ${cleanFileName} đã được tải về. Vui lòng chọn nơi lưu file.`
+          );
+
           const isAvailable = await Sharing.isAvailableAsync();
           if (isAvailable) {
-            // Mở giao diện chia sẻ để người dùng tự lưu file
             await Sharing.shareAsync(fileUri);
-  
-            // Thông báo sau khi giao diện chia sẻ đóng
             alert(
               `Đã hoàn tất. Vui lòng kiểm tra file ${cleanFileName} tại nơi bạn đã chọn để lưu (ví dụ: Files app, iCloud). Nếu bạn không chọn lưu, file sẽ không được giữ lại.`
             );
           } else {
-            // Nếu không hỗ trợ chia sẻ, thông báo vị trí file
             alert(
               `File ${cleanFileName} đã được tải về thành công! File nằm trong thư mục tài liệu của ứng dụng.`
             );
@@ -1287,15 +1383,14 @@ const renderPreviewItem = ({ item }) => (
       console.error("Lỗi khi tải file:", error.message);
       alert(`Không thể tải file: ${error.message}`);
     } finally {
-      // Đảm bảo xóa file tạm trong mọi trường hợp (kể cả khi có lỗi)
       if (fileUri) {
         await FileSystem.deleteAsync(fileUri, { idempotent: true });
-        console.log("Đã xóa file tạm:", fileUri); // Debug xóa file
+        console.log("Đã xóa file tạm:", fileUri);
       }
       setIsDownloading(false);
     }
   };
-  // --- Giao diện chính ---
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -1303,22 +1398,27 @@ const renderPreviewItem = ({ item }) => (
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={Platform.OS === "ios" ? -300 : 0}
       >
-        {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate("ChatListScreen")}
+          >
             <Ionicons name="arrow-back" size={24} color="black" />
           </TouchableOpacity>
           <Image
             source={{
-              uri:
-                otherUser.avatar ||
-                "https://randomuser.me/api/portraits/men/1.jpg",
+              uri: conversation.isGroup
+                ? conversation?.groupAvatar?.trim()
+                  ? conversation.groupAvatar
+                  : "https://file.hstatic.net/200000503583/file/tao-dang-chup-anh-nhom-lay-loi__5__34b470841bb840e3b2ce25cbe02533ec.jpg"
+                : otherUser?.avatar || "https://via.placeholder.com/50",
             }}
             style={styles.avatar}
           />
           <View style={styles.nameContainer}>
             <Text style={styles.name}>
-              {otherUser.username || "Người dùng"}
+              {conversation.isGroup
+                ? conversation?.name || "Nhóm không tên"
+                : otherUser.username}
             </Text>
             <Text style={styles.online}>Online</Text>
           </View>
@@ -1340,11 +1440,11 @@ const renderPreviewItem = ({ item }) => (
               size={24}
               color="black"
               style={styles.icon}
+              onPress={handleEditGroup}
             />
           </View>
         </View>
 
-        {/* Hiển thị tin nhắn đang trả lời */}
         {replyingMessage && (
           <View style={styles.replyingContainer}>
             <Text style={styles.replyingToText}>Đang trả lời:</Text>
@@ -1360,7 +1460,6 @@ const renderPreviewItem = ({ item }) => (
           </View>
         )}
 
-        {/* Hiển thị tin nhắn đã ghim */}
         {pinnedMessage && (
           <TouchableOpacity
             style={styles.pinnedMessageContainer}
@@ -1384,7 +1483,6 @@ const renderPreviewItem = ({ item }) => (
           </TouchableOpacity>
         )}
 
-        {/* Hiển thị xem trước media */}
         {previews.length > 0 && (
           <View style={styles.previewContainer}>
             <FlatList
@@ -1394,102 +1492,124 @@ const renderPreviewItem = ({ item }) => (
               horizontal
               showsHorizontalScrollIndicator={false}
             />
-            
           </View>
         )}
 
-        {/* Danh sách tin nhắn */}
         <GiftedChat
-  
-  listViewProps={{
-    ref: flatListRef,
-    initialNumToRender: 50,
-    maxToRenderPerBatch: 50,
-    windowSize: 51,
-    onScrollToIndexFailed: (info) => {
-      setTimeout(() => {
-        if (flatListRef.current) {
-          flatListRef.current.scrollToIndex({
-            index: info.index,
-            animated: true,
-            viewPosition: 0.5,
-          });
-        }
-      }, 500);
-    },
-    onLayout: () => {
-      if (highlightedMessageId && !scrollCompleted) {
-        setScrollCompleted(true);
-      }
-    },
-    onScrollEndDrag: () => {
-      if (highlightedMessageId && !scrollCompleted) {
-        setScrollCompleted(true);
-      }
-    },
-  }}
-  messages={messages}
-  onSend={onSend}
-  user={{ _id: currentUser._id }}
-  showUserAvatar={true}
-  renderAvatar={renderCustomAvatar}
-  text={text}
-  onInputTextChanged={setText}
-  renderMessageVideo={renderMessageVideo}
-  renderMessageImage={renderMessageImage}
-  renderMessageFile={renderMessageFile}
-  renderBubble={renderBubble}
-  renderActions={() => (
-    <View style={styles.actionContainer}>
-      <TouchableOpacity onPress={handleImagePick} style={styles.actionButton}>
-        <MaterialIcons name="image" size={24} color="#007AFF" />
-      </TouchableOpacity>
-      <TouchableOpacity onPress={handleVideoPick} style={styles.actionButton}>
-        <MaterialIcons name="videocam" size={24} color="#007AFF" />
-      </TouchableOpacity>
-      <TouchableOpacity onPress={handleFilePick} style={styles.actionButton}>
-        <MaterialIcons name="attach-file" size={24} color="#007AFF" />
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={styles.actionButton}
-        onPress={() => setShowEmojiPicker(!showEmojiPicker)}
-      >
-        <MaterialIcons name="insert-emoticon" size={24} color="#007AFF" />
-      </TouchableOpacity>
-    </View>
-  )}
-  renderSend={(props) => (
-    <TouchableOpacity
-      style={styles.sendButton}
-      disabled={!(text.trim().length > 0 || previews.length > 0)}
-      onPress={() => {
-        if (text.trim().length > 0 || previews.length > 0) {
-          const message = {
-            _id: Math.random().toString(36).substring(7),
-            text: text.trim(),
-            createdAt: new Date(),
-            user: { _id: currentUser._id },
-          };
-          props.onSend([message], true);
-        }
-      }}
-    >
-      <Ionicons
-        name="send"
-        size={30}
-        color={text.trim().length > 0 || previews.length > 0 ? "#7B61FF" : "#ccc"}
-      />
-    </TouchableOpacity>
-  )}
-  alwaysShowSend={true}
-  shouldUpdateMessage={(props, nextProps) =>
-    props.currentMessage._id === highlightedMessageId ||
-    nextProps.currentMessage._id === highlightedMessageId
-  }
-  renderCustomText={renderCustomText}
-/>
+          listViewProps={{
+            ref: flatListRef,
+            initialNumToRender: 50,
+            maxToRenderPerBatch: 50,
+            windowSize: 51,
+            onScrollToIndexFailed: (info) => {
+              setTimeout(() => {
+                if (flatListRef.current) {
+                  flatListRef.current.scrollToIndex({
+                    index: info.index,
+                    animated: true,
+                    viewPosition: 0.5,
+                  });
+                }
+              }, 500);
+            },
+            onLayout: () => {
+              if (highlightedMessageId && !scrollCompleted) {
+                setScrollCompleted(true);
+              }
+            },
+            onScrollEndDrag: () => {
+              if (highlightedMessageId && !scrollCompleted) {
+                setScrollCompleted(true);
+              }
+            },
+          }}
+          messages={messages}
+          onSend={onSend}
+          user={{ _id: currentUser._id }}
+          showUserAvatar={true}
+          renderAvatar={renderCustomAvatar}
+          text={text}
+          onInputTextChanged={setText}
+          renderMessageVideo={renderMessageVideo}
+          renderMessageImage={renderMessageImage}
+          renderMessageFile={renderMessageFile}
+          renderBubble={renderBubble}
+          renderActions={() =>
+            isGroupActive ? (
+              <View style={styles.actionContainer}>
+                <TouchableOpacity
+                  onPress={handleImagePick}
+                  style={styles.actionButton}
+                  disabled={!isGroupActive} // Vô hiệu hóa nếu nhóm không hoạt động
+                >
+                  <MaterialIcons name="image" size={24} color="#007AFF" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleVideoPick}
+                  style={styles.actionButton}
+                  disabled={!isGroupActive} // Vô hiệu hóa nếu nhóm không hoạt động
+                >
+                  <MaterialIcons name="videocam" size={24} color="#007AFF" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleFilePick}
+                  style={styles.actionButton}
+                  disabled={!isGroupActive} // Vô hiệu hóa nếu nhóm không hoạt động
+                >
+                  <MaterialIcons name="attach-file" size={24} color="#007AFF" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => setShowEmojiPicker(!showEmojiPicker)}
+                  disabled={!isGroupActive} // Vô hiệu hóa nếu nhóm không hoạt động
+                >
+                  <MaterialIcons
+                    name="insert-emoticon"
+                    size={24}
+                    color="#007AFF"
+                  />
+                </TouchableOpacity>
+              </View>
+            ) : null
+          }
+          renderSend={(props) => (
+            <TouchableOpacity
+              style={styles.sendButton}
+              disabled={
+                !(text.trim().length > 0 || previews.length > 0) ||
+                !isGroupActive // Vô hiệu hóa nếu nhóm không hoạt động
+              }
+              onPress={() => {
+                if (text.trim().length > 0 || previews.length > 0) {
+                  const message = {
+                    _id: Math.random().toString(36).substring(7),
+                    text: text.trim(),
+                    createdAt: new Date(),
+                    user: { _id: currentUser._id },
+                  };
+                  props.onSend([message], true);
+                }
+              }}
+            >
+              <Ionicons
+                name="send"
+                size={30}
+                color={
+                  (text.trim().length > 0 || previews.length > 0) &&
+                  isGroupActive
+                    ? "#7B61FF"
+                    : "#ccc"
+                }
+              />
+            </TouchableOpacity>
+          )}
+          shouldUpdateMessage={(props, nextProps) =>
+            props.currentMessage._id === highlightedMessageId ||
+            nextProps.currentMessage._id === highlightedMessageId
+          }
+          renderCustomText={renderCustomText}
+        />
 
-        {/* Modal chọn emoji */}
         {showEmojiPicker && (
           <Modal
             animationType="slide"
@@ -1508,7 +1628,6 @@ const renderPreviewItem = ({ item }) => (
           </Modal>
         )}
 
-        {/* Modal tùy chọn tin nhắn */}
         <Modal
           animationType="slide"
           transparent={true}
@@ -1531,7 +1650,6 @@ const renderPreviewItem = ({ item }) => (
   );
 }
 
-// --- Styles ---
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1565,13 +1683,16 @@ const styles = StyleSheet.create({
   icon: {
     marginLeft: 10,
   },
-  previewContainer: { padding: 10, backgroundColor: "#f0f0f0", borderRadius: 5 },
-previewItem: { marginRight: 10, alignItems: "center" },
-previewImage: { width: 100, height: 100, borderRadius: 10 },
-previewVideo: { width: 100, height: 100, borderRadius: 10 },
-previewText: { fontSize: 14, marginVertical: 5 },
-previewRemoveButton: { position: "absolute", top: -10, right: -10 },
-
+  previewContainer: {
+    padding: 10,
+    backgroundColor: "#f0f0f0",
+    borderRadius: 5,
+  },
+  previewItem: { marginRight: 10, alignItems: "center" },
+  previewImage: { width: 100, height: 100, borderRadius: 10 },
+  previewVideo: { width: 100, height: 100, borderRadius: 10 },
+  previewText: { fontSize: 14, marginVertical: 5 },
+  previewRemoveButton: { position: "absolute", top: -10, right: -10 },
   actionContainer: {
     flexDirection: "row",
     justifyContent: "center",
@@ -1673,21 +1794,9 @@ previewRemoveButton: { position: "absolute", top: -10, right: -10 },
     borderRadius: 5,
     marginBottom: 5,
   },
-  embeddedRepliedMessageRight: {
-    backgroundColor: "#d3d3d3",
-    alignSelf: "flex-end",
-  },
-  embeddedRepliedMessageLeft: {
-    backgroundColor: "#e0e0e0",
-    alignSelf: "flex-start",
-  },
   embeddedRepliedToText: {
     fontSize: 12,
     color: "gray",
-  },
-  embeddedRepliedToName: {
-    fontWeight: "bold",
-    color: "black",
   },
   fileContainer: {
     flexDirection: "row",
@@ -1695,7 +1804,6 @@ previewRemoveButton: { position: "absolute", top: -10, right: -10 },
     padding: 10,
     backgroundColor: "#f5f5f5",
     borderRadius: 8,
-    borderWidth: 1, // Thêm border để debug
     marginVertical: 5,
   },
   fileInfo: {
@@ -1718,7 +1826,6 @@ previewRemoveButton: { position: "absolute", top: -10, right: -10 },
     backgroundColor: "#7B61FF",
     paddingVertical: 6,
     paddingHorizontal: 10,
-    borderWidth: 1, // Thêm border để debug
     borderRadius: 6,
   },
   downloadText: {
@@ -1726,13 +1833,12 @@ previewRemoveButton: { position: "absolute", top: -10, right: -10 },
     fontSize: 12,
     marginLeft: 4,
   },
-
   friendAvatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
     marginRight: 10,
-    backgroundColor: "lightgray", // Thêm màu nền để kiểm tra xem component có hiển thị không
+    backgroundColor: "lightgray",
   },
   friendItem: {
     flexDirection: "row",
@@ -1746,4 +1852,4 @@ previewRemoveButton: { position: "absolute", top: -10, right: -10 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
-}); 
+});
