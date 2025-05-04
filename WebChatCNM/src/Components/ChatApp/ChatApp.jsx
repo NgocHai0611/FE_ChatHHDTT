@@ -63,10 +63,6 @@ export default function ChatApp() {
   const [selectedChat, setSelectedChat] = useState(null);
   const [sidebarView, setSidebarView] = useState("chat-list"); // Mặc định hiển thị danh sách chat
   const [selectedHeader, setSelectedHeader] = useState("");
-  const [showSelectNewLeaderModal, setShowSelectNewLeaderModal] =
-    useState(false);
-  const [pendingLeaveGroup, setPendingLeaveGroup] = useState(null);
-
   const navigate = useNavigate();
   const messageRefs = useRef({});
 
@@ -675,48 +671,15 @@ export default function ChatApp() {
     /* Rời nhóm */
   }
   const handleLeaveGroup = async (conversationId) => {
-    const res = await axios.get(
-      `http://localhost:8004/conversations/get/${conversationId}`
-    );
-    if (!res) return;
-    const group = res.data;
-    console.log("Group data:", group);
-
-    // Kiểm tra nếu user là nhóm trưởng
-    if (user._id === group.groupLeader) {
-      console.log("Bạn là nhóm trưởng, vui lòng chọn người thay thế.");
-      // Mở modal chọn nhóm trưởng mới
-      setPendingLeaveGroup(group);
-      setShowSelectNewLeaderModal(true);
-      return;
-    }
-
-    // Nếu không phải nhóm trưởng thì xử lý rời nhóm như bình thường
-    confirmAndLeaveGroup(conversationId);
-  };
-  const handleSelectNewLeader = (newLeaderId) => {
-    if (!pendingLeaveGroup) return;
-
-    confirmAndLeaveGroup(pendingLeaveGroup._id, newLeaderId);
-    setShowSelectNewLeaderModal(false);
-    setPendingLeaveGroup(null);
-  };
-
-  const confirmAndLeaveGroup = async (conversationId, newLeaderId = null) => {
-    if (!window.confirm("Bạn có chắc muốn rời nhóm này?")) return;
-    console.log("nhóm trưởng mới:", newLeaderId);
-    console.log("conversationId:", conversationId);
-    try {
-      socket.emit("leaveGroup", {
-        conversationId,
-        userId: user._id,
-        newLeaderId, // chỉ gửi nếu là nhóm trưởng
-      });
-
-      setSelectedChat(null);
-      setShowMenuId(null);
-    } catch (error) {
-      console.error("Error leaving group:", error);
+    if (window.confirm("Bạn có chắc muốn rời nhóm này?")) {
+      try {
+        socket.emit("leaveGroup", { conversationId, userId: user._id });
+        setSelectedChat(null); // Đóng nhóm sau khi rời
+        setShowMenuId(null); // Reset menu popup để nhóm khác vẫn mở được
+        setSelectedChat(null); // Đóng nhóm sau khi rời
+      } catch (error) {
+        console.error("Error leaving group:", error);
+      }
     }
   };
 
@@ -2150,7 +2113,64 @@ export default function ChatApp() {
     };
   }, []);
 
+  const handleGroupImageChange = (e) => {
+    const file = e.target.files[0];
+    setGroupImageFile(file);
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => setGroupImagePreview(reader.result);
+      reader.readAsDataURL(file);
+    }
+  };
+  const handleUpdateGroupInfo = async () => {
+    const formData = new FormData();
+    formData.append("name", groupName);
+    if (groupImageFile) {
+      formData.append("groupAvatar", groupImageFile);
+    }
 
+    try {
+      const res = await axios.put(
+        `http://localhost:8004/conversations/group/${selectedChat.conversationId}`,
+        formData
+      );
+      console.log("Cập nhật nhóm thành công:", res.data);
+
+      // Nếu muốn cập nhật lại state nhóm ở client, có thể làm tại đây
+      handleSelectChat({
+        conversationId: res.data._id,
+        lastMessageId: res.data.lastMessageId?._id,
+        lastMessageSenderId: res.data.lastMessageSenderId?._id,
+        members: res.data.members,
+        groupLeader: res.data.groupLeader,
+        groupDeputies: res.data.groupDeputies,
+        isGroup: res.data.isGroup,
+        isDissolved: res.data.isDissolved, // Cập nhật trạng thái giải tán nhóm
+        image:
+          res.data.groupAvatar ||
+          "https://file.hstatic.net/200000503583/file/tao-dang-chup-anh-nhom-lay-loi__5__34b470841bb840e3b2ce25cbe02533ec.jpg",
+        name: res.data.name,
+        lastMessage: res.data.latestmessage,
+        addedMembers: res.data.addMembers,
+      });
+
+      toast.success("Cập nhật nhóm thành công!"); // Thông báo thành công
+      setShowEditGroupModal(false);
+      console.log("Selected chat:", selectedChat);
+    } catch (err) {
+      const errorMsg =
+        err.response?.data?.error || "Cập nhật thất bại. Vui lòng thử lại.";
+      toast.error(errorMsg); // Thông báo lỗi cụ thể
+      console.error("Lỗi khi cập nhật nhóm:", err);
+    }
+  };
+
+  // Khi modal mở, cập nhật groupName từ selectedChat nếu có
+  useEffect(() => {
+    if (selectedChat && showEditGroupModal) {
+      setGroupName(selectedChat.name); // Đảm bảo luôn cập nhật đúng tên nhóm
+    }
+  }, [selectedChat, showEditGroupModal]);
 
   return (
     <div className="chat-app">
@@ -2914,25 +2934,117 @@ export default function ChatApp() {
                 onClick={() => setShowMediaModal((prev) => !prev)}
               />
 
-                  {showMediaModal && (
-                    <div className="media-overlay" onClick={() => setShowMediaModal(false)}>
-                      <div className="media-modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="media-header">
-                          <FaTimes className="icon-outmedia" onClick={() => setShowMediaModal(false)} />
-                          <h4>{selectedChat.isGroup ? "Thông tin nhóm" : "Thông tin hội thoại"}</h4>
-                          <hr />
+              {showMediaModal && (
+                <div
+                  className="media-overlay"
+                  onClick={() => setShowMediaModal(false)}
+                >
+                  <div
+                    className="media-modal"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="media-header">
+                      <FaTimes
+                        className="icon-outmedia"
+                        onClick={() => setShowMediaModal(false)}
+                      />
+                      <h4>
+                        {selectedChat.isGroup
+                          ? "Thông tin nhóm"
+                          : "Thông tin hội thoại"}
+                      </h4>
+                      <hr />
+                    </div>
+                    <div className="user-conservation">
+                      <div className="container-conservation">
+                        <div
+                          className="avatar-conservation"
+                          onClick={() => {
+                            if (selectedChat.isGroup) {
+                              setShowEditGroupModal(true);
+                            }
+                          }}
+                          style={{
+                            cursor: selectedChat.isGroup
+                              ? "pointer"
+                              : "default",
+                          }}
+                        >
+                          <img
+                            src={selectedChat.image}
+                            alt="img"
+                            className="avatar-conservation-img"
+                          />
                         </div>
-                        <div className="user-conservation">
+                        <div className="info-conservation">
+                          <p className="name-conservation">
+                            {selectedChat.name}
+                          </p>
+                        </div>
+                        {showEditGroupModal && !selectedChat?.isDissolved && (
+                          <div
+                            className="modal-overlayuser"
+                            onClick={(e) => {
+                              if (e.target === e.currentTarget) {
+                                setShowEditGroupModal(false);
+                              }
+                            }}
+                          >
+                            <div className="modal-contentuser-group">
+                              <span
+                                className="close-btnuser"
+                                onClick={() => setShowEditGroupModal(false)}
+                              >
+                                &times;
+                              </span>
+                              <h3>Chỉnh sửa nhóm</h3>
 
+                              <div className="profile-use-group">
+                                <img
+                                  src={groupImagePreview || selectedChat.image}
+                                  alt="Avatar nhóm"
+                                  className="profile-avataruser"
+                                />
 
+                                {/* Icon đổi ảnh */}
+                                <label
+                                  htmlFor="group-avatar-upload"
+                                  className="avatar-icon-label"
+                                >
+                                  <FaCamera size={25} color="black" />
+                                </label>
+                                <input
+                                  id="group-avatar-upload"
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={handleGroupImageChange}
+                                  className="avatar-upload"
+                                  style={{ display: "none" }}
+                                />
 
-                          <div className="container-conservation">
-                            <div className="avatar-conservation">
-                              <img src={selectedChat.image} alt="img" className="avatar-conservation-img" />
+                                <p>
+                                  <input
+                                    type="text"
+                                    name="groupName"
+                                    value={groupName}
+                                    onChange={(e) =>
+                                      setGroupName(e.target.value)
+                                    }
+                                    placeholder="Nhập tên nhóm"
+                                    className="username-input"
+                                  />
+                                </p>
+                              </div>
+
+                              <button
+                                onClick={handleUpdateGroupInfo}
+                                className="update-btn"
+                              >
+                                Cập nhật
+                              </button>
                             </div>
-                            <div className="info-conservation">
-                              <p className="name-conservation">{selectedChat.name}</p>
-                            </div>
+                          </div>
+                        )}
 
                         {/* Thêm thành viên vô nhóm  */}
                         {showAddMembersModal && !selectedChat?.isDissolved && (
@@ -3447,7 +3559,7 @@ export default function ChatApp() {
                             <input
                               type="text"
                               placeholder="Tên nhóm"
-                              value={groupName}
+                              value={selectedChat.name}
                               onChange={(e) => setGroupName(e.target.value)}
                               className="add-member-phone-input"
                             />

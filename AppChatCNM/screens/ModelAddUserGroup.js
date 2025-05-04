@@ -42,7 +42,7 @@ const ModalAddUserToGroup = ({
   const navigation = useNavigation();
 
   useEffect(() => {
-    socket.current = io("http://192.168.137.74:8004", {
+    socket.current = io("http://192.168.2.47:8004", {
       transports: ["websocket"],
     });
 
@@ -243,9 +243,6 @@ const ModalAddUserToGroup = ({
           )}
 
           {typeAction === "update" && renderPhoneInput()}
-
-          {console.log("Danh Sach Ban Be", friends)}
-          {console.log("Danh Sach Nguoi Trong Nhom", alreadyInGroup)}
 
           <FlatList
             style={{ maxHeight: 300 }}

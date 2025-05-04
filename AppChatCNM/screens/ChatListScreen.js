@@ -28,7 +28,7 @@ export default function ChatListScreen({ navigation }) {
   const [user, setUser] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [searchText, setSearchText] = useState("");
-  const socket = io("http://192.168.137.74:8004", {
+  const socket = io("http://192.168.2.47:8004", {
     transports: ["websocket"],
   });
   const [isDeleteModalVisible, setDeleteModalVisible] = useState(false);
@@ -157,7 +157,7 @@ export default function ChatListScreen({ navigation }) {
   const fetchMessagesByConversationId = async (conversationId) => {
     try {
       const response = await fetch(
-        `http://192.168.137.74:8004/messages/get/${conversationId}`
+        `http://192.168.2.47:8004/messages/get/${conversationId}`
       );
       const data = await response.json();
       const pinnedMessage = data.find((msg) => msg.isPinned === true);
@@ -178,14 +178,14 @@ export default function ChatListScreen({ navigation }) {
 
       // 2. Gọi API lấy chi tiết cuộc trò chuyện (xem có phải group không)
       const res1 = await axios.get(
-        `http://192.168.137.74:8004/conversations/get/${conversation._id}`
+        `http://192.168.2.47:8004/conversations/get/${conversation._id}`
       );
       const fullConversation = res1.data;
 
       // 3. Nếu là group chat thì lấy thông tin người tạo nhóm
       if (fullConversation.createGroup?.userId) {
         const res2 = await axios.get(
-          `http://192.168.137.74:8004/users/get/${fullConversation.createGroup.userId}`
+          `http://192.168.2.47:8004/users/get/${fullConversation.createGroup.userId}`
         );
         const userAdd = res2.data;
 

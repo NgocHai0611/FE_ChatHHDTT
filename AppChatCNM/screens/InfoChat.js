@@ -12,6 +12,8 @@ import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import io from "socket.io-client";
 import { getConversationById } from "../services/apiServices"; // Thêm import
 import ModalAddUserToGroup from "./ModelAddUserGroup";
+import ModalEditGroupInfo from "./EditGroupInfo";
+import Feather from "@expo/vector-icons/Feather";
 
 export default function InfoChat({ route }) {
   const {
@@ -35,6 +37,7 @@ export default function InfoChat({ route }) {
 
   const [isModalVisible, setModalVisible] = useState(false);
   const [refreshFlag, setRefreshFlag] = useState(true);
+  const [modalEditGroup, setModalEditGroup] = useState(false);
 
   // Lấy dữ liệu cuộc trò chuyện mới nhất
   const fetchConversation = async () => {
@@ -49,7 +52,7 @@ export default function InfoChat({ route }) {
   };
 
   useEffect(() => {
-    socket.current = io("http://192.168.137.74:8004", {
+    socket.current = io("http://192.168.2.47:8004", {
       transports: ["websocket"],
     });
 
@@ -261,28 +264,27 @@ export default function InfoChat({ route }) {
                 style={styles.groupImage}
               />
             </TouchableOpacity>
-            <View style={{ flex: 1, marginLeft: 10 }}>
+            <View>
               <TouchableOpacity
-                onPress={() => {
-                  const newName = prompt(
-                    "Nhập tên nhóm mới:",
-                    conversation.groupName
-                  );
-                  if (newName) {
-                    socket.current.emit("updateGroupName", {
-                      conversationId: conversation._id,
-                      newName,
-                      userId: currentUser._id,
-                    });
-                    setConversation((prev) => ({
-                      ...prev,
-                      groupName: newName,
-                    }));
-                  }
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
+                onPress={() => setModalEditGroup(true)}
               >
                 <Text style={styles.groupName}>{conversation.name}</Text>
+                <Feather name="edit" size={20} color="black" />
               </TouchableOpacity>
+
+              <ModalEditGroupInfo
+                group={conversation}
+                visible={modalEditGroup}
+                onClose={() => {
+                  setModalEditGroup(false);
+                  setRefreshFlag((prev) => !prev);
+                }}
+              ></ModalEditGroupInfo>
             </View>
           </View>
 

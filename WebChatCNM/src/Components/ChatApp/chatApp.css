@@ -6,118 +6,6 @@
   width: 100%;
   z-index: 1;
 }
-.leave-group-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 9999; /* chắc chắn nằm trên cùng */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.leave-group-modal {
-  background-color: #fff;
-  padding: 1.5rem;
-  border-radius: 8px;
-  max-width: 400px;
-  width: 90%;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.leave-group-modal h3 {
-  margin-top: 0;
-  margin-bottom: 1rem;
-  font-size: 1.25rem;
-}
-
-.leave-group-modal ul {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 1rem;
-}
-
-.leave-group-modal li {
-  padding: 0.5rem 0;
-  cursor: pointer;
-  border-bottom: 1px solid #eee;
-}
-
-.leave-group-modal li:last-child {
-  border-bottom: none;
-}
-
-.leave-group-modal li:hover {
-  background-color: #f5f5f5;
-}
-
-.leave-group-cancel {
-  background: transparent;
-  border: none;
-  color: #555;
-  cursor: pointer;
-  font-size: 0.9rem;
-}
-.leave-group-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 9999;        /* chắc chắn nằm trên cùng */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.leave-group-modal {
-  background-color: #fff;
-  padding: 1.5rem;
-  border-radius: 8px;
-  max-width: 400px;
-  width: 90%;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.leave-group-modal h3 {
-  margin-top: 0;
-  margin-bottom: 1rem;
-  font-size: 1.25rem;
-}
-
-.leave-group-modal ul {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 1rem;
-}
-
-.leave-group-modal li {
-  padding: 0.5rem 0;
-  cursor: pointer;
-  border-bottom: 1px solid #eee;
-}
-
-.leave-group-modal li:last-child {
-  border-bottom: none;
-}
-
-.leave-group-modal li:hover {
-  background-color: #f5f5f5;
-}
-
-.leave-group-cancel {
-  background: transparent;
-  border: none;
-  color: #555;
-  cursor: pointer;
-  font-size: 0.9rem;
-}
-
-
 
 /* Sidebar */
 .sidebar {
@@ -2333,4 +2221,31 @@ iframe.modal-media {
   border-radius: 50%;
   transform: translate(50%, -50%);
   z-index: 1;
+}
+
+.modal-contentuser-group {
+  background-color: #ecedef;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 500px;
+  padding: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 9999; /* Đảm bảo modal sẽ ở trên các phần tử khác */
+  animation: modal-show 0.3s ease-in-out;
+  align-items: flex-start;
+  border: 1px solid #ccc; /* Viền nhẹ */
+}
+
+.profile-use-group {
+  z-index: 1002; /* Đảm bảo avatar ở trên modal */
+  margin-top: 20px;
+  display: flex;
+  flex-direction: row;
+}
+.profile-use-group p {
+  margin-top: 30px;
+  margin-left: 10px;
 }
