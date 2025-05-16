@@ -14,7 +14,7 @@ import InfoChat from "./screens/InfoChat";
 const Stack = createStackNavigator();
 
 const linking = {
-  prefixes: ["http://192.168.2.47:8081"], // Prefix của URL
+  prefixes: ["http://172.16.1.126:8081"], // Prefix của URL
   config: {
     screens: {
       Login: "login",

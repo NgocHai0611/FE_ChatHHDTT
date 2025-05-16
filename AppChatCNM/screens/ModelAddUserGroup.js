@@ -42,7 +42,7 @@ const ModalAddUserToGroup = ({
   const navigation = useNavigation();
 
   useEffect(() => {
-    socket.current = io("http://192.168.2.47:8004", {
+    socket.current = io("http://172.16.1.126:8004", {
       transports: ["websocket"],
     });
 
@@ -59,6 +59,8 @@ const ModalAddUserToGroup = ({
   }, [visible]);
 
   useEffect(() => {
+    console.log("Cac User Trong Group ", alreadyInGroup);
+
     const groupMembersIds = Array.from(alreadyInGroup).map(
       (member) => member._id
     );
@@ -100,6 +102,35 @@ const ModalAddUserToGroup = ({
     setSelectedFriends((prev) =>
       prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
     );
+  };
+
+  const searchFriendByPhone = async () => {
+    if (!phoneNumber.trim()) {
+      Alert.alert("Vui lòng nhập số điện thoại.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const res = await axios.get(
+        `https://bechatcnm-production.up.railway.app/friends/search?phone=${phoneNumber}`
+      );
+
+      const foundFriend = res.data;
+      if (foundFriend) {
+        setFriends((prev) => {
+          // Kiểm tra nếu đã có thì không thêm lại
+          const exists = prev.some((f) => f._id === foundFriend._id);
+          if (exists) return prev;
+          return [...prev, foundFriend];
+        });
+      }
+    } catch (err) {
+      console.error("Không tìm thấy bạn:", err.response?.data || err.message);
+      Alert.alert("Không tìm thấy bạn với số điện thoại này.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const pickImage = async () => {
@@ -149,7 +180,7 @@ const ModalAddUserToGroup = ({
       }
 
       const res = await axios.post(
-        "http://192.168.137.74:8004/conversations/createwithimage",
+        "http://172.16.1.126:8004/conversations/createwithimage",
         formData,
         {
           headers: {
@@ -200,12 +231,16 @@ const ModalAddUserToGroup = ({
   };
 
   const renderPhoneInput = () => (
-    <TextInput
-      placeholder="Nhập SĐT để thêm bạn"
-      style={styles.input}
-      value={phoneNumber}
-      onChangeText={setPhoneNumber}
-    />
+    <View style={{ flexDirection: "row", alignItems: "center" }}>
+      <TextInput
+        placeholder="Nhập SĐT để thêm bạn"
+        style={[styles.input, { flex: 1 }]}
+        value={phoneNumber}
+        onChangeText={setPhoneNumber}
+        onSubmitEditing={searchFriendByPhone} // Khi nhấn Enter, sẽ gọi hàm tìm kiếm
+        returnKeyType="search" // Đặt loại nút bàn phím là "search" (hỗ trợ Enter)
+      />
+    </View>
   );
 
   return (

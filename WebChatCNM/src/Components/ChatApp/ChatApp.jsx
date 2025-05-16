@@ -142,6 +142,10 @@ export default function ChatApp() {
 
   const [groupImageFile, setGroupImageFile] = useState(null);
   const [groupImagePreview, setGroupImagePreview] = useState(null);
+
+  const [showSelectNewLeaderModal, setShowSelectNewLeaderModal] =
+    useState(false);
+  const [pendingLeaveGroup, setPendingLeaveGroup] = useState(null);
   {
     /* Lấy danh sách conversation từ server và cập nhật vào state */
   }
@@ -671,15 +675,48 @@ export default function ChatApp() {
     /* Rời nhóm */
   }
   const handleLeaveGroup = async (conversationId) => {
-    if (window.confirm("Bạn có chắc muốn rời nhóm này?")) {
-      try {
-        socket.emit("leaveGroup", { conversationId, userId: user._id });
-        setSelectedChat(null); // Đóng nhóm sau khi rời
-        setShowMenuId(null); // Reset menu popup để nhóm khác vẫn mở được
-        setSelectedChat(null); // Đóng nhóm sau khi rời
-      } catch (error) {
-        console.error("Error leaving group:", error);
-      }
+    const res = await axios.get(
+      `http://localhost:8004/conversations/get/${conversationId}`
+    );
+    if (!res) return;
+    const group = res.data;
+    console.log("Group data:", group);
+
+    // Kiểm tra nếu user là nhóm trưởng
+    if (user._id === group.groupLeader) {
+      console.log("Bạn là nhóm trưởng, vui lòng chọn người thay thế.");
+      // Mở modal chọn nhóm trưởng mới
+      setPendingLeaveGroup(group);
+      setShowSelectNewLeaderModal(true);
+      return;
+    }
+
+    // Nếu không phải nhóm trưởng thì xử lý rời nhóm như bình thường
+    confirmAndLeaveGroup(conversationId);
+  };
+  const handleSelectNewLeader = (newLeaderId) => {
+    if (!pendingLeaveGroup) return;
+
+    confirmAndLeaveGroup(pendingLeaveGroup._id, newLeaderId);
+    setShowSelectNewLeaderModal(false);
+    setPendingLeaveGroup(null);
+  };
+
+  const confirmAndLeaveGroup = async (conversationId, newLeaderId = null) => {
+    if (!window.confirm("Bạn có chắc muốn rời nhóm này?")) return;
+    console.log("nhóm trưởng mới:", newLeaderId);
+    console.log("conversationId:", conversationId);
+    try {
+      socket.emit("leaveGroup", {
+        conversationId,
+        userId: user._id,
+        newLeaderId, // chỉ gửi nếu là nhóm trưởng
+      });
+
+      setSelectedChat(null);
+      setShowMenuId(null);
+    } catch (error) {
+      console.error("Error leaving group:", error);
     }
   };
 
@@ -1339,8 +1376,10 @@ export default function ChatApp() {
       // Mình là người gửi → bị từ chối
       if (senderId === user._id) {
         handleSearchUser();
-        setIsFriendRequestSent(false);
+        loadFriendRequests();
+
         toast.info("Lời mời kết bạn đã bị từ chối.");
+        setIsFriendRequestSent(false);
       }
 
       // Mình là người nhận → cập nhật lại danh sách lời mời
@@ -2112,6 +2151,25 @@ export default function ChatApp() {
       socket.off("nguoila");
     };
   }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on("friend_request_cancelled", ({ senderId }) => {
+      // Cập nhật danh sách lời mời kết bạn
+      setFriendRequests((prev) =>
+        prev.filter((req) => req.senderId !== senderId)
+      );
+
+      loadFriendRequests();
+
+      toast.info("Đối phương đã thu hồi lời mời kết bạn.");
+    });
+
+    return () => {
+      socket.off("friend_request_cancelled");
+    };
+  }, [socket]);
 
   const handleGroupImageChange = (e) => {
     const file = e.target.files[0];
@@ -4622,6 +4680,34 @@ export default function ChatApp() {
           <div className="welcome-message">
             <h2>{selectedtitle}</h2>
             <p>{selectedtitle2}</p>
+          </div>
+        </>
+      )}
+
+      {showSelectNewLeaderModal && (
+        <>
+          <div className="leave-group-overlay">
+            <div className="leave-group-modal">
+              <h3>Chọn nhóm trưởng mới trước khi rời</h3>
+              <ul>
+                {pendingLeaveGroup.members
+                  .filter((member) => member._id !== user._id)
+                  .map((member) => (
+                    <li
+                      key={member._id}
+                      onClick={() => handleSelectNewLeader(member._id)}
+                    >
+                      {member.username}
+                    </li>
+                  ))}
+              </ul>
+              <button
+                className="leave-group-cancel"
+                onClick={() => setShowSelectNewLeaderModal(false)}
+              >
+                Huỷ
+              </button>
+            </div>
           </div>
         </>
       )}

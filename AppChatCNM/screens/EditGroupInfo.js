@@ -69,7 +69,7 @@ export default function ModalEditGroupInfo({ group, visible, onClose }) {
       }
 
       await axios.put(
-        `http://192.168.2.47:8004/conversations/group/${group._id}`,
+        `http://172.16.1.126:8004/conversations/group/${group._id}`,
         formData,
         {
           headers: {

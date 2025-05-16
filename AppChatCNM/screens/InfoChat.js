@@ -52,7 +52,7 @@ export default function InfoChat({ route }) {
   };
 
   useEffect(() => {
-    socket.current = io("http://192.168.2.47:8004", {
+    socket.current = io("http://172.16.1.126:8004", {
       transports: ["websocket"],
     });
 
