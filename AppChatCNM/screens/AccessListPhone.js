@@ -254,7 +254,7 @@ const AccessListPhone = ({ route }) => {
   const getConversation = async (currentUser, contact) => {
     try {
       const response = await fetch(
-        `http://172.16.1.126:8004/conversations/${currentUser._id}/search`
+        `http://192.168.2.20:8004/conversations/${currentUser._id}/search`
       );
       if (!response.ok) {
         throw new Error("Không thể tải danh sách cuộc trò chuyện");

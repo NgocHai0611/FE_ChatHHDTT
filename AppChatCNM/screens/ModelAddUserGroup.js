@@ -42,7 +42,7 @@ const ModalAddUserToGroup = ({
   const navigation = useNavigation();
 
   useEffect(() => {
-    socket.current = io("http://172.16.1.126:8004", {
+    socket.current = io("http://192.168.2.20:8004", {
       transports: ["websocket"],
     });
 
@@ -180,7 +180,7 @@ const ModalAddUserToGroup = ({
       }
 
       const res = await axios.post(
-        "http://172.16.1.126:8004/conversations/createwithimage",
+        "http://192.168.2.20:8004/conversations/createwithimage",
         formData,
         {
           headers: {

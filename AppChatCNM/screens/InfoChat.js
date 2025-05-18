@@ -14,6 +14,7 @@ import { getConversationById } from "../services/apiServices"; // Thêm import
 import ModalAddUserToGroup from "./ModelAddUserGroup";
 import ModalEditGroupInfo from "./EditGroupInfo";
 import Feather from "@expo/vector-icons/Feather";
+import ModalChangeLead from "./ModalChangeLead";
 
 export default function InfoChat({ route }) {
   const {
@@ -38,12 +39,13 @@ export default function InfoChat({ route }) {
   const [isModalVisible, setModalVisible] = useState(false);
   const [refreshFlag, setRefreshFlag] = useState(true);
   const [modalEditGroup, setModalEditGroup] = useState(false);
+  const [modalLeaveGroupLead, setModalLeaveGroupLead] = useState(false);
 
   // Lấy dữ liệu cuộc trò chuyện mới nhất
   const fetchConversation = async () => {
     try {
       const updatedConversation = await getConversationById(
-        initialConversation._id
+        initialConversation._ids
       );
       setConversation(updatedConversation);
       setMembers(updatedConversation.members);
@@ -52,7 +54,7 @@ export default function InfoChat({ route }) {
   };
 
   useEffect(() => {
-    socket.current = io("http://172.16.1.126:8004", {
+    socket.current = io("http://192.168.2.20:8004", {
       transports: ["websocket"],
     });
 
@@ -136,6 +138,32 @@ export default function InfoChat({ route }) {
 
     navigation.navigate("ChatListScreen");
   };
+
+  // const handleSelectNewLeader = (newLeaderId) => {
+  //   if (!pendingLeaveGroup) return;
+
+  //   confirmAndLeaveGroup(pendingLeaveGroup._id, newLeaderId);
+  //   setShowSelectNewLeaderModal(false);
+  //   setPendingLeaveGroup(null);
+  // };
+
+  // const confirmAndLeaveGroup = async (conversationId, newLeaderId = null) => {
+  //   if (!window.confirm("Bạn có chắc muốn rời nhóm này?")) return;
+  //   console.log("nhóm trưởng mới:", newLeaderId);
+  //   console.log("conversationId:", conversationId);
+  //   try {
+  //     socket.emit("leaveGroup", {
+  //       conversationId,
+  //       userId: user._id,
+  //       newLeaderId, // chỉ gửi nếu là nhóm trưởng
+  //     });
+
+  //     setSelectedChat(null);
+  //     setShowMenuId(null);
+  //   } catch (error) {
+  //     console.error("Error leaving group:", error);
+  //   }
+  // };
 
   const handleRemoveFromGroup = (memberId) => {
     // Gửi sự kiện lên server
@@ -306,15 +334,38 @@ export default function InfoChat({ route }) {
 
           {/* Out  */}
           {conversation.groupLeader === currentUser._id ? (
-            <TouchableOpacity
-              style={[styles.leaveGroupBtn, { backgroundColor: "#ffcccc" }]}
-              onPress={handleGroupDisbandedSocket}
-            >
-              <Ionicons name="trash-outline" size={24} color="red" />
-              <Text style={styles.leaveGroupText}>
-                Giải tán cuộc trò chuyện
-              </Text>
-            </TouchableOpacity>
+            <View>
+              <TouchableOpacity
+                style={styles.leaveGroupBtn}
+                onPress={() => {
+                  setModalLeaveGroupLead(true);
+                }}
+              >
+                <Ionicons name="exit-outline" size={24} color="red" />
+                <Text style={styles.leaveGroupText}>Rời cuộc trò chuyện</Text>
+              </TouchableOpacity>
+
+              <ModalChangeLead
+                members={members}
+                idLeadOLD={currentUser._id}
+                conservationID={conversation._id}
+                visible={modalLeaveGroupLead}
+                onClose={() => {
+                  setModalLeaveGroupLead(false);
+                  setRefreshFlag((prev) => !prev);
+                }}
+              ></ModalChangeLead>
+
+              <TouchableOpacity
+                style={[styles.leaveGroupBtn, { backgroundColor: "#ffcccc" }]}
+                onPress={handleGroupDisbandedSocket}
+              >
+                <Ionicons name="trash-outline" size={24} color="red" />
+                <Text style={styles.leaveGroupText}>
+                  Giải tán cuộc trò chuyện
+                </Text>
+              </TouchableOpacity>
+            </View>
           ) : (
             <TouchableOpacity
               style={styles.leaveGroupBtn}
