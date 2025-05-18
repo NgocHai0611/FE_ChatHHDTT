@@ -59,7 +59,9 @@ export default function ChatScreen({ navigation, route }) {
 
   // Kết nối socket và xử lý các sự kiện
   useEffect(() => {
+
     socket.current = io("http://192.168.100.60:8004", {
+
       transports: ["websocket"],
     });
 

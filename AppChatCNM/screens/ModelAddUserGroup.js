@@ -244,9 +244,6 @@ const ModalAddUserToGroup = ({
 
           {typeAction === "update" && renderPhoneInput()}
 
-          {console.log("Danh Sach Ban Be", friends)}
-          {console.log("Danh Sach Nguoi Trong Nhom", alreadyInGroup)}
-
           <FlatList
             style={{ maxHeight: 300 }}
             data={friendNotToGroup}
