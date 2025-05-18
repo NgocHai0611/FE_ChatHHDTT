@@ -60,8 +60,15 @@ export default function ChatListScreen({ navigation }) {
     if (user) {
       try {
         const data = await getConversations(user._id);
-        setConversations(data);
-        console.log("Fetched Conversations:", data);
+
+        // Lọc bỏ các conversation mà người dùng đã xóa (có trong deleteBy)
+        const filteredData = data.filter(
+          (conv) =>
+            !conv.deleteBy?.some((id) => id.toString() === user._id.toString())
+        );
+
+        setConversations(filteredData);
+        console.log("Fetched Conversations:", filteredData);
       } catch (error) {
         console.log("Error fetching conversations:", error);
       }

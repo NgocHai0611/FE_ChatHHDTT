@@ -15,6 +15,7 @@ import ModalAddUserToGroup from "./ModelAddUserGroup";
 import ModalEditGroupInfo from "./EditGroupInfo";
 import Feather from "@expo/vector-icons/Feather";
 import ModalChangeLead from "./ModalChangeLead";
+import Entypo from "@expo/vector-icons/Entypo";
 
 export default function InfoChat({ route }) {
   const {
@@ -179,6 +180,21 @@ export default function InfoChat({ route }) {
     }, 2000); // 2000 milliseconds = 2 giây
   };
 
+  const handleHideConversation = () => {
+    console.log("Conservation Hide ", conversation._id);
+    console.log("User Id Hide", currentUser._id);
+
+    if (window.confirm("Bạn có chắc muốn ẩn đoạn chat này?")) {
+      socket.current.emit("deleteChat", {
+        conversationId: conversation._id,
+        userId: currentUser._id,
+      });
+    }
+
+    // Delay 2 giây rồi mới navigate
+    navigation.replace("ChatListScreen"); // sẽ remount lại hoàn toàn ChatListScreen
+  };
+
   const renderMember = ({ item }) => {
     const isLeader = conversation.groupLeader === item._id;
     const isDeputy = deputies.some((id) => id === item._id);
@@ -190,7 +206,7 @@ export default function InfoChat({ route }) {
     const canManage = isLeader || isDeputy || isCurrentUserLeader;
 
     return (
-      <View style={styles.memberContainer}>
+      <View key={item._id} style={styles.memberContainer}>
         <View style={styles.memberInfo}>
           <Image source={{ uri: item.avatar }} style={styles.avatar} />
           <View>
@@ -332,6 +348,14 @@ export default function InfoChat({ route }) {
             <Text style={styles.addMemberText}>Thêm thành viên</Text>
           </TouchableOpacity>
 
+          <TouchableOpacity
+            style={styles.addMemberBtn}
+            onPress={handleHideConversation}
+          >
+            <Entypo name="eye-with-line" size={24} color="black" />
+            <Text style={styles.addMemberText}>Ẩn Cuộc Trò Chuyện</Text>
+          </TouchableOpacity>
+
           {/* Out  */}
           {conversation.groupLeader === currentUser._id ? (
             <View>
@@ -394,6 +418,7 @@ export default function InfoChat({ route }) {
         </>
       ) : (
         <>
+          {/* Thêm Nhóm VỚi Người Khác */}
           <View style={styles.singleUserInfo}>
             <Image
               source={{ uri: otherUser.avatar }}
@@ -401,6 +426,15 @@ export default function InfoChat({ route }) {
             />
             <Text style={styles.username}>{otherUser.username}</Text>
           </View>
+
+          <TouchableOpacity
+            style={styles.addMemberBtn}
+            onPress={handleHideConversation}
+          >
+            <Entypo name="eye-with-line" size={24} color="black" />
+            <Text style={styles.addMemberText}>Ẩn Cuộc Trò Chuyện</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={styles.createGroupBtn}
             onPress={handleCreateGroup}

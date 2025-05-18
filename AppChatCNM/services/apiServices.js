@@ -267,8 +267,6 @@ export const deleteMessageForUser = async (
   }
 };
 
-
-
 // Hàm upload file, video, image nhiều file được
 
 export const uploadFiles = async (files, conversationId, senderId) => {
@@ -344,7 +342,6 @@ export const uploadFiles = async (files, conversationId, senderId) => {
     }
     return response.data;
   } catch (error) {
-
     console.error(
       "Lỗi khi tải lên files:",
       error.response?.data || error.message
@@ -352,4 +349,3 @@ export const uploadFiles = async (files, conversationId, senderId) => {
     throw error;
   }
 };
-
