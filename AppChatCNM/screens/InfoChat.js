@@ -5,6 +5,8 @@ import {
   StyleSheet,
   Image,
   FlatList,
+  Modal,
+  Pressable,
   TouchableOpacity,
 } from "react-native";
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
@@ -16,6 +18,20 @@ import ModalEditGroupInfo from "./EditGroupInfo";
 import Feather from "@expo/vector-icons/Feather";
 import ModalChangeLead from "./ModalChangeLead";
 import Entypo from "@expo/vector-icons/Entypo";
+import { ScrollView } from "react-native-web";
+import {
+  uploadFiles,
+  getMessages,
+  pinMessage,
+  recallMessage as recallMessageApi,
+  deleteMessageForUser,
+  getListFriend,
+  createConversation,
+  getConversations,
+} from "../services/apiServices";
+import MediaMessagesViewer from "./RenderMessageMedia";
+
+import { Video } from "expo-av";
 
 export default function InfoChat({ route }) {
   const {
@@ -41,6 +57,9 @@ export default function InfoChat({ route }) {
   const [refreshFlag, setRefreshFlag] = useState(true);
   const [modalEditGroup, setModalEditGroup] = useState(false);
   const [modalLeaveGroupLead, setModalLeaveGroupLead] = useState(false);
+  const [mediaMessages, setMediaMessages] = useState([]);
+  const [noMediaMessage, setNoMediaMessage] = useState("");
+  const [fullScreenMedia, setFullScreenMedia] = useState(null); // { type: 'image' | 'video', uri: string }
 
   // Lấy dữ liệu cuộc trò chuyện mới nhất
   const fetchConversation = async () => {
@@ -52,6 +71,58 @@ export default function InfoChat({ route }) {
       setMembers(updatedConversation.members);
       setDeputies(updatedConversation.groupDeputies || []);
     } catch (error) {}
+  };
+
+  // Lấy các mesage với type file và video
+
+  const fetchMediaMessages = async () => {
+    try {
+      const data = await getMessages(conversation._id);
+      console.log("📥 Tất cả messages:", data);
+
+      const mediaMessages = data
+        .filter(
+          (msg) =>
+            (msg.messageType === "file" && msg.fileUrl) ||
+            (msg.messageType === "video" && msg.videoUrl) ||
+            (msg.messageType === "image" && msg.imageUrl)
+        )
+        .map((msg) => {
+          const userInfo =
+            msg.messageType === "system"
+              ? { _id: "system", name: "Hệ thống" }
+              : {
+                  _id: msg.senderId?._id ?? "unknown",
+                  name: msg.senderId?.username ?? "Không xác định",
+                  avatar: msg.senderId?.avatar ?? "",
+                };
+
+          return {
+            _id: msg._id ?? `${Date.now()}-${Math.random()}`,
+            text: msg.isRecalled ? "Tin nhắn đã bị thu hồi" : msg.text || "",
+            createdAt: msg.createdAt ? new Date(msg.createdAt) : new Date(),
+            user: userInfo,
+            file: msg.fileUrl || undefined,
+            video: msg.videoUrl || undefined,
+            image: msg.imageUrl || undefined,
+            fileName: msg.fileName || "",
+            messageType: msg.messageType,
+          };
+        })
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); // Mới nhất lên đầu
+
+      if (mediaMessages.length === 0) {
+        setMediaMessages([]);
+        setNoMediaMessage("Không có gì cả");
+      } else {
+        console.log("Media Message ", mediaMessages);
+        setMediaMessages(mediaMessages);
+        setNoMediaMessage("");
+      }
+    } catch (error) {
+      console.error("🚨 Lỗi khi fetch media messages:", error);
+      alert("Không thể tải file/video/hình ảnh. Vui lòng thử lại.");
+    }
   };
 
   useEffect(() => {
@@ -84,6 +155,7 @@ export default function InfoChat({ route }) {
   useFocusEffect(
     React.useCallback(() => {
       fetchConversation(); // Làm mới dữ liệu mỗi khi màn hình được focus
+      fetchMediaMessages();
     }, [])
   );
 
@@ -139,32 +211,6 @@ export default function InfoChat({ route }) {
 
     navigation.navigate("ChatListScreen");
   };
-
-  // const handleSelectNewLeader = (newLeaderId) => {
-  //   if (!pendingLeaveGroup) return;
-
-  //   confirmAndLeaveGroup(pendingLeaveGroup._id, newLeaderId);
-  //   setShowSelectNewLeaderModal(false);
-  //   setPendingLeaveGroup(null);
-  // };
-
-  // const confirmAndLeaveGroup = async (conversationId, newLeaderId = null) => {
-  //   if (!window.confirm("Bạn có chắc muốn rời nhóm này?")) return;
-  //   console.log("nhóm trưởng mới:", newLeaderId);
-  //   console.log("conversationId:", conversationId);
-  //   try {
-  //     socket.emit("leaveGroup", {
-  //       conversationId,
-  //       userId: user._id,
-  //       newLeaderId, // chỉ gửi nếu là nhóm trưởng
-  //     });
-
-  //     setSelectedChat(null);
-  //     setShowMenuId(null);
-  //   } catch (error) {
-  //     console.error("Error leaving group:", error);
-  //   }
-  // };
 
   const handleRemoveFromGroup = (memberId) => {
     // Gửi sự kiện lên server
@@ -356,6 +402,9 @@ export default function InfoChat({ route }) {
             <Text style={styles.addMemberText}>Ẩn Cuộc Trò Chuyện</Text>
           </TouchableOpacity>
 
+          {/*Render Hình Ảnh Và Video Với Mỗi Đoạn Chat  */}
+          <MediaMessagesViewer messages={mediaMessages}></MediaMessagesViewer>
+
           {/* Out  */}
           {conversation.groupLeader === currentUser._id ? (
             <View>
@@ -434,6 +483,9 @@ export default function InfoChat({ route }) {
             <Entypo name="eye-with-line" size={24} color="black" />
             <Text style={styles.addMemberText}>Ẩn Cuộc Trò Chuyện</Text>
           </TouchableOpacity>
+
+          {/* Render Message Media Chat 1-1 */}
+          <MediaMessagesViewer messages={mediaMessages}></MediaMessagesViewer>
 
           <TouchableOpacity
             style={styles.createGroupBtn}
