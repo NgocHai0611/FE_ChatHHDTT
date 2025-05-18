@@ -1,9 +1,8 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   View,
   Text,
   FlatList,
-  ScrollView,
   Image,
   TouchableOpacity,
   StyleSheet,
@@ -23,15 +22,12 @@ const MediaMessagesViewer = ({ messages }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [modalImageUri, setModalImageUri] = useState(null);
   const [modalVideoUri, setModalVideoUri] = useState(null);
+  const videoRef = useRef(null); // Tạo ref
 
-  // Hàm tải file về máy và mở chia sẻ nếu có thể
   const downloadFile = async (fileUri, fileName) => {
     try {
       const fileUriLocal = FileSystem.documentDirectory + fileName;
-
       const { uri } = await FileSystem.downloadAsync(fileUri, fileUriLocal);
-
-      Alert.alert("Tải về thành công!", `File đã lưu tại:\n${uri}`);
 
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri);
@@ -94,8 +90,18 @@ const MediaMessagesViewer = ({ messages }) => {
           style={styles.itemContainer}
         >
           <View style={styles.videoPreview}>
-            <Text style={styles.playIcon}>▶</Text>
-            <Text style={styles.downloadText}>Xem video</Text>
+            <Video
+              ref={videoRef}
+              source={{ uri: video }}
+              rate={1.0}
+              volume={1.0}
+              isMuted={false}
+              resizeMode="cover"
+              shouldPlay={false}
+              useNativeControls={false}
+              style={styles.videoPlayer}
+            />
+            <Text style={styles.downloadText}>{fileName || "Xem video"}</Text>
           </View>
         </TouchableOpacity>
       );
@@ -105,7 +111,7 @@ const MediaMessagesViewer = ({ messages }) => {
   };
 
   return (
-    <ScrollView>
+    <>
       <FlatList
         data={messages}
         renderItem={renderMediaItem}
@@ -150,7 +156,7 @@ const MediaMessagesViewer = ({ messages }) => {
           </View>
         </View>
       </Modal>
-    </ScrollView>
+    </>
   );
 };
 
@@ -161,7 +167,7 @@ const styles = StyleSheet.create({
   itemContainer: {
     width: itemWidth,
     height: itemWidth,
-    margin: 5, // khoảng cách đều cho từng item
+    margin: 5,
     backgroundColor: "#f0f0f0",
     borderRadius: 8,
     justifyContent: "center",
@@ -234,6 +240,12 @@ const styles = StyleSheet.create({
   fullVideo: {
     width: "100%",
     height: "100%",
+  },
+  videoPlayer: {
+    width: 250,
+    height: 150,
+    borderRadius: 10,
+    backgroundColor: "#000",
   },
 });
 
