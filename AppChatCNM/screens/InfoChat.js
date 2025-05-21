@@ -126,7 +126,7 @@ export default function InfoChat({ route }) {
   };
 
   useEffect(() => {
-    socket.current = io("http://192.168.2.20:8004", {
+    socket.current = io("http://192.168.1.218:8004", {
       transports: ["websocket"],
     });
 
@@ -394,13 +394,13 @@ export default function InfoChat({ route }) {
             <Text style={styles.addMemberText}>Thêm thành viên</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
+          {/* <TouchableOpacity
             style={styles.addMemberBtn}
             onPress={handleHideConversation}
           >
             <Entypo name="eye-with-line" size={24} color="black" />
             <Text style={styles.addMemberText}>Ẩn Cuộc Trò Chuyện</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
 
           {/*Render Hình Ảnh Và Video Với Mỗi Đoạn Chat  */}
           <MediaMessagesViewer messages={mediaMessages}></MediaMessagesViewer>
@@ -476,13 +476,13 @@ export default function InfoChat({ route }) {
             <Text style={styles.username}>{otherUser.username}</Text>
           </View>
 
-          <TouchableOpacity
+          {/* <TouchableOpacity
             style={styles.addMemberBtn}
             onPress={handleHideConversation}
           >
             <Entypo name="eye-with-line" size={24} color="black" />
             <Text style={styles.addMemberText}>Ẩn Cuộc Trò Chuyện</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
 
           {/* Render Message Media Chat 1-1 */}
           <MediaMessagesViewer messages={mediaMessages}></MediaMessagesViewer>

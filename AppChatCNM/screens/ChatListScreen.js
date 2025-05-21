@@ -28,7 +28,7 @@ export default function ChatListScreen({ navigation }) {
   const [user, setUser] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [searchText, setSearchText] = useState("");
-  const socket = io("http://192.168.2.20:8004", {
+  const socket = io("http://192.168.1.218:8004", {
     transports: ["websocket"],
   });
   const [isDeleteModalVisible, setDeleteModalVisible] = useState(false);
@@ -36,7 +36,7 @@ export default function ChatListScreen({ navigation }) {
   const [pinnedMessage, setPinnedMessage] = useState(null);
   const [isModalVisible, setModalVisible] = useState(false);
   const [refreshFlag, setRefreshFlag] = useState(true);
-
+  const [modalAction, setModalAction] = useState("hide"); // "delete" hoặc "hide"
   // Fetch thông tin user khi đăng nhập
   useEffect(() => {
     const fetchUserData = async () => {
@@ -82,20 +82,22 @@ export default function ChatListScreen({ navigation }) {
     }
   }, [user, isModalVisible]);
 
-  // Socket Listener
+  // Cập nhật useEffect để xử lý sự kiện chatDeleted
   useEffect(() => {
     socket.on("conversationUpdated", () => {
       if (user) fetchConversations();
     });
 
-    socket.on("chatDeleted", (data) => {
+    socket.on("chatDeleted", ({ conversationId }) => {
       setConversations((prevConversations) =>
-        prevConversations.filter((conv) => conv._id !== data.conversationId)
+        prevConversations.filter((conv) => conv._id !== conversationId)
       );
-      console.log("Chat deleted on client:", data.conversationId);
+      console.log("Chat deleted or hidden on client:", conversationId);
     });
 
     return () => {
+      socket.off("conversationUpdated");
+      socket.off("chatDeleted");
       socket.disconnect();
     };
   }, [user]);
@@ -121,7 +123,9 @@ export default function ChatListScreen({ navigation }) {
               .toLowerCase()
               .includes(searchText.toLowerCase()));
 
-        return shouldShowConversation;
+        // Thêm điều kiện lọc để loại bỏ các cuộc trò chuyện bị ẩn hoặc xóa
+        const isNotHiddenOrDeleted = !c.deleteBy?.includes(user._id);
+        return shouldShowConversation && isNotHiddenOrDeleted;
       })
       .sort((a, b) => {
         // Sắp xếp theo lastMessageTime, từ mới nhất đến cũ nhất
@@ -164,7 +168,7 @@ export default function ChatListScreen({ navigation }) {
   const fetchMessagesByConversationId = async (conversationId) => {
     try {
       const response = await fetch(
-        `http://192.168.2.20:8004/messages/get/${conversationId}`
+        `http://192.168.1.218:8004/messages/get/${conversationId}`
       );
       const data = await response.json();
       const pinnedMessage = data.find((msg) => msg.isPinned === true);
@@ -185,14 +189,14 @@ export default function ChatListScreen({ navigation }) {
 
       // 2. Gọi API lấy chi tiết cuộc trò chuyện (xem có phải group không)
       const res1 = await axios.get(
-        `http://192.168.2.20:8004/conversations/get/${conversation._id}`
+        `http://192.168.1.218:8004/conversations/get/${conversation._id}`
       );
       const fullConversation = res1.data;
 
       // 3. Nếu là group chat thì lấy thông tin người tạo nhóm
       if (fullConversation.createGroup?.userId) {
         const res2 = await axios.get(
-          `http://192.168.2.20:8004/users/get/${fullConversation.createGroup.userId}`
+          `http://192.168.1.218:8004/users/get/${fullConversation.createGroup.userId}`
         );
         const userAdd = res2.data;
 
@@ -234,6 +238,13 @@ export default function ChatListScreen({ navigation }) {
 
   const handleDeleteChat = (conversationId) => {
     setSelectedConversationId(conversationId);
+    setModalAction("hide");
+    setDeleteModalVisible(true);
+  };
+
+  const handleDeleteChatWithMe = (conversationId) => {
+    setSelectedConversationId(conversationId);
+    setModalAction("delete");
     setDeleteModalVisible(true);
   };
 
@@ -266,6 +277,13 @@ export default function ChatListScreen({ navigation }) {
         </View>
 
         <View>
+          <Text style={styles.title}>Chats</Text>
+        </View>
+      </View>
+
+      {/* Phần body */}
+      <View style={styles.inputContainer}>
+        <TouchableOpacity style={styles.iconAddFriend}>
           <MaterialIcons
             name="group-add"
             size={24}
@@ -274,14 +292,6 @@ export default function ChatListScreen({ navigation }) {
             typeAction="create"
             onPress={() => setModalVisible(true)}
           />
-          <Text style={styles.title}>Chats</Text>
-        </View>
-      </View>
-
-      {/* Phần body */}
-      <View style={styles.inputContainer}>
-        <TouchableOpacity style={styles.iconAddFriend}>
-          <MaterialIcons name="person-add" size={30} color="gray" />
         </TouchableOpacity>
         <View style={styles.iconSearch}>
           <TouchableOpacity style={styles.iconSearchTouch}>
@@ -383,16 +393,24 @@ export default function ChatListScreen({ navigation }) {
         renderHiddenItem={({ item }) => (
           <View style={styles.rowBack}>
             <View style={{ flex: 1 }}></View>
+            {/* Nút Ẩn */}
+            <TouchableOpacity
+              style={[styles.backRightBtn, styles.backRightBtnHide]}
+              onPress={() => handleDeleteChat(item._id)}
+            >
+              <Text style={styles.backTextWhite}>Ẩn</Text>
+            </TouchableOpacity>
+            {/* Nút Xóa */}
             <TouchableOpacity
               style={[styles.backRightBtn, styles.backRightBtnRight]}
-              onPress={() => handleDeleteChat(item._id)}
+              onPress={() => handleDeleteChatWithMe(item._id)}
             >
               <Text style={styles.backTextWhite}>Xóa</Text>
             </TouchableOpacity>
           </View>
         )}
         leftOpenValue={0}
-        rightOpenValue={-75}
+        rightOpenValue={-150} // Tăng giá trị để chứa cả hai nút
       />
 
       {/* Modal xóa */}
@@ -400,35 +418,50 @@ export default function ChatListScreen({ navigation }) {
         animationType="slide"
         transparent={true}
         visible={isDeleteModalVisible}
-        onRequestClose={() => {
-          setDeleteModalVisible(!isDeleteModalVisible);
-        }}
+        onRequestClose={() => setDeleteModalVisible(false)}
       >
         <View style={styles.centeredView}>
           <View style={styles.modalView}>
             <Text style={styles.modalText}>
-              Bạn có chắc chắn muốn xóa cuộc trò chuyện này?
+              {modalAction === "hide"
+                ? "Bạn có chắc muốn ẩn đoạn chat này?"
+                : "Bạn có chắc muốn xóa đoạn chat này?"}
             </Text>
             <View style={styles.modalButtons}>
               <Pressable
                 style={[styles.button, styles.buttonCancel]}
-                onPress={() => setDeleteModalVisible(!isDeleteModalVisible)}
+                onPress={() => setDeleteModalVisible(false)}
               >
                 <Text style={styles.textStyle}>Hủy</Text>
               </Pressable>
               <Pressable
-                style={[styles.button, styles.buttonDelete]}
+                style={[
+                  styles.button,
+                  modalAction === "hide"
+                    ? styles.buttonHide
+                    : styles.buttonDelete,
+                ]}
                 onPress={() => {
                   if (selectedConversationId) {
-                    socket.emit("deleteChat", {
-                      conversationId: selectedConversationId,
-                    });
+                    if (modalAction === "hide") {
+                      socket.emit("deleteChat", {
+                        conversationId: selectedConversationId,
+                        userId: user._id,
+                      });
+                    } else {
+                      socket.emit("deleteChatWithMe", {
+                        conversationId: selectedConversationId,
+                        userId: user._id,
+                      });
+                    }
                   }
-                  setDeleteModalVisible(!isDeleteModalVisible);
+                  setDeleteModalVisible(false);
                   setSelectedConversationId(null);
                 }}
               >
-                <Text style={styles.textStyle}>Xóa</Text>
+                <Text style={styles.textStyle}>
+                  {modalAction === "hide" ? "Ẩn" : "Xóa"}
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -646,7 +679,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 22,
+    backgroundColor: "rgba(0,0,0,0.5)",
   },
   modalView: {
     margin: 20,
@@ -685,6 +718,9 @@ const styles = StyleSheet.create({
   buttonDelete: {
     backgroundColor: "#ff6347",
   },
+  buttonHide: {
+    backgroundColor: "#FFA500",
+  },
   textStyle: {
     color: "white",
     fontWeight: "bold",
@@ -692,26 +728,25 @@ const styles = StyleSheet.create({
   },
   rowBack: {
     alignItems: "center",
-    backgroundColor: "#DDD",
     flex: 1,
     flexDirection: "row",
-    justifyContent: "space-between",
-    paddingLeft: 15,
+    justifyContent: "flex-end",
   },
   backRightBtn: {
     alignItems: "center",
-    bottom: 0,
     justifyContent: "center",
-    position: "absolute",
-    top: 0,
+    height: "100%",
     width: 75,
   },
+  backRightBtnHide: {
+    backgroundColor: "#FFA500", // Màu cam cho nút Ẩn
+  },
   backRightBtnRight: {
-    backgroundColor: "red",
-    right: 0,
+    backgroundColor: "#FF0000", // Màu đỏ cho nút Xóa
   },
   backTextWhite: {
     color: "#FFF",
+    fontWeight: "bold",
   },
   systemMessageText: {
     fontStyle: "italic",

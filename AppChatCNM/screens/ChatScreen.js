@@ -59,7 +59,7 @@ export default function ChatScreen({ navigation, route }) {
 
   // Kết nối socket và xử lý các sự kiện
   useEffect(() => {
-    socket.current = io("http://192.168.2.20:8004", {
+    socket.current = io("http://192.168.1.218:8004", {
       transports: ["websocket"],
     });
 
@@ -235,7 +235,8 @@ export default function ChatScreen({ navigation, route }) {
         if (!currentUser || !currentUser._id) return true;
         return !msg.deletedFrom?.includes(currentUser._id);
       });
-
+      const pinned = formattedMessages.find((msg) => msg.isPinned);
+      setPinnedMessage(pinned || null);
       setMessages(filteredMessages.reverse());
     } catch (error) {
       console.error("🚨 Failed to fetch messages:", error);
@@ -622,6 +623,13 @@ export default function ChatScreen({ navigation, route }) {
   // Render tin nhắn ảnh
   const renderMessageImage = (props) => {
     const { currentMessage } = props;
+    if (currentMessage.isRecalled) {
+      return (
+        <Text style={{ color: "gray", fontStyle: "italic" }}>
+          Tin nhắn đã bị thu hồi
+        </Text>
+      );
+    }
     const imageUrl = currentMessage.image;
     const fileName = `image_${Date.now()}.jpg`;
 
@@ -669,6 +677,13 @@ export default function ChatScreen({ navigation, route }) {
   // Render tin nhắn video
   const renderMessageVideo = (props) => {
     const { currentMessage } = props;
+    if (currentMessage.isRecalled) {
+      return (
+        <Text style={{ color: "gray", fontStyle: "italic" }}>
+          Tin nhắn đã bị thu hồi
+        </Text>
+      );
+    }
     const videoUrl = currentMessage.video;
     const fileName = currentMessage.fileName || `video_${Date.now()}.mp4`;
     const handleDownload = async () => {
@@ -705,15 +720,22 @@ export default function ChatScreen({ navigation, route }) {
   // Render tin nhắn file
   const renderMessageFile = (props) => {
     const { currentMessage } = props;
+    if (currentMessage.isRecalled) {
+      return (
+        <Text style={{ color: "gray", fontStyle: "italic" }}>
+          Tin nhắn đã bị thu hồi
+        </Text>
+      );
+    }
     const fileName =
       currentMessage.fileName ||
       currentMessage.text?.replace("📄 ", "") ||
       "Tệp không xác định";
-    const fileType = fileName.split(".").portable.toUpperCase() || "UNKNOWN";
+    const fileType = fileName.split(".").pop().toUpperCase() || "UNKNOWN";
 
     const fileUrl = currentMessage.file;
     const truncatedFileName =
-      fileName.length > 20 ? `${fileName.substring(0, 17)}...` : fileName;
+      fileName.length > 10 ? `${fileName.substring(0, 17)}...` : fileName;
 
     const handleDownload = async () => {
       if (!fileUrl) {
@@ -1018,7 +1040,18 @@ export default function ChatScreen({ navigation, route }) {
     const { currentMessage } = props;
     const isCurrentUser = currentMessage.user._id === currentUser._id;
     const isSystemMessage = currentMessage.messageType === "system";
+    const repliedToMessage =
+      currentMessage.replyTo && currentMessage.replyTo._id
+        ? messages.find((msg) => msg._id === currentMessage.replyTo._id)
+        : null;
+    const isHighlighted = currentMessage._id === highlightedMessageId;
 
+    // Nếu là tin nhắn file, không hiển thị bubble mặc định
+    if (currentMessage.file) {
+      return (
+        <View style={{ marginVertical: 5 }}>{renderMessageFile(props)}</View>
+      );
+    }
     if (isSystemMessage) {
       return (
         <View
@@ -1041,7 +1074,12 @@ export default function ChatScreen({ navigation, route }) {
         </View>
       );
     }
-
+    // Kiểm tra trạng thái "Đã xem" cho cả nhóm và cuộc trò chuyện 1-1
+    const isSeenByOthers =
+      isCurrentUser &&
+      currentMessage.seenBy?.some(
+        (s) => s.user !== currentUser._id // Kiểm tra nếu có người khác đã xem
+      );
     return (
       <View>
         <Bubble
@@ -1051,13 +1089,25 @@ export default function ChatScreen({ navigation, route }) {
               padding: 10,
               borderRadius: 15,
               alignSelf: "flex-end",
-              backgroundColor: isCurrentUser ? "#007AFF" : "#7B61FF",
+              backgroundColor: isCurrentUser
+                ? isHighlighted
+                  ? "red"
+                  : "#007AFF"
+                : isHighlighted
+                ? "red"
+                : "#7B61FF",
             },
             left: {
               padding: 10,
               borderRadius: 15,
               alignSelf: "flex-start",
-              backgroundColor: isCurrentUser ? "#e0e0e0" : "#f0f0f0",
+              backgroundColor: isCurrentUser
+                ? isHighlighted
+                  ? "red"
+                  : "#e0e0e0"
+                : isHighlighted
+                ? "red"
+                : "#f0f0f0",
             },
           }}
           textStyle={{
@@ -1069,19 +1119,35 @@ export default function ChatScreen({ navigation, route }) {
             setIsMessageModalVisible(true);
           }}
           renderCustomView={() =>
-            currentMessage.replyTo && (
+            repliedToMessage && repliedToMessage._id ? (
               <TouchableOpacity
-                onPress={() => handleReplyToPress(currentMessage.replyTo._id)}
+                onPress={() => handleReplyToPress(repliedToMessage._id)}
               >
-                <View style={[styles.embeddedRepliedMessageContainer]}>
+                <View
+                  style={[
+                    styles.embeddedRepliedMessageContainer,
+                    isCurrentUser
+                      ? styles.embeddedRepliedMessageRight
+                      : styles.embeddedRepliedMessageLeft,
+                  ]}
+                >
                   <Text style={styles.embeddedRepliedToText}>
-                    {currentMessage.replyTo.text || "Tin nhắn đã bị thu hồi"}
+                    {repliedToMessage.user._id !== currentUser._id && (
+                      <Text style={styles.embeddedRepliedToName}>
+                        {repliedToMessage.user.name}:{" "}
+                      </Text>
+                    )}
+                    {repliedToMessage.text ||
+                      (repliedToMessage.image && "Ảnh") ||
+                      (repliedToMessage.video && "Video") ||
+                      (repliedToMessage.file && "Tệp")}
                   </Text>
                 </View>
               </TouchableOpacity>
-            )
+            ) : null
           }
         />
+        {isSeenByOthers && <Text style={styles.seenText}>Đã xem</Text>}
       </View>
     );
   };

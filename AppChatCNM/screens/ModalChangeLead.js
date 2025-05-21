@@ -24,7 +24,7 @@ const ModalChangeLead = ({
   const navigation = useNavigation();
 
   useEffect(() => {
-    socket.current = io("http://192.168.2.20:8004", {
+    socket.current = io("http://192.168.1.218:8004", {
       transports: ["websocket"],
     });
 
