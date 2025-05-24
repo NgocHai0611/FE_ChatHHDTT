@@ -51,6 +51,7 @@ import axios from "axios";
 import { useLocation } from "react-router-dom";
 import { set } from "mongoose";
 // import { image } from "../../../../../BE_ChatHHDTT/config/cloudConfig";
+// Test
 const socket = io("https://bechatcnm-production.up.railway.app", {
   transports: ["websocket"],
 });
