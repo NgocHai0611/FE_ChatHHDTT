@@ -126,7 +126,7 @@ export default function InfoChat({ route }) {
   };
 
   useEffect(() => {
-    socket.current = io("http://192.168.1.218:8004", {
+    socket.current = io("https://bechatcnm-production.up.railway.app", {
       transports: ["websocket"],
     });
 

@@ -51,7 +51,9 @@ import axios from "axios";
 import { useLocation } from "react-router-dom";
 import { set } from "mongoose";
 // import { image } from "../../../../../BE_ChatHHDTT/config/cloudConfig";
-const socket = io("http://localhost:8004", { transports: ["websocket"] });
+const socket = io("https://bechatcnm-production.up.railway.app", {
+  transports: ["websocket"],
+});
 
 Modal.setAppElement("#root");
 
@@ -153,7 +155,7 @@ export default function ChatApp() {
     try {
       // Bước 1: Lấy danh sách conversation
       const res = await axios.get(
-        `http://localhost:8004/conversations/${user._id}`
+        `https://bechatcnm-production.up.railway.app/conversations/${user._id}`
       );
       let conversations = res.data;
       const conversationbyId = res.data;
@@ -184,7 +186,7 @@ export default function ChatApp() {
             memberIds.map(async (memberId) => {
               try {
                 const res = await axios.get(
-                  `http://localhost:8004/users/get/${memberId}`
+                  `https://bechatcnm-production.up.railway.app/users/get/${memberId}`
                 );
                 return res.data; // { _id, username, avatar }
               } catch (err) {
@@ -201,7 +203,7 @@ export default function ChatApp() {
           //   (conv.leftMembers || []).map(async (member) => {
           //     try {
           //       const res = await axios.get(
-          //         `http://localhost:8004/users/get/${member.userId}`
+          //         `https://bechatcnm-production.up.railway.app/users/get/${member.userId}`
           //       );
           //       return {
           //         userId: member.userId,
@@ -241,7 +243,7 @@ export default function ChatApp() {
           // 🟢 Đây là conversation giữa 2 người
           const otherUserId = conv.members.find((_id) => _id !== user._id);
           const userRes = await axios.get(
-            `http://localhost:8004/users/get/${otherUserId}`
+            `https://bechatcnm-production.up.railway.app/users/get/${otherUserId}`
           );
           const otherUser = userRes.data;
 
@@ -384,7 +386,7 @@ export default function ChatApp() {
   const fetchMessagesByConversationId = async (conversationId) => {
     try {
       const response = await fetch(
-        `http://localhost:8004/messages/get/${conversationId}`
+        `https://bechatcnm-production.up.railway.app/messages/get/${conversationId}`
       );
       const data = await response.json();
       const pinnedMessage = data.find((msg) => msg.isPinned === true);
@@ -406,14 +408,14 @@ export default function ChatApp() {
 
     try {
       const res1 = await axios.get(
-        `http://localhost:8004/conversations/get/${chat.conversationId}`
+        `https://bechatcnm-production.up.railway.app/conversations/get/${chat.conversationId}`
       );
       const conversation = res1.data;
 
       // Kiểm tra nếu có trường createGroup (nghĩa là group chat)
       if (conversation.createGroup?.userId) {
         const res2 = await axios.get(
-          `http://localhost:8004/users/get/${conversation.createGroup.userId}`
+          `https://bechatcnm-production.up.railway.app/users/get/${conversation.createGroup.userId}`
         );
         const userAdd = res2.data;
 
@@ -504,11 +506,14 @@ export default function ChatApp() {
 
   const handleLogout = async () => {
     try {
-      const response = await fetch(`http://localhost:8004/v1/auth/logout`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: user._id }),
-      });
+      const response = await fetch(
+        `https://bechatcnm-production.up.railway.app/v1/auth/logout`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: user._id }),
+        }
+      );
 
       if (response.ok) {
         console.log("Đã đăng xuất thành công!");
@@ -576,11 +581,14 @@ export default function ChatApp() {
     /* Xử lý pin tin nhắn */
   }
   const handlePinMessage = async (messageId, isPinned) => {
-    await fetch(`http://localhost:8004/messages/pin/${messageId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isPinned }),
-    });
+    await fetch(
+      `https://bechatcnm-production.up.railway.app/messages/pin/${messageId}`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isPinned }),
+      }
+    );
     // Gửi tín hiệu tới socket để cập nhật tin nhắn bên người nhận
     socket.emit("messageUpdated", {
       conversationId: selectedChat.conversationId,
@@ -593,11 +601,14 @@ export default function ChatApp() {
     /* Xử lý xóa tin nhắn phía tôi */
   }
   const handleDeleteMessageFrom = async (messageId) => {
-    await fetch(`http://localhost:8004/messages/deletefrom/${messageId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: user._id }),
-    });
+    await fetch(
+      `https://bechatcnm-production.up.railway.app/messages/deletefrom/${messageId}`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user._id }),
+      }
+    );
     handleSelectChat(selectedChat);
     setMenuMessageId(null);
   };
@@ -608,7 +619,7 @@ export default function ChatApp() {
   const handleRecallMessage = async (messageId) => {
     try {
       const response = await fetch(
-        `http://localhost:8004/messages/recall/${messageId}`,
+        `https://bechatcnm-production.up.railway.app/messages/recall/${messageId}`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -676,7 +687,7 @@ export default function ChatApp() {
   }
   const handleLeaveGroup = async (conversationId) => {
     const res = await axios.get(
-      `http://localhost:8004/conversations/get/${conversationId}`
+      `https://bechatcnm-production.up.railway.app/conversations/get/${conversationId}`
     );
     if (!res) return;
     const group = res.data;
@@ -747,7 +758,7 @@ export default function ChatApp() {
         updatedMembers.map(async (id) => {
           try {
             const res = await axios.get(
-              `http://localhost:8004/users/get/${id}`
+              `https://bechatcnm-production.up.railway.app/users/get/${id}`
             );
             return res.data;
           } catch (err) {
@@ -808,7 +819,7 @@ export default function ChatApp() {
         try {
           // Gọi API để lấy lại thông tin cuộc trò chuyện mới nhất
           const res = await axios.get(
-            `http://localhost:8004/conversations/get/${conversationId}`
+            `https://bechatcnm-production.up.railway.app/conversations/get/${conversationId}`
           );
           const conversation = res.data;
 
@@ -880,10 +891,10 @@ export default function ChatApp() {
           newMembers.map(async (member) => {
             try {
               const userRes = await axios.get(
-                `http://localhost:8004/users/get/${member.userId}`
+                `https://bechatcnm-production.up.railway.app/users/get/${member.userId}`
               );
               const addByRes = await axios.get(
-                `http://localhost:8004/users/get/${member.addBy}`
+                `https://bechatcnm-production.up.railway.app/users/get/${member.addBy}`
               );
               return {
                 ...member,
@@ -903,7 +914,7 @@ export default function ChatApp() {
         // Gọi lại handleSelectChat để cập nhật lại thông tin cuộc trò chuyện
         try {
           const res = await axios.get(
-            `http://localhost:8004/conversations/get/${conversationId}`
+            `https://bechatcnm-production.up.railway.app/conversations/get/${conversationId}`
           );
           const conversation = res.data;
 
@@ -1034,10 +1045,13 @@ export default function ChatApp() {
     }
 
     try {
-      const response = await fetch("http://localhost:8004/messages/upload", {
-        method: "POST",
-        body: formData,
-      });
+      const response = await fetch(
+        "https://bechatcnm-production.up.railway.app/messages/upload",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
 
       if (!response.ok)
         throw new Error(`HTTP error! Status: ${response.status}`);
@@ -1411,7 +1425,7 @@ export default function ChatApp() {
     try {
       if (isGroup) {
         const res = await fetch(
-          `http://localhost:8004/conversations/get/${receiverId}`
+          `https://bechatcnm-production.up.railway.app/conversations/get/${receiverId}`
         );
         const groupInfo = await res.json();
         console.log("groupInfo", groupInfo);
@@ -1437,7 +1451,7 @@ export default function ChatApp() {
 
       // ✅ Trường hợp chat 1-1
       const response = await fetch(
-        `http://localhost:8004/conversations/${user._id}/search`
+        `https://bechatcnm-production.up.railway.app/conversations/${user._id}/search`
       );
       const conversations = await response.json();
 
@@ -1450,7 +1464,7 @@ export default function ChatApp() {
 
       // 💡 Chỉ gọi API user nếu là chat 1-1
       const userReceiver = await fetch(
-        `http://localhost:8004/users/get/${receiverId}`
+        `https://bechatcnm-production.up.railway.app/users/get/${receiverId}`
       );
       const data = await userReceiver.json();
 
@@ -1466,7 +1480,7 @@ export default function ChatApp() {
 
       // Nếu chưa có, tạo mới cuộc trò chuyện
       const createResponse = await fetch(
-        "http://localhost:8004/conversations/create",
+        "https://bechatcnm-production.up.railway.app/conversations/create",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1535,7 +1549,7 @@ export default function ChatApp() {
       }
 
       const response = await axios.put(
-        `http://localhost:8004/users/update/${user._id}`,
+        `https://bechatcnm-production.up.railway.app/users/update/${user._id}`,
         formData,
         {
           headers: {
@@ -1632,7 +1646,7 @@ export default function ChatApp() {
   const handleSearchByPhone = async () => {
     try {
       const response = await fetch(
-        `http://localhost:8004/friends/search?phone=${phoneSearchTerm}`
+        `https://bechatcnm-production.up.railway.app/friends/search?phone=${phoneSearchTerm}`
       );
       const res = await response.json();
 
@@ -1687,7 +1701,7 @@ export default function ChatApp() {
     try {
       setCreatingGroup(true);
       const res = await axios.post(
-        "http://localhost:8004/conversations/createwithimage",
+        "https://bechatcnm-production.up.railway.app/conversations/createwithimage",
         formData,
         {
           headers: {
@@ -1758,7 +1772,7 @@ export default function ChatApp() {
     try {
       setCreatingGroup(true);
       const res = await axios.post(
-        "http://localhost:8004/conversations/createwithimage",
+        "https://bechatcnm-production.up.railway.app/conversations/createwithimage",
         formData,
         {
           headers: {
@@ -1825,7 +1839,7 @@ export default function ChatApp() {
       } else {
         try {
           const createResponse = await fetch(
-            "http://localhost:8004/conversations/create",
+            "https://bechatcnm-production.up.railway.app/conversations/create",
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -1952,7 +1966,7 @@ export default function ChatApp() {
           try {
             // Bước 1: Lấy danh sách conversation
             const res = await axios.get(
-              `http://localhost:8004/conversations/get/${conversationId}`
+              `https://bechatcnm-production.up.railway.app/conversations/get/${conversationId}`
             );
             const conversation = res.data;
             console.log("conversation", conversation);
@@ -1996,7 +2010,7 @@ export default function ChatApp() {
         if (conversationId === selectedChat?.conversationId) {
           try {
             const res = await axios.get(
-              `http://localhost:8004/conversations/get/${conversationId}`
+              `https://bechatcnm-production.up.railway.app/conversations/get/${conversationId}`
             );
             const updatedChat = res.data;
             console.log("updatedChat", updatedChat);
@@ -2069,7 +2083,7 @@ export default function ChatApp() {
       if (conversationId === selectedChat?.conversationId) {
         try {
           const res = await axios.get(
-            `http://localhost:8004/conversations/get/${conversationId}`
+            `https://bechatcnm-production.up.railway.app/conversations/get/${conversationId}`
           );
           const updatedChat = res.data;
 
@@ -2189,7 +2203,7 @@ export default function ChatApp() {
 
     try {
       const res = await axios.put(
-        `http://localhost:8004/conversations/group/${selectedChat.conversationId}`,
+        `https://bechatcnm-production.up.railway.app/conversations/group/${selectedChat.conversationId}`,
         formData
       );
       console.log("Cập nhật nhóm thành công:", res.data);

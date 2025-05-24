@@ -19,7 +19,7 @@ export default function RecoverPasswordApp() {
   const [isModalVisible, setModalVisible] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
 
-  const API_BASE_URL = `http://192.168.1.218:8004`;
+  const API_BASE_URL = `https://bechatcnm-production.up.railway.app`;
 
   const handleReset = async () => {
     try {

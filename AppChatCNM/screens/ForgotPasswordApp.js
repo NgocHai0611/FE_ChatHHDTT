@@ -27,7 +27,7 @@ export default function ForgotPasswordApp() {
   const [modalMessage, setModalMessage] = useState("");
   const [token, setToken] = useState("");
 
-  const API_BASE_URL = `http://192.168.1.218:8004`;
+  const API_BASE_URL = `https://bechatcnm-production.up.railway.app`;
 
   useEffect(() => {
     // Lấy token từ route.params (được truyền qua deep linking)

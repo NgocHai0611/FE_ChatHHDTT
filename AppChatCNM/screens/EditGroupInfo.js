@@ -69,7 +69,7 @@ export default function ModalEditGroupInfo({ group, visible, onClose }) {
       }
 
       await axios.put(
-        `http://192.168.1.218:8004/conversations/group/${group._id}`,
+        `https://bechatcnm-production.up.railway.app/conversations/group/${group._id}`,
         formData,
         {
           headers: {

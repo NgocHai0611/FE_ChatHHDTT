@@ -286,7 +286,7 @@ const AccessListPhone = ({ route }) => {
   const getConversation = async (currentUser, contact) => {
     try {
       const response = await fetch(
-        `http://192.168.1.218:8004/conversations/${currentUser._id}/search`
+        `https://bechatcnm-production.up.railway.app/conversations/${currentUser._id}/search`
       );
       if (!response.ok) {
         throw new Error("Không thể tải danh sách cuộc trò chuyện");
