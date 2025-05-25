@@ -433,8 +433,6 @@ export default function ChatScreen({ navigation, route }) {
     [conversation._id, currentUser._id, previews, replyingMessage]
   );
 
-
-  
   // Xử lý chọn ảnh
   const handleImagePick = async () => {
     try {
@@ -1448,27 +1446,29 @@ export default function ChatScreen({ navigation, route }) {
             </Text>
             <Text style={styles.online}>Online</Text>
           </View>
-          <View style={styles.iconContainer}>
-            <MaterialIcons
-              name="call"
-              size={24}
-              color="black"
-              style={styles.icon}
-            />
-            <MaterialIcons
-              name="videocam"
-              size={24}
-              color="black"
-              style={styles.icon}
-            />
-            <MaterialIcons
-              name="info-outline"
-              size={24}
-              color="black"
-              style={styles.icon}
-              onPress={handleEditGroup}
-            />
-          </View>
+          {isGroupActive ? (
+            <View style={styles.iconContainer}>
+              <MaterialIcons
+                name="call"
+                size={24}
+                color="black"
+                style={styles.icon}
+              />
+              <MaterialIcons
+                name="videocam"
+                size={24}
+                color="black"
+                style={styles.icon}
+              />
+              <MaterialIcons
+                name="info-outline"
+                size={24}
+                color="black"
+                style={styles.icon}
+                onPress={handleEditGroup}
+              />
+            </View>
+          ) : null}
         </View>
 
         {replyingMessage && (
