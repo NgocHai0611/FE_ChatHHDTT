@@ -13,6 +13,7 @@ import {
   Dimensions,
   FlatList,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { GiftedChat, Bubble, Send } from "react-native-gifted-chat";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
@@ -61,14 +62,41 @@ export default function ChatScreen({ navigation, route }) {
   useEffect(() => {
     socket.current = io("https://bechatcnm-production.up.railway.app", {
       transports: ["websocket"],
+      secure: true,
+      timeout: 10000, // timeout sau 10 giây
     });
 
     socket.current.on("connect", () => {
-      console.log("Socket connected: ", socket.current.id);
       socket.current.emit("markAsSeen", {
         conversationId: conversation._id,
         userId: currentUser._id,
       });
+    });
+
+    // Bắt lỗi kết nối thất bại
+    socket.current.on("connect_error", (err) => {
+      Alert.alert(
+        "Lỗi kết nối",
+        "Không thể kết nối đến server (connect_error)."
+      );
+    });
+
+    // Bắt timeout
+    socket.current.io.on("timeout", () => {
+      // console.log("Socket connection timeout");
+      Alert.alert(
+        "Hết thời gian kết nối",
+        "Không thể kết nối đến server (timeout)."
+      );
+    });
+
+    // Một số socket.io-client dùng 'connect_timeout' thay vì 'timeout'
+    socket.current.io.on("connect_timeout", () => {
+      console.log("Socket connection timeout");
+      Alert.alert(
+        "Hết thời gian kết nối",
+        "Không thể kết nối đến server (connect_timeout)."
+      );
     });
 
     // Lắng nghe tin nhắn mới
@@ -182,7 +210,7 @@ export default function ChatScreen({ navigation, route }) {
   const fetchMessages = async () => {
     try {
       const data = await getMessages(conversation._id);
-      console.log("📥 Data Fetch message", data);
+      // console.log("📥 Data Fetch message", data);
 
       if (conversation.isDissolved === true) {
         setIsGroupActive(false);
@@ -223,7 +251,7 @@ export default function ChatScreen({ navigation, route }) {
           };
 
           if (!formattedMsg.user || !formattedMsg.user._id) {
-            console.warn("❌ Bỏ qua message thiếu user._id:", formattedMsg);
+            // console.warn("❌ Bỏ qua message thiếu user._id:", formattedMsg);
             return null;
           }
 
@@ -287,7 +315,6 @@ export default function ChatScreen({ navigation, route }) {
             type: preview.type,
           }));
 
-          console.log("Files to upload:", files);
           const responseData = await uploadFiles(
             files,
             conversation._id,
@@ -366,6 +393,7 @@ export default function ChatScreen({ navigation, route }) {
           }
         } catch (error) {
           console.error("Lỗi khi gửi tin nhắn media:", error);
+          Alert.alert("Không thể gửi tin nhắn meida. Vui lòng thử lại.", error);
           let errorMessage = "Không thể gửi tin nhắn.";
           if (error.response?.data) {
             if (typeof error.response.data === "string") {
@@ -399,12 +427,14 @@ export default function ChatScreen({ navigation, route }) {
         setText("");
       } catch (error) {
         console.error("Error sending message:", error);
-        alert("Không thể gửi tin nhắn. Vui lòng thử lại.");
+        Alert.alert("Không thể gửi tin nhắn. Vui lòng thử lại.", error);
       }
     },
     [conversation._id, currentUser._id, previews, replyingMessage]
   );
 
+
+  
   // Xử lý chọn ảnh
   const handleImagePick = async () => {
     try {
@@ -507,7 +537,7 @@ export default function ChatScreen({ navigation, route }) {
         copyToCacheDirectory: true,
       });
       if (result.canceled) {
-        console.log("File pick canceled");
+        // console.log("File pick canceled");
         return;
       }
 
@@ -563,7 +593,7 @@ export default function ChatScreen({ navigation, route }) {
           name: fileName,
           type: mimeType,
         };
-        console.log("Selected file:", fileData);
+        // console.log("Selected file:", fileData);
         if (!fileData.uri || !fileData.name || !fileData.type) {
           console.error("Invalid file data:", fileData);
           throw new Error("Dữ liệu file không hợp lệ");
@@ -814,7 +844,7 @@ export default function ChatScreen({ navigation, route }) {
         const response = await pinMessage(selectedMessage._id, {
           isPinned: true,
         });
-        console.log("pinMessage response:", response);
+        // console.log("pinMessage response:", response);
         if (response.isPinned) {
           setMessages((prevMessages) =>
             prevMessages.map((msg) =>
@@ -826,11 +856,11 @@ export default function ChatScreen({ navigation, route }) {
           setPinnedMessage({ ...selectedMessage, isPinned: true });
           setIsMessageModalVisible(false);
           if (socket.current && conversation._id && selectedMessage._id) {
-            console.log("Emitting messageUpdated for pin:", {
-              conversationId: conversation._id,
-              messageId: selectedMessage._id,
-              isSender: selectedMessage.user._id === currentUser._id,
-            });
+            // console.log("Emitting messageUpdated for pin:", {
+            //   conversationId: conversation._id,
+            //   messageId: selectedMessage._id,
+            //   isSender: selectedMessage.user._id === currentUser._id,
+            // });
             socket.current.emit("messageUpdated", {
               conversationId: conversation._id,
               messageId: selectedMessage._id,
@@ -857,7 +887,7 @@ export default function ChatScreen({ navigation, route }) {
   const handleUnpinMessage = async (messageId) => {
     try {
       const response = await pinMessage(messageId, { isPinned: false });
-      console.log("unpinMessage response:", response);
+      // console.log("unpinMessage response:", response);
       if (response.isPinned === false) {
         setMessages((prevMessages) =>
           prevMessages.map((msg) =>
@@ -869,10 +899,10 @@ export default function ChatScreen({ navigation, route }) {
           setSelectedMessage(null);
         }
         if (socket.current && conversation._id) {
-          console.log("Emitting messageUpdated for unpin:", {
-            conversationId: conversation._id,
-            messageId: messageId,
-          });
+          // console.log("Emitting messageUpdated for unpin:", {
+          //   conversationId: conversation._id,
+          //   messageId: messageId,
+          // });
           socket.current.emit("messageUpdated", {
             conversationId: conversation._id,
             messageId: messageId,
@@ -1214,16 +1244,16 @@ export default function ChatScreen({ navigation, route }) {
     try {
       let conversationId = null;
       const userConversations = await getConversations(currentUser._id);
-      console.log("Danh sách cuộc trò chuyện:", userConversations);
-      console.log(
-        "currentUser._id:",
-        currentUser._id,
-        "friend._id:",
-        friend._id
-      );
+      // console.log("Danh sách cuộc trò chuyện:", userConversations);
+      // console.log(
+      //   "currentUser._id:",
+      //   currentUser._id,
+      //   "friend._id:",
+      //   friend._id
+      // );
 
       const existingConversation = userConversations.find((conv) => {
-        console.log("Conversation members:", conv.members);
+        // console.log("Conversation members:", conv.members);
         const hasCurrentUser = conv.members.some(
           (member) => member._id === currentUser._id
         );
@@ -1234,10 +1264,8 @@ export default function ChatScreen({ navigation, route }) {
       });
 
       if (existingConversation) {
-        console.log("Tìm thấy cuộc trò chuyện hiện có:", existingConversation);
         conversationId = existingConversation._id;
       } else {
-        console.log("Không tìm thấy cuộc trò chuyện, tạo mới...");
         const newConversation = await createConversation([
           currentUser._id,
           friend._id,
@@ -1289,13 +1317,11 @@ export default function ChatScreen({ navigation, route }) {
         throw new Error("URL tải xuống không hợp lệ.");
       }
 
-      console.log("URL tải xuống:", url);
       const cleanFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
       const timestamp = Date.now();
       const uniqueFileName = `${timestamp}_${cleanFileName}`;
       fileUri = `${FileSystem.documentDirectory}${uniqueFileName}`;
 
-      console.log("fileUri:", fileUri);
       const downloadResult = await FileSystem.downloadAsync(url, fileUri);
       if (downloadResult.status !== 200) {
         throw new Error(
@@ -1386,7 +1412,6 @@ export default function ChatScreen({ navigation, route }) {
     } finally {
       if (fileUri) {
         await FileSystem.deleteAsync(fileUri, { idempotent: true });
-        console.log("Đã xóa file tạm:", fileUri);
       }
       setIsDownloading(false);
     }

@@ -10,20 +10,21 @@ import ChatListScreen from "./screens/ChatListScreen";
 import ChatScreen from "./screens/ChatScreen";
 import EditProfileScreen from "./screens/EditProfileScreen";
 import InfoChat from "./screens/InfoChat";
+import * as Linking from "expo-linking";
 
 const Stack = createStackNavigator();
 
 const linking = {
-  prefixes: ["http://172.16.1.126:8081"], // Prefix của URL
+  prefixes: [Linking.createURL("/"), "appchatcnm://"],
   config: {
     screens: {
       Login: "login",
       SignUp: "signup",
       RecoverPasswordApp: "recover-password",
-      ForgotPasswordApp: "reset-password/:token", // Ánh xạ URL reset-password với token
+      ForgotPasswordApp: "reset-password/:token",
       PhoneContact: "phone-contact",
       ChatListScreen: "chat-list",
-      ChatScreen: "chat/:conversationId", // Nếu cần, tùy chỉnh cho màn hình chat
+      ChatScreen: "chat/:conversationId",
       EditProfileScreen: "edit-profile",
       InfoChat: "info-chat",
     },

@@ -22,6 +22,7 @@ import dayjs from "dayjs";
 import { SwipeListView } from "react-native-swipe-list-view";
 import axios from "axios";
 import ModalAddUserToGroup from "./ModelAddUserGroup";
+import { useFocusEffect } from "@react-navigation/native";
 
 export default function ChatListScreen({ navigation }) {
   const [hoveredId, setHoveredId] = useState(null);
@@ -49,7 +50,7 @@ export default function ChatListScreen({ navigation }) {
           await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
         }
       } catch (error) {
-        console.log("Error retrieving user data", error);
+        // console.log("Error retrieving user data", error);
       }
     };
     fetchUserData();
@@ -68,9 +69,9 @@ export default function ChatListScreen({ navigation }) {
         );
 
         setConversations(filteredData);
-        console.log("Fetched Conversations:", filteredData);
+        // console.log("Fetched Conversations:", filteredData);
       } catch (error) {
-        console.log("Error fetching conversations:", error);
+        // console.log("Error fetching conversations:", error);
       }
     }
   };
@@ -82,6 +83,14 @@ export default function ChatListScreen({ navigation }) {
     }
   }, [user, isModalVisible]);
 
+  useFocusEffect(
+    React.useCallback(() => {
+      if (user) {
+        fetchConversations();
+      }
+    }, [user])
+  );
+
   // Cập nhật useEffect để xử lý sự kiện chatDeleted
   useEffect(() => {
     socket.on("conversationUpdated", () => {
@@ -92,7 +101,7 @@ export default function ChatListScreen({ navigation }) {
       setConversations((prevConversations) =>
         prevConversations.filter((conv) => conv._id !== conversationId)
       );
-      console.log("Chat deleted or hidden on client:", conversationId);
+      // console.log("Chat deleted or hidden on client:", conversationId);
     });
 
     return () => {
@@ -133,7 +142,7 @@ export default function ChatListScreen({ navigation }) {
       });
   }, [conversations, searchText]);
 
-  console.log("Filtered Conversations:", filteredConversations);
+  // console.log("Filtered Conversations:", filteredConversations);
 
   if (!user) {
     return (
@@ -175,7 +184,7 @@ export default function ChatListScreen({ navigation }) {
       setPinnedMessage(pinnedMessage);
       return data; // data sẽ là mảng messages
     } catch (error) {
-      console.error("Lỗi khi lấy messages:", error);
+      // console.error("Lỗi khi lấy messages:", error);
       return [];
     }
   };

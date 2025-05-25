@@ -184,9 +184,9 @@ const AccessListPhone = ({ route }) => {
           return;
         }
         try {
-          console.log("Calling getFriendByPhone with phone:", query);
+          // console.log("Calling getFriendByPhone with phone:", query);
           const result = await getFriendByPhone(query);
-          console.log("getFriendByPhone result:", result);
+          // console.log("getFriendByPhone result:", result);
 
           if (result && currentUser && currentUser._id) {
             setSearchedUser(result);
@@ -198,16 +198,16 @@ const AccessListPhone = ({ route }) => {
               setIncomingRequest(null);
             } else {
               try {
-                console.log(
-                  "Calling checkFriendStatus with:",
-                  currentUser._id,
-                  result._id
-                );
+                // console.log(
+                //   "Calling checkFriendStatus with:",
+                //   currentUser._id,
+                //   result._id
+                // );
                 const statusResponse = await checkFriendStatus(
                   currentUser._id,
                   result._id
                 );
-                console.log("checkFriendStatus result:", statusResponse);
+                // console.log("checkFriendStatus result:", statusResponse);
                 setFriendStatus(statusResponse?.status || "none");
                 if (
                   statusResponse?.status === "pending" &&
@@ -382,7 +382,7 @@ const AccessListPhone = ({ route }) => {
                   currentUser._id,
                   userToAdd._id
                 );
-                console.log("Response from addFriend:", response);
+                // console.log("Response from addFriend:", response);
                 Alert.alert(
                   "Thành công",
                   `Đã gửi lời mời kết bạn đến ${userToAdd.username}`

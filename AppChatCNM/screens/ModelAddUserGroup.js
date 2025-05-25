@@ -18,6 +18,7 @@ import { CheckBox } from "react-native-elements";
 import axios from "axios";
 import io from "socket.io-client";
 import { useNavigation } from "@react-navigation/native";
+import Loading from "../loading";
 
 const ModalAddUserToGroup = ({
   visible,
@@ -37,6 +38,7 @@ const ModalAddUserToGroup = ({
   const [loading, setLoading] = useState(false);
   const [alreadyInGroup, setAlreadyInGroup] = useState(new Set());
   const [friendNotToGroup, setFriendNotToGroup] = useState([]);
+  const [loadingState, setLoadingState] = useState(false);
 
   const socket = useRef(null);
   const navigation = useNavigation();
@@ -147,12 +149,15 @@ const ModalAddUserToGroup = ({
   };
 
   const handleCreateGroupChat = async () => {
+    setLoadingState(true);
     if (!nameGroup.trim()) {
       Alert.alert("Vui lòng nhập tên nhóm.");
+      setLoadingState(false); // <--- Thêm dòng này
       return;
     }
     if (selectedFriends.length < 2) {
       Alert.alert("Cần ít nhất 3 thành viên (bao gồm bạn).");
+      setLoadingState(false); // <--- Thêm dòng này
       return;
     }
 
@@ -200,6 +205,7 @@ const ModalAddUserToGroup = ({
       onClose();
     } catch (err) {
       console.error("Tạo nhóm thất bại:", err.response?.data || err.message);
+      setLoadingState(false); // <--- Thêm dòng này
       Alert.alert("Không thể tạo nhóm.");
     }
   };
@@ -209,10 +215,12 @@ const ModalAddUserToGroup = ({
     setAvatar(null);
     setSelectedFriends([]);
     setPhoneNumber("");
+    setLoadingState(false);
   };
 
   const handleAddUsersToGroup = async () => {
     console.log(selectedFriends);
+    setLoadingState(true);
 
     socket.current.emit("addMembersToGroup", {
       conversationId: idGroup,
@@ -338,6 +346,7 @@ const ModalAddUserToGroup = ({
             <Button title="Đóng" onPress={onClose} />
           </View>
         </View>
+        <Loading loadingState={loadingState}></Loading>
       </View>
     </Modal>
   );

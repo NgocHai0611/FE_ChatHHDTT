@@ -6,11 +6,13 @@ import {
   Text,
   FlatList,
   TouchableOpacity,
+  Alert,
   StyleSheet,
   Image,
 } from "react-native";
 import { CheckBox } from "react-native-elements";
 import { io } from "socket.io-client";
+import Loading from "../loading";
 
 const ModalChangeLead = ({
   members,
@@ -22,6 +24,7 @@ const ModalChangeLead = ({
   const [selectedId, setSelectedId] = useState(null);
   const socket = useRef(null);
   const navigation = useNavigation();
+  const [stateLoading, setStateLoading] = useState(false);
 
   useEffect(() => {
     socket.current = io("https://bechatcnm-production.up.railway.app", {
@@ -63,25 +66,38 @@ const ModalChangeLead = ({
   };
 
   const handleChangeLeadInGroup = () => {
-    console.log("Selected Leader ID:", selectedId);
-    if (!window.confirm("Bạn có chắc muốn rời nhóm này?")) return;
-    console.log("nhóm trưởng mới:", selectedId);
-    console.log("conversationId:", conservationID);
-    try {
-      socket.current.emit("leaveGroup", {
-        conversationId: conservationID,
-        userId: idLeadOLD,
-        newLeaderId: selectedId, // chỉ gửi nếu là nhóm trưởng
-      });
+    // console.log("Selected Leader ID:", selectedId);
 
-      onClose();
+    Alert.alert(
+      "Xác nhận",
+      "Bạn có chắc muốn rời nhóm này?",
+      [
+        {
+          text: "Hủy",
+          style: "cancel",
+        },
+        {
+          text: "Đồng ý",
+          onPress: () => {
+            try {
+              socket.current.emit("leaveGroup", {
+                conversationId: conservationID,
+                userId: idLeadOLD,
+                newLeaderId: selectedId, // chỉ gửi nếu là nhóm trưởng
+              });
 
-      setTimeout(() => {
-        navigation.navigate("ChatListScreen");
-      }, 2000); // 2000 milliseconds = 2 seconds
-    } catch (error) {
-      console.log("Error leaving group:", error);
-    }
+              setTimeout(() => {
+                onClose();
+                navigation.navigate("ChatListScreen");
+              }, 2000);
+            } catch (error) {
+              console.log("Error leaving group:", error);
+            }
+          },
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   return (
@@ -96,7 +112,7 @@ const ModalChangeLead = ({
           <Text style={styles.title}>Chọn trưởng nhóm mới</Text>
 
           <FlatList
-            data={members}
+            data={members.filter((item) => item._id !== idLeadOLD)}
             keyExtractor={(item) => item._id.toString()}
             renderItem={renderItem}
             extraData={selectedId}

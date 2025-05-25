@@ -6,6 +6,7 @@ import {
   Image,
   FlatList,
   Modal,
+  Alert,
   Pressable,
   TouchableOpacity,
 } from "react-native";
@@ -78,7 +79,6 @@ export default function InfoChat({ route }) {
   const fetchMediaMessages = async () => {
     try {
       const data = await getMessages(conversation._id);
-      console.log("📥 Tất cả messages:", data);
 
       const mediaMessages = data
         .filter(
@@ -125,6 +125,13 @@ export default function InfoChat({ route }) {
     }
   };
 
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchConversation(); // Làm mới dữ liệu mỗi khi màn hình được focus
+      fetchMediaMessages();
+    }, [])
+  );
+
   useEffect(() => {
     socket.current = io("https://bechatcnm-production.up.railway.app", {
       transports: ["websocket"],
@@ -138,7 +145,7 @@ export default function InfoChat({ route }) {
       "groupUpdatedToggleDeputy",
       ({ conversationId, groupDeputies }) => {
         if (conversationId === conversation._id) {
-          console.log("Received groupUpdatedToggleDeputy:", { groupDeputies });
+          // console.log("Received groupUpdatedToggleDeputy:", { groupDeputies });
           setDeputies(groupDeputies || []);
           fetchConversation(); // Làm mới dữ liệu khi nhận sự kiện
         }
@@ -151,13 +158,6 @@ export default function InfoChat({ route }) {
       }
     };
   }, [conversation._id]);
-
-  useFocusEffect(
-    React.useCallback(() => {
-      fetchConversation(); // Làm mới dữ liệu mỗi khi màn hình được focus
-      fetchMediaMessages();
-    }, [])
-  );
 
   const handleGoBack = () => {
     navigation.navigate("ChatScreen", {
@@ -187,7 +187,7 @@ export default function InfoChat({ route }) {
 
   // Giải Tán Nhóm
   const handleGroupDisbandedSocket = async () => {
-    console.log("📤 Emit sự kiện giải tán nhóm");
+    // console.log("📤 Emit sự kiện giải tán nhóm");
 
     socket.current.emit("disbandGroup", {
       conversationId: conversation._id,
@@ -197,19 +197,32 @@ export default function InfoChat({ route }) {
     navigation.navigate("ChatListScreen");
   };
 
-  const handleLeaveGroup = async (conversationId) => {
-    if (window.confirm("Bạn có chắc muốn rời nhóm này?")) {
-      try {
-        socket.current.emit("leaveGroup", {
-          conversationId,
-          userId: currentUser._id,
-        });
-      } catch (error) {
-        console.error("Error leaving group:", error);
-      }
-    }
-
-    navigation.navigate("ChatListScreen");
+  const handleLeaveGroup = (conversationId) => {
+    Alert.alert(
+      "Xác nhận",
+      "Bạn có chắc muốn rời nhóm này?",
+      [
+        {
+          text: "Hủy",
+          style: "cancel",
+        },
+        {
+          text: "Đồng ý",
+          onPress: () => {
+            try {
+              socket.current.emit("leaveGroup", {
+                conversationId,
+                userId: currentUser._id,
+              });
+            } catch (error) {
+              console.error("Error leaving group:", error);
+            }
+            navigation.navigate("ChatListScreen");
+          },
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   const handleRemoveFromGroup = (memberId) => {
@@ -227,8 +240,8 @@ export default function InfoChat({ route }) {
   };
 
   const handleHideConversation = () => {
-    console.log("Conservation Hide ", conversation._id);
-    console.log("User Id Hide", currentUser._id);
+    // console.log("Conservation Hide ", conversation._id);
+    // console.log("User Id Hide", currentUser._id);
 
     if (window.confirm("Bạn có chắc muốn ẩn đoạn chat này?")) {
       socket.current.emit("deleteChat", {

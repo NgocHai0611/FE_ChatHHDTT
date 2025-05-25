@@ -12,17 +12,16 @@ const Recover = () => {
 
   // Hàm chuyển đổi hiển thị mật khẩu
   const togglePassword = () => setShowPassword(!showPassword);
-  const togglePasswordConfirm = () => setShowPasswordConfirm(!showPasswordConfirm);
+  const togglePasswordConfirm = () =>
+    setShowPasswordConfirm(!showPasswordConfirm);
 
-  const { token } = useParams();  // Lấy token từ URL
+  const { token } = useParams(); // Lấy token từ URL
 
   const dispatch = useDispatch();
 
   // State để lưu mật khẩu và thông báo lỗi/success
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-
-
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -54,10 +53,7 @@ const Recover = () => {
 
       {/* Right section */}
       <div className="recover-right">
-
-
         <form onSubmit={handleSubmit}>
-
           <div className="input-container">
             <input
               type={showPassword ? "text" : "password"}
@@ -67,7 +63,9 @@ const Recover = () => {
               required
             />
             <span className="password-toggle" onClick={togglePassword}>
-              <i className={`fas ${showPassword ? "fa-eye-slash" : "fa-eye"}`}></i>
+              <i
+                className={`fas ${showPassword ? "fa-eye-slash" : "fa-eye"}`}
+              ></i>
             </span>
           </div>
 
@@ -80,12 +78,15 @@ const Recover = () => {
               required
             />
             <span className="password-toggle" onClick={togglePasswordConfirm}>
-              <i className={`fas ${showPasswordConfirm ? "fa-eye-slash" : "fa-eye"}`}></i>
+              <i
+                className={`fas ${
+                  showPasswordConfirm ? "fa-eye-slash" : "fa-eye"
+                }`}
+              ></i>
             </span>
           </div>
           <button type="submit">Confirm</button>
         </form>
-
 
         <div className="or">or continue with</div>
         <div className="social-icons">
