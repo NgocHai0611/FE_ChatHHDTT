@@ -202,6 +202,7 @@ const ModalAddUserToGroup = ({
       });
 
       resetState();
+      setLoadingState(false);
       onClose();
     } catch (err) {
       console.error("Tạo nhóm thất bại:", err.response?.data || err.message);
@@ -215,7 +216,6 @@ const ModalAddUserToGroup = ({
     setAvatar(null);
     setSelectedFriends([]);
     setPhoneNumber("");
-    setLoadingState(false);
   };
 
   const handleAddUsersToGroup = async () => {
@@ -230,12 +230,13 @@ const ModalAddUserToGroup = ({
 
     // Reset và đóng modal trước khi điều hướng
     resetState();
+    setLoadingState(false);
     onClose();
 
     // Đảm bảo modal đã được đóng trước khi điều hướng
     setTimeout(() => {
       navigation.navigate("ChatListScreen");
-    }, 300); // Chờ một chút để đảm bảo modal đã đóng
+    }, 3000); // Chờ một chút để đảm bảo modal đã đóng
   };
 
   const renderPhoneInput = () => (
