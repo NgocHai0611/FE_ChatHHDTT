@@ -131,6 +131,7 @@ const AccessListPhone = ({ route }) => {
   const [incomingRequestsList, setIncomingRequestsList] = useState([]);
   const [isRequestModalVisible, setIsRequestModalVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [isPolling, setIsPolling] = useState(true); // New state to control polling
 
   const fetchFriendList = useCallback(async () => {
     if (currentUser && currentUser._id) {
@@ -160,7 +161,7 @@ const AccessListPhone = ({ route }) => {
   // Polling for friend data
   useEffect(() => {
     const pollFriendData = async () => {
-      if (currentUser?._id) {
+      if (currentUser?._id && isPolling) { // Only poll if isPolling is true
         try {
           const { friends, requests } = await fetchUpdatedFriendData(currentUser._id);
           setFriendList(friends);
@@ -179,7 +180,7 @@ const AccessListPhone = ({ route }) => {
 
     // Cleanup interval on unmount
     return () => clearInterval(interval);
-  }, [currentUser]);
+  }, [currentUser, isPolling]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -222,6 +223,7 @@ const AccessListPhone = ({ route }) => {
         setFriendStatus(null);
         setIncomingRequest(null);
         setFriends(friendList);
+        setIsPolling(true);
         return;
       }
 
@@ -230,10 +232,12 @@ const AccessListPhone = ({ route }) => {
           setSearchedUser(null);
           setFriendStatus(null);
           setIncomingRequest(null);
+          setIsPolling(true);
           return;
         }
         try {
           const result = await getFriendByPhone(query);
+          setIsPolling(true);
           if (result && currentUser && currentUser._id) {
             setSearchedUser(result);
             const isAlreadyFriend = friendList.some(
@@ -290,11 +294,13 @@ const AccessListPhone = ({ route }) => {
               "Thông báo",
               "Không tìm thấy người dùng với số điện thoại này."
             );
+            setIsPolling(false);
           }
         } catch (error) {
           setSearchedUser(null);
           setFriendStatus(null);
           setIncomingRequest(null);
+          setIsPolling(false);
           if (error.response?.status === 404) {
             Alert.alert(
               "Thông báo",
@@ -312,6 +318,7 @@ const AccessListPhone = ({ route }) => {
         setFriendStatus(null);
         setIncomingRequest(null);
         setFriends(filteredFriends);
+        setIsPolling(true);
       }
     };
 
