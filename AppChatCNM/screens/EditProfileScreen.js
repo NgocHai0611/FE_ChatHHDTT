@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import api from '../services/api';
+import { fetchUpdatedUser } from '../services/apiServices';
 
 export default function EditProfileScreen({ route, navigation }) {
   const { user } = route.params;
@@ -23,6 +24,36 @@ export default function EditProfileScreen({ route, navigation }) {
   const [avatar, setAvatar] = useState(user.avatar || '');
   const [secureText, setSecureText] = useState(true);
   const [errors, setErrors] = useState({ username: '', phone: '', password: '' });
+  const [isUpdating, setIsUpdating] = useState(false); // Track if user is editing profile
+
+  // Polling for avatar updates every 2 seconds
+  useEffect(() => {
+    if (!user?._id || isUpdating) return;
+
+    let lastFetchTime = 0;
+    const minInterval = 2000; // Minimum interval of 2 seconds between fetches
+
+    const fetchAvatar = async () => {
+      const now = Date.now();
+      if (now - lastFetchTime < minInterval) return; // Prevent fetching too quickly
+      lastFetchTime = now;
+
+      try {
+        const updatedUser = await fetchUpdatedUser(user._id);
+        // Only update avatar if it has changed
+        if (updatedUser.avatar !== avatar && updatedUser.avatar !== user.avatar) {
+          setAvatar(updatedUser.avatar);
+        }
+      } catch (error) {
+        console.error("Error refreshing avatar:", error);
+      }
+    };
+
+    fetchAvatar(); // Initial fetch
+    const interval = setInterval(fetchAvatar, 2000); // Check every 2 seconds
+
+    return () => clearInterval(interval); // Cleanup on unmount
+  }, [user?._id, avatar, user.avatar, isUpdating]);
 
   const pickImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -40,6 +71,7 @@ export default function EditProfileScreen({ route, navigation }) {
 
     if (!result.canceled) {
       setAvatar(result.assets[0].uri);
+      setIsUpdating(true); // Mark as updating when new avatar is selected
     }
   };
 
@@ -47,17 +79,13 @@ export default function EditProfileScreen({ route, navigation }) {
     let isValid = true;
     const newErrors = { username: '', phone: '', password: '' };
 
-    // Ràng buộc tên người dùng
-    const usernameRegex = /^[A-Z][a-z]*( [A-Z][a-z]*)?$/;
+    // Ràng buộc tên người dùng: Chỉ chứa chữ cái (bao gồm dấu tiếng Việt) và khoảng trắng
+    const usernameRegex = /^[\p{L}\s]+$/u;
     if (!username) {
       newErrors.username = 'Tên người dùng không được để trống.';
       isValid = false;
     } else if (!usernameRegex.test(username)) {
-      newErrors.username =
-        'Tên người dùng phải bắt đầu bằng chữ in hoa, chỉ chứa chữ cái, không chứa số hoặc ký tự đặc biệt.';
-      isValid = false;
-    } else if (username.includes('  ')) {
-      newErrors.username = 'Tên người dùng không được chứa nhiều hơn một khoảng trắng liên tiếp.';
+      newErrors.username = 'Tên người dùng chỉ được chứa chữ cái và khoảng trắng, không chứa số hoặc ký tự đặc biệt.';
       isValid = false;
     }
 
@@ -68,9 +96,9 @@ export default function EditProfileScreen({ route, navigation }) {
       isValid = false;
     }
 
-    // Ràng buộc mật khẩu
-    if (!password) {
-      newErrors.password = 'Mật khẩu không được để trống.';
+    // Nếu nhập mật khẩu, kiểm tra độ dài tối thiểu
+    if (password && password.length < 6) {
+      newErrors.password = 'Mật khẩu phải có ít nhất 6 ký tự.';
       isValid = false;
     }
 
@@ -84,10 +112,14 @@ export default function EditProfileScreen({ route, navigation }) {
     }
 
     try {
+      setIsUpdating(true); // Mark as updating
       const formData = new FormData();
       formData.append('username', username);
       formData.append('phone', phone);
-      formData.append('password', password);
+      // Chỉ thêm password vào FormData nếu người dùng nhập mật khẩu mới
+      if (password) {
+        formData.append('password', password);
+      }
       if (avatar && avatar !== user.avatar) {
         formData.append('avatar', {
           uri: avatar,
@@ -106,12 +138,37 @@ export default function EditProfileScreen({ route, navigation }) {
         },
       });
 
-      const updatedUser = { ...user, ...response.data };
+      // Fetch latest user data from server to ensure sync
+      const latestUser = await fetchUpdatedUser(user._id);
+      const updatedUser = {
+        ...user,
+        username: latestUser.username,
+        phone: latestUser.phone,
+        avatar: latestUser.avatar,
+        email: latestUser.email || user.email,
+        accessToken: accessToken, // Preserve access token
+      };
+
       await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
 
-      Alert.alert('Thành công', 'Cập nhật thông tin thành công!');
-      navigation.goBack();
+      // Update state and reset isUpdating
+      setUsername(latestUser.username);
+      setPhone(latestUser.phone);
+      setAvatar(latestUser.avatar);
+      setPassword(''); // Clear password field
+      setIsUpdating(false); // Allow polling to resume
+
+      Alert.alert('Thành công', 'Cập nhật thông tin thành công!', [
+        {
+          text: 'OK',
+          onPress: () => {
+            // Chuyển về ChatListScreen và truyền updatedUser
+            navigation.navigate('ChatListScreen', { updatedUser });
+          },
+        },
+      ]);
     } catch (error) {
+      setIsUpdating(false); // Reset isUpdating on error
       console.error('Error updating profile:', error);
       Alert.alert('Lỗi', error.response?.data?.message || 'Cập nhật thất bại.');
     }
@@ -133,7 +190,7 @@ export default function EditProfileScreen({ route, navigation }) {
             source={{
               uri:
                 avatar ||
-                'https://res.cloudinary.com/dapvuniyx/image/upload/v1744161405/chat_app_uploads/yk4kcxxugoaepkfyhkxz.jpg',
+                'https://res.cloudinary.com/dapvuniyx/image/upload/v1744161405/chat_app_Uploads/yk4kcxxugoaepkfyhkxz.jpg',
             }}
             style={styles.avatar}
           />
@@ -148,11 +205,11 @@ export default function EditProfileScreen({ route, navigation }) {
           <Text style={styles.label}>Tên người dùng</Text>
           <TextInput
             style={[styles.input, errors.username && styles.inputError]}
-            placeholder="Tên người dùng (VD: Nguyen Van)"
+            placeholder="Ví dụ: Mai Quốc Trưởng"
             value={username}
             onChangeText={(text) => {
               setUsername(text);
-              setErrors({ ...errors, username: '' }); // Xóa lỗi khi người dùng nhập
+              setErrors({ ...errors, username: '' });
             }}
           />
           {errors.username ? <Text style={styles.errorText}>{errors.username}</Text> : null}
@@ -167,7 +224,7 @@ export default function EditProfileScreen({ route, navigation }) {
             value={phone}
             onChangeText={(text) => {
               setPhone(text);
-              setErrors({ ...errors, phone: '' }); // Xóa lỗi khi người dùng nhập
+              setErrors({ ...errors, phone: '' });
             }}
           />
           {errors.phone ? <Text style={styles.errorText}>{errors.phone}</Text> : null}
@@ -178,12 +235,12 @@ export default function EditProfileScreen({ route, navigation }) {
           <View style={[styles.passwordContainer, errors.password && styles.inputError]}>
             <TextInput
               style={styles.passwordInput}
-              placeholder="Nhập mật khẩu"
+              placeholder="Nhập mật khẩu mới (nếu muốn thay đổi)"
               secureTextEntry={secureText}
               value={password}
               onChangeText={(text) => {
                 setPassword(text);
-                setErrors({ ...errors, password: '' }); // Xóa lỗi khi người dùng nhập
+                setErrors({ ...errors, password: '' });
               }}
             />
             <TouchableOpacity onPress={() => setSecureText(!secureText)}>
@@ -205,6 +262,7 @@ export default function EditProfileScreen({ route, navigation }) {
   );
 }
 
+// Styles giữ nguyên
 const styles = {
   container: {
     flex: 1,

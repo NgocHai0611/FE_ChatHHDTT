@@ -471,6 +471,14 @@ export default function ChatApp() {
   // Hàm bật/tắt menu
   const toggleMenu = () => {
     setShowMenu((prev) => !prev);
+    // setShowModal(true);
+    // setIsUpdating(true); // Mark as updating when modal opens
+  };
+
+  const openProfileModal = () => {
+    setShowMenu(false); // Đóng dropdown menu
+    setShowModal(true); // Mở modal thông tin tài khoản
+    setIsUpdating(true); // Đánh dấu đang cập nhật
   };
 
   // Đóng menu khi click ra ngoài
@@ -1127,9 +1135,9 @@ export default function ChatApp() {
   };
 
   const closeModal = () => {
-    setIsOpen(false);
-    setMediaUrl("");
-    setMediaType("");
+    setShowModal(false);
+    setIsUpdating(false); // Reset isUpdating when modal closes
+    setAvatarPreview(null); // Reset avatarPreview to allow fetching
   };
   //Check lời mời kết bạn
   useEffect(() => {
@@ -1148,6 +1156,8 @@ export default function ChatApp() {
         }
       );
     };
+
+    //
 
     checkFriendRequestStatus();
   }, [searchResult?._id, user?._id]);
@@ -1172,6 +1182,59 @@ export default function ChatApp() {
     loadFriends();
   };
 
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  // Refresh user information for chat-avatar every 2 seconds, except when updating profile
+  useEffect(() => {
+    if (!user?._id) return;
+
+    let lastFetchTime = 0;
+    const minInterval = 2000; // Minimum interval of 2 seconds between fetches
+
+    const fetchUserInfo = async () => {
+      const now = Date.now();
+      if (now - lastFetchTime < minInterval) return; // Prevent fetching too quickly
+      lastFetchTime = now;
+
+      // Skip fetching if user is updating profile (modal open or avatar uploaded)
+      if (isUpdating || avatarPreview) return;
+
+      try {
+        const response = await axios.get(
+          `https://bechatcnm-production.up.railway.app/users/get/${user._id}`
+        );
+        const updatedUser = response.data;
+
+        // Compare fields to detect changes
+        const hasChanges = 
+          updatedUser.username !== user.username ||
+          updatedUser.phone !== user.phone ||
+          updatedUser.avatar !== user.avatar ||
+          (showModal && updatedUser.email && updatedUser.email !== user.email) ||
+          (showModal && updatedUser.password && updatedUser.password !== user.password);
+
+        if (hasChanges) {
+          setUser((prev) => ({
+            ...prev,
+            username: updatedUser.username,
+            phone: updatedUser.phone,
+            avatar: updatedUser.avatar,
+            email: updatedUser.email,
+            ...(showModal && updatedUser.password && { password: updatedUser.password }),
+          }));
+          localStorage.setItem("user", JSON.stringify(updatedUser));
+        }
+      } catch (error) {
+        console.error("Error refreshing user info:", error);
+      }
+    };
+
+    fetchUserInfo(); // Initial fetch
+    const interval = setInterval(fetchUserInfo, 2000); // Check every 2 seconds
+
+    return () => clearInterval(interval); // Cleanup on unmount
+  }, [user?._id, showModal, user.username, user.phone, user.avatar, user.email, user.password, avatarPreview, isUpdating]);
+  
   //Gửi lời mời kết bạn
   const handleSendFriendRequest = (receiverId) => {
     if (!user?._id || !receiverId) return;
@@ -1541,6 +1604,7 @@ export default function ChatApp() {
 
   const handleUpdate = async () => {
     try {
+      setIsUpdating(true);
       const formData = new FormData();
       formData.append("username", updatedUser.username);
       formData.append("phone", updatedUser.phone);
@@ -1560,7 +1624,7 @@ export default function ChatApp() {
       );
 
       localStorage.setItem("user", JSON.stringify(response.data));
-
+      setUser(response.data);
       // Sau khi cập nhật thành công, cập nhật lại user với thông tin mới
       setUpdatedUser({
         username: response.data.username,
@@ -1568,9 +1632,12 @@ export default function ChatApp() {
         password: "",
         avatar: response.data.avatar,
       });
+      setAvatarPreview(null);
+      setIsUpdating(false);
       toast.success("Cập nhật thông tin thành công!");
       setShowModal(false);
     } catch (error) {
+      setIsUpdating(false);
       // Bắt lỗi trả về từ server (đã kiểm tra regex, định dạng...)
       if (error.response && error.response.data && error.response.data.error) {
         toast.error(error.response.data.error); // Hiển thị nội dung lỗi từ backend
@@ -2686,10 +2753,10 @@ export default function ChatApp() {
       </div>
       <div className="icon-container-left">
         {/* Avatar nhấn vào để mở modal */}
-        {updatedUser && (
-          <div className="icon-item" onClick={() => setShowModal(true)}>
+        {user && (
+          <div className="icon-item" onClick={() => { setShowModal(true); setIsUpdating(true); }}>
             <img
-              src={`${updatedUser.avatar}?t=${Date.now()}`}
+              src={user.avatar || "/default-avatar.png"}
               alt="Avatar"
               className="chat-avatar"
             />
@@ -2702,7 +2769,7 @@ export default function ChatApp() {
             onClick={(e) => {
               if (e.target === e.currentTarget) {
                 // Kiểm tra xem có click vào overlay (ngoài modal)
-                setShowModal(false); // Đóng modal
+                closeModal();
               }
             }}
           >
