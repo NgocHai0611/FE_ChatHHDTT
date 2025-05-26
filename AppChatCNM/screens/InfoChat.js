@@ -239,30 +239,34 @@ export default function InfoChat({ route }) {
     }, 2000); // 2000 milliseconds = 2 giây
   };
 
-  const handleHideConversation = () => {
-    // console.log("Conservation Hide ", conversation._id);
-    // console.log("User Id Hide", currentUser._id);
+  // const handleHideConversation = () => {
+  //   // console.log("Conservation Hide ", conversation._id);
+  //   // console.log("User Id Hide", currentUser._id);
 
-    if (window.confirm("Bạn có chắc muốn ẩn đoạn chat này?")) {
-      socket.current.emit("deleteChat", {
-        conversationId: conversation._id,
-        userId: currentUser._id,
-      });
-    }
+  //   if (window.confirm("Bạn có chắc muốn ẩn đoạn chat này?")) {
+  //     socket.current.emit("deleteChat", {
+  //       conversationId: conversation._id,
+  //       userId: currentUser._id,
+  //     });
+  //   }
 
-    // Delay 2 giây rồi mới navigate
-    navigation.replace("ChatListScreen"); // sẽ remount lại hoàn toàn ChatListScreen
-  };
+  //   // Delay 2 giây rồi mới navigate
+  //   navigation.replace("ChatListScreen"); // sẽ remount lại hoàn toàn ChatListScreen
+  // };
 
   const renderMember = ({ item }) => {
     const isLeader = conversation.groupLeader === item._id;
-    const isDeputy = deputies.some((id) => id === item._id);
+    const isDeputy = deputies.includes(item._id);
     const isOptionsOpen = showOptionsFor === item._id;
-    const isCurrentUserLeader = conversation.groupLeader === currentUser._id;
-    const isCurrentUser = currentUser._id === item._id;
 
-    // Kiểm tra nếu không phải nhóm trưởng hoặc phó nhóm thì không cho phép hiển thị các tùy chọn
-    const canManage = isLeader || isDeputy || isCurrentUserLeader;
+    const isCurrentUser = currentUser._id === item._id;
+    const isCurrentUserLeader = conversation.groupLeader === currentUser._id;
+    const isCurrentUserDeputy =
+      !isCurrentUserLeader && deputies.includes(currentUser._id);
+
+    // Cho phép mở menu nếu là leader, deputy hoặc chính mình
+    const canManage =
+      isCurrentUserLeader || isCurrentUserDeputy || isCurrentUser;
 
     return (
       <View key={item._id} style={styles.memberContainer}>
@@ -279,7 +283,7 @@ export default function InfoChat({ route }) {
           </View>
         </View>
 
-        {canManage ? (
+        {canManage && (
           <TouchableOpacity
             onPress={() =>
               setShowOptionsFor((prev) => (prev === item._id ? null : item._id))
@@ -287,16 +291,16 @@ export default function InfoChat({ route }) {
           >
             <Ionicons name="ellipsis-vertical" size={20} color="gray" />
           </TouchableOpacity>
-        ) : (
-          <Ionicons name="ellipsis-vertical" size={20} color="gray" />
         )}
 
         {isOptionsOpen && canManage && (
           <View style={styles.optionsBox}>
+            {/* Hiển thị nếu thành viên là nhóm trưởng */}
             {isLeader ? (
               <Text style={styles.leaderText}>👑 Nhóm trưởng</Text>
             ) : isCurrentUserLeader ? (
               <>
+                {/* Nhóm trưởng có thể cấp/xóa quyền phó nhóm */}
                 <TouchableOpacity onPress={() => handleToggleDeputy(item._id)}>
                   <Text style={styles.optionText}>
                     {isDeputy
@@ -305,38 +309,44 @@ export default function InfoChat({ route }) {
                   </Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  onPress={() => {
-                    console.log("Xoá khỏi cuộc trò chuyện:", item._id);
-                    handleRemoveFromGroup(item._id);
-                  }}
-                >
-                  <Text style={[styles.optionText, { color: "red" }]}>
-                    ❌ Xóa khỏi cuộc trò chuyện
-                  </Text>
-                </TouchableOpacity>
+                {/* Nhóm trưởng có thể xoá bất kỳ ai (trừ chính mình nếu cần) */}
+                {!isCurrentUser && (
+                  <TouchableOpacity
+                    onPress={() => handleRemoveFromGroup(item._id)}
+                  >
+                    <Text style={[styles.optionText, { color: "red" }]}>
+                      ❌ Xóa khỏi cuộc trò chuyện
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            ) : isCurrentUserDeputy ? (
+              <>
+                {/* Phó nhóm chỉ được xóa thành viên thường */}
+                {!isLeader && !isDeputy && !isCurrentUser && (
+                  <TouchableOpacity
+                    onPress={() => handleRemoveFromGroup(item._id)}
+                  >
+                    <Text style={[styles.optionText, { color: "red" }]}>
+                      ❌ Xóa khỏi cuộc trò chuyện
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </>
             ) : isCurrentUser ? (
+              // Người dùng hiện tại mở tuỳ chọn với chính họ
               <TouchableOpacity
                 onPress={() => {
                   console.log("Xóa cuộc trò chuyện với người này");
-                  // Thực hiện hành động xóa cuộc trò chuyện
+                  // TODO: Xử lý hành động rời nhóm cá nhân
                 }}
               >
-                <Text style={[styles.optionText, { color: "red" }]}>
-                  ❌ Xóa cuộc trò chuyện
-                </Text>
-              </TouchableOpacity>
-            ) : (
-              <Text style={styles.optionText}>Không có quyền quản lý</Text>
-            )}
-
-            {isCurrentUser && !isLeader && (
-              <TouchableOpacity>
                 <Text style={[styles.optionText, { color: "red" }]}>
                   ❌ Rời khỏi cuộc trò chuyện
                 </Text>
               </TouchableOpacity>
+            ) : (
+              <Text style={styles.optionText}>Không có quyền quản lý</Text>
             )}
           </View>
         )}

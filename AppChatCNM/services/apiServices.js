@@ -81,7 +81,6 @@ export const disconnectSocket = () => {
 };
 export const getSocket = () => socket;
 
-
 // Fetch updated user data
 export const fetchUpdatedUser = async (userId) => {
   try {
