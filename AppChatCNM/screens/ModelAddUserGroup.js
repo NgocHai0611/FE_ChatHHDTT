@@ -337,18 +337,21 @@ const ModalAddUserToGroup = ({
             }}
           />
 
+          {loadingState && <Loading />} 
           <View style={styles.buttonRow}>
             {typeAction === "create" && (
-              <Button title="Tạo Nhóm" onPress={handleCreateGroupChat} />
+              <Button title="Tạo Nhóm" onPress={handleCreateGroupChat} disabled={loadingState}/>
+              
             )}
             {typeAction === "update" && (
-              <Button title="Thêm" onPress={handleAddUsersToGroup} />
+              <Button title="Thêm" onPress={handleAddUsersToGroup} disabled={loadingState}/>
             )}
-            <Button title="Đóng" onPress={onClose} />
+            <Button title="Đóng" onPress={onClose} disabled={loadingState} />
           </View>
         </View>
-        <Loading loadingState={loadingState}></Loading>
+        
       </View>
+     
     </Modal>
   );
 };

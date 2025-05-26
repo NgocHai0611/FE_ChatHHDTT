@@ -31,6 +31,7 @@ import {
   getListFriend,
   createConversation,
   getConversations,
+  
 } from "../services/apiServices";
 import { useFocusEffect } from "@react-navigation/native";
 import io from "socket.io-client";
@@ -38,7 +39,7 @@ import * as FileSystem from "expo-file-system";
 import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
 import { v4 as uuidv4 } from "uuid";
-
+import Loading from "../loading";
 export default function ChatScreen({ navigation, route }) {
   const [messages, setMessages] = useState([]);
   const [previews, setPreviews] = useState([]);
@@ -57,8 +58,9 @@ export default function ChatScreen({ navigation, route }) {
   const [friendList, setFriendList] = useState([]);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isGroupActive, setIsGroupActive] = useState(true); // Giả sử nhóm đang hoạt động ban đầu
-
-  // Kết nối socket và xử lý các sự kiện
+const [isLoading, setIsLoading] = useState(false); // Thêm trạng thái isLoading
+  
+// Kết nối socket và xử lý các sự kiện
   useEffect(() => {
     socket.current = io("https://bechatcnm-production.up.railway.app", {
       transports: ["websocket"],
@@ -72,6 +74,11 @@ export default function ChatScreen({ navigation, route }) {
         userId: currentUser._id,
       });
     });
+
+    socket.current.on("nguoila", (data) => {
+    console.log("NguoiLa event:", data);
+    Alert.alert("Thông báo", data.text || "Bạn chỉ có thể nhắn tin với người đã kết bạn.");
+  });
 
     // Bắt lỗi kết nối thất bại
     socket.current.on("connect_error", (err) => {
@@ -271,12 +278,12 @@ export default function ChatScreen({ navigation, route }) {
       alert("Không thể tải tin nhắn. Vui lòng thử lại.");
     }
   };
-
   useEffect(() => {
     if (conversation._id && currentUser) {
       fetchMessages();
     }
   }, [conversation._id, currentUser]);
+
 
   const handleEditGroup = () => {
     navigation.navigate("InfoChat", {
@@ -286,11 +293,31 @@ export default function ChatScreen({ navigation, route }) {
     });
   };
 
+  
+
   // Gửi tin nhắn
   const onSend = useCallback(
-    async (newMessages = []) => {
-      const message = newMessages[0];
+  async (newMessages = []) => {
+    if (isLoading || !isGroupActive) return;
+
+    setIsLoading(true);
+    const message = newMessages[0];
       let messageData = [];
+    try {
+      
+
+      if (!conversation.isGroup) {
+        const receiverId = conversation.members.find(
+          (id) => id !== currentUser._id
+        );
+        console.log("Receiver ID:", receiverId, "Members:", conversation.members);
+        if (!receiverId) {
+          Alert.alert("Lỗi", "Không tìm thấy người nhận trong cuộc trò chuyện.");
+          setIsLoading(false);
+          return;
+        }
+        // Bỏ kiểm tra trạng thái bạn bè vì server đã xử lý
+      }
 
       if (message.text && message.text.trim() !== "") {
         messageData.push({
@@ -366,10 +393,7 @@ export default function ChatScreen({ navigation, route }) {
                     p.type.includes("application") || p.type.includes("text")
                 );
                 if (!filePreview) {
-                  console.warn(
-                    "No matching file preview found for index:",
-                    index
-                  );
+                  console.warn("No matching file preview found for index:", index);
                   return;
                 }
                 messageData.push({
@@ -389,11 +413,11 @@ export default function ChatScreen({ navigation, route }) {
           } else {
             console.error("Upload failed with response:", responseData);
             alert(responseData?.message || "Lỗi khi tải lên files.");
+            setIsLoading(false);
             return;
           }
         } catch (error) {
           console.error("Lỗi khi gửi tin nhắn media:", error);
-          Alert.alert("Không thể gửi tin nhắn meida. Vui lòng thử lại.", error);
           let errorMessage = "Không thể gửi tin nhắn.";
           if (error.response?.data) {
             if (typeof error.response.data === "string") {
@@ -410,11 +434,13 @@ export default function ChatScreen({ navigation, route }) {
             errorMessage = error.message || "Lỗi kết nối server.";
           }
           alert(errorMessage);
+          setIsLoading(false);
           return;
         }
       }
 
       if (messageData.length === 0) {
+        setIsLoading(false);
         return;
       }
 
@@ -427,21 +453,30 @@ export default function ChatScreen({ navigation, route }) {
         setText("");
       } catch (error) {
         console.error("Error sending message:", error);
-        Alert.alert("Không thể gửi tin nhắn. Vui lòng thử lại.", error);
+        alert("Không thể gửi tin nhắn. Vui lòng thử lại.");
+      } finally {
+        setIsLoading(false);
       }
-    },
-    [conversation._id, currentUser._id, previews, replyingMessage]
-  );
+    } catch (error) {
+      console.error("Unexpected error in onSend:", error);
+      alert("Đã xảy ra lỗi không mong muốn. Vui lòng thử lại.");
+      setIsLoading(false);
+    }
+  },
+  [conversation._id, currentUser._id, previews, replyingMessage, isLoading, conversation.isGroup, conversation.members, isGroupActive]
+);
 
 
   
   // Xử lý chọn ảnh
   const handleImagePick = async () => {
     try {
+      setIsLoading(true);
       const { status } =
         await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
         alert("Cần cấp quyền truy cập thư viện để chọn ảnh!");
+        setIsLoading(false);
         return;
       }
 
@@ -467,16 +502,20 @@ export default function ChatScreen({ navigation, route }) {
     } catch (error) {
       console.error("Error in handleImagePick:", error);
       alert("Lỗi khi chọn ảnh: " + error.message);
-    }
+    }finally {
+    setIsLoading(false); // Reset loading state
+  }
   };
 
   // Xử lý chọn video
   const handleVideoPick = async () => {
     try {
+      setIsLoading(true);
       const { status } =
         await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
         alert("Cần cấp quyền truy cập thư viện để chọn video!");
+        setIsLoading(false);
         return;
       }
 
@@ -518,12 +557,15 @@ export default function ChatScreen({ navigation, route }) {
     } catch (error) {
       console.error("Error in handleVideoPick:", error);
       alert("Lỗi khi chọn video: " + error.message);
-    }
+    }finally {
+    setIsLoading(false); // Reset loading state
+  }
   };
 
   // Xử lý chọn file
   const handleFilePick = async () => {
     try {
+      setIsLoading(true);
       const result = await DocumentPicker.getDocumentAsync({
         type: [
           "application/pdf",
@@ -538,6 +580,7 @@ export default function ChatScreen({ navigation, route }) {
       });
       if (result.canceled) {
         // console.log("File pick canceled");
+        setIsLoading(false);
         return;
       }
 
@@ -605,7 +648,9 @@ export default function ChatScreen({ navigation, route }) {
     } catch (error) {
       console.error("Error picking document:", error);
       alert(`Lỗi khi chọn tài liệu: ${error.message}`);
-    }
+    }finally {
+    setIsLoading(false); // Reset loading state
+  }
   };
 
   // Render preview item
@@ -1566,28 +1611,28 @@ export default function ChatScreen({ navigation, route }) {
                 <TouchableOpacity
                   onPress={handleImagePick}
                   style={styles.actionButton}
-                  disabled={!isGroupActive} // Vô hiệu hóa nếu nhóm không hoạt động
+                 disabled={isLoading || !isGroupActive} // Vô hiệu hóa nếu nhóm không hoạt động
                 >
                   <MaterialIcons name="image" size={24} color="#007AFF" />
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={handleVideoPick}
                   style={styles.actionButton}
-                  disabled={!isGroupActive} // Vô hiệu hóa nếu nhóm không hoạt động
+                 disabled={isLoading || !isGroupActive} // Vô hiệu hóa nếu nhóm không hoạt động
                 >
                   <MaterialIcons name="videocam" size={24} color="#007AFF" />
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={handleFilePick}
                   style={styles.actionButton}
-                  disabled={!isGroupActive} // Vô hiệu hóa nếu nhóm không hoạt động
+                  disabled={isLoading || !isGroupActive} // Vô hiệu hóa nếu nhóm không hoạt động
                 >
                   <MaterialIcons name="attach-file" size={24} color="#007AFF" />
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.actionButton}
                   onPress={() => setShowEmojiPicker(!showEmojiPicker)}
-                  disabled={!isGroupActive} // Vô hiệu hóa nếu nhóm không hoạt động
+                  disabled={isLoading || !isGroupActive} // Vô hiệu hóa nếu nhóm không hoạt động
                 >
                   <MaterialIcons
                     name="insert-emoticon"
@@ -1599,36 +1644,40 @@ export default function ChatScreen({ navigation, route }) {
             ) : null
           }
           renderSend={(props) => (
-            <TouchableOpacity
-              style={styles.sendButton}
-              disabled={
-                !(text.trim().length > 0 || previews.length > 0) ||
-                !isGroupActive // Vô hiệu hóa nếu nhóm không hoạt động
-              }
-              onPress={() => {
-                if (text.trim().length > 0 || previews.length > 0) {
-                  const message = {
-                    _id: Math.random().toString(36).substring(7),
-                    text: text.trim(),
-                    createdAt: new Date(),
-                    user: { _id: currentUser._id },
-                  };
-                  props.onSend([message], true);
-                }
-              }}
-            >
-              <Ionicons
-                name="send"
-                size={30}
-                color={
-                  (text.trim().length > 0 || previews.length > 0) &&
-                  isGroupActive
-                    ? "#7B61FF"
-                    : "#ccc"
-                }
-              />
-            </TouchableOpacity>
-          )}
+  <TouchableOpacity
+    style={styles.sendButton}
+    disabled={
+      isLoading ||
+      !(text.trim().length > 0 || previews.length > 0) ||
+      !isGroupActive
+    }
+    onPress={() => {
+      if (text.trim().length > 0 || previews.length > 0) {
+        const message = {
+          _id: Math.random().toString(36).substring(7),
+          text: text.trim(),
+          createdAt: new Date(),
+          user: { _id: currentUser._id },
+        };
+        props.onSend([message], true);
+      }
+    }}
+  >
+    {isLoading ? (
+      <ActivityIndicator size="small" color="#7B61FF" />
+    ) : (
+      <Ionicons
+        name="send"
+        size={30}
+        color={
+          (text.trim().length > 0 || previews.length > 0) && isGroupActive
+            ? "#7B61FF"
+            : "#ccc"
+        }
+      />
+    )}
+  </TouchableOpacity>
+)}
           shouldUpdateMessage={(props, nextProps) =>
             props.currentMessage._id === highlightedMessageId ||
             nextProps.currentMessage._id === highlightedMessageId
@@ -1671,6 +1720,7 @@ export default function ChatScreen({ navigation, route }) {
         >
           <View style={styles.modalOverlay}>{renderForwardModal()}</View>
         </Modal>
+        <Loading loadingState={isLoading} />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
