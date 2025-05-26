@@ -33,7 +33,6 @@ import {
   getConversations,
   initializeSocket,
   getSocket,
-  
 } from "../services/apiServices";
 import { useFocusEffect } from "@react-navigation/native";
 import io from "socket.io-client";
@@ -60,138 +59,141 @@ export default function ChatScreen({ navigation, route }) {
   const [friendList, setFriendList] = useState([]);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isGroupActive, setIsGroupActive] = useState(true); // Giả sử nhóm đang hoạt động ban đầu
-const [isLoading, setIsLoading] = useState(false); // Thêm trạng thái isLoading
-  
-// Kết nối socket và xử lý các sự kiện
+  const [isLoading, setIsLoading] = useState(false); // Thêm trạng thái isLoading
+
+  // Kết nối socket và xử lý các sự kiện
   useEffect(() => {
     if (currentUser?._id && conversation?._id) {
       socket.current = initializeSocket(currentUser._id, (request) => {
         // Xử lý yêu cầu kết bạn nếu cần
       });
 
-    socket.current.on("connect", () => {
-      socket.current.emit("join_room", currentUser._id);
-      socket.current.emit("markAsSeen", {
-        conversationId: conversation._id,
-        userId: currentUser._id,
+      socket.current.on("connect", () => {
+        socket.current.emit("join_room", currentUser._id);
+        socket.current.emit("markAsSeen", {
+          conversationId: conversation._id,
+          userId: currentUser._id,
+        });
       });
-    });
 
-    socket.current.on("nguoila", (data) => {
-    console.log("NguoiLa event:", data);
-    Alert.alert("Thông báo", data.text || "Bạn chỉ có thể nhắn tin với người đã kết bạn.");
-  });
+      socket.current.on("nguoila", (data) => {
+        console.log("NguoiLa event:", data);
+        Alert.alert(
+          "Thông báo",
+          data.text || "Bạn chỉ có thể nhắn tin với người đã kết bạn."
+        );
+      });
 
-    // Bắt lỗi kết nối thất bại
-    socket.current.on("connect_error", (err) => {
-      Alert.alert(
-        "Lỗi kết nối",
-        "Không thể kết nối đến server (connect_error)."
-      );
-    });
+      // Bắt lỗi kết nối thất bại
+      socket.current.on("connect_error", (err) => {
+        Alert.alert(
+          "Lỗi kết nối",
+          "Không thể kết nối đến server (connect_error)."
+        );
+      });
 
-    // Bắt timeout
-    socket.current.io.on("timeout", () => {
-      // console.log("Socket connection timeout");
-      Alert.alert(
-        "Hết thời gian kết nối",
-        "Không thể kết nối đến server (timeout)."
-      );
-    });
+      // Bắt timeout
+      socket.current.io.on("timeout", () => {
+        // console.log("Socket connection timeout");
+        Alert.alert(
+          "Hết thời gian kết nối",
+          "Không thể kết nối đến server (timeout)."
+        );
+      });
 
-    // Một số socket.io-client dùng 'connect_timeout' thay vì 'timeout'
-    socket.current.io.on("connect_timeout", () => {
-      console.log("Socket connection timeout");
-      Alert.alert(
-        "Hết thời gian kết nối",
-        "Không thể kết nối đến server (connect_timeout)."
-      );
-    });
+      // Một số socket.io-client dùng 'connect_timeout' thay vì 'timeout'
+      socket.current.io.on("connect_timeout", () => {
+        console.log("Socket connection timeout");
+        Alert.alert(
+          "Hết thời gian kết nối",
+          "Không thể kết nối đến server (connect_timeout)."
+        );
+      });
 
-    // Lắng nghe tin nhắn mới
-    socket.current.on(`receiveMessage-${conversation._id}`, (newMessage) => {
-      const formattedMessage = {
-        _id: newMessage._id,
-        text: newMessage.text || "",
-        createdAt: new Date(newMessage.createdAt),
-        user: {
-          _id: newMessage.sender?._id || "system",
-          name: newMessage.sender?.username || "Hệ thống",
-          avatar: newMessage.sender?.avatar || "",
-        },
-        image: newMessage.imageUrl || undefined,
-        video: newMessage.videoUrl || undefined,
-        file: newMessage.fileUrl || undefined,
-        fileName: newMessage.fileName || undefined,
-        isRecalled: newMessage.isRecalled || false,
-        isPinned: newMessage.isPinned || false,
-        replyTo: newMessage.replyTo || null,
-        messageType: newMessage.messageType || "text",
+      // Lắng nghe tin nhắn mới
+      socket.current.on(`receiveMessage-${conversation._id}`, (newMessage) => {
+        const formattedMessage = {
+          _id: newMessage._id,
+          text: newMessage.text || "",
+          createdAt: new Date(newMessage.createdAt),
+          user: {
+            _id: newMessage.sender?._id || "system",
+            name: newMessage.sender?.username || "Hệ thống",
+            avatar: newMessage.sender?.avatar || "",
+          },
+          image: newMessage.imageUrl || undefined,
+          video: newMessage.videoUrl || undefined,
+          file: newMessage.fileUrl || undefined,
+          fileName: newMessage.fileName || undefined,
+          isRecalled: newMessage.isRecalled || false,
+          isPinned: newMessage.isPinned || false,
+          replyTo: newMessage.replyTo || null,
+          messageType: newMessage.messageType || "text",
+        };
+        setMessages((prevMessages) => {
+          if (prevMessages.find((msg) => msg._id === formattedMessage._id)) {
+            return prevMessages;
+          }
+          if (formattedMessage.isPinned) {
+            setPinnedMessage(formattedMessage);
+          }
+          return GiftedChat.append(prevMessages, [formattedMessage]);
+        });
+      });
+
+      // Lắng nghe sự kiện tin nhắn được xem
+      socket.current.on(`messageSeen-${conversation._id}`, (data) => {
+        const { messageId, userId, seenAt } = data;
+        setMessages((prevMessages) =>
+          prevMessages.map((msg) =>
+            msg._id === messageId
+              ? {
+                  ...msg,
+                  seenBy: [
+                    ...(msg.seenBy || []),
+                    { user: userId, seenAt: new Date(seenAt) },
+                  ],
+                }
+              : msg
+          )
+        );
+      });
+
+      // Lắng nghe sự kiện tin nhắn được cập nhật (thu hồi)
+      socket.current.on("refreshMessages", (data) => {
+        if (data.conversationId === conversation._id) {
+          fetchMessages();
+        }
+      });
+
+      // Lắng nghe sự kiện cập nhật phó nhóm
+      socket.current.on("groupUpdatedToggleDeputy", ({ conversationId }) => {
+        if (conversationId === conversation._id) {
+          fetchMessages(); // Làm mới tin nhắn để hiển thị thông báo hệ thống
+        }
+      });
+
+      // Lấy danh sách bạn bè
+      const fetchFriends = async () => {
+        try {
+          const friends = await getListFriend(currentUser._id);
+          setFriendList(friends);
+        } catch (error) {
+          console.error("Lỗi khi lấy danh sách bạn bè:", error);
+          alert("Không thể lấy danh sách bạn bè. Vui lòng thử lại.");
+        }
       };
-      setMessages((prevMessages) => {
-        if (prevMessages.find((msg) => msg._id === formattedMessage._id)) {
-          return prevMessages;
-        }
-        if (formattedMessage.isPinned) {
-          setPinnedMessage(formattedMessage);
-        }
-        return GiftedChat.append(prevMessages, [formattedMessage]);
-      });
-    });
+      fetchFriends();
 
-    // Lắng nghe sự kiện tin nhắn được xem
-    socket.current.on(`messageSeen-${conversation._id}`, (data) => {
-      const { messageId, userId, seenAt } = data;
-      setMessages((prevMessages) =>
-        prevMessages.map((msg) =>
-          msg._id === messageId
-            ? {
-                ...msg,
-                seenBy: [
-                  ...(msg.seenBy || []),
-                  { user: userId, seenAt: new Date(seenAt) },
-                ],
-              }
-            : msg
-        )
-      );
-    });
-
-    // Lắng nghe sự kiện tin nhắn được cập nhật (thu hồi)
-    socket.current.on("refreshMessages", (data) => {
-      if (data.conversationId === conversation._id) {
-        fetchMessages();
-      }
-    });
-
-    // Lắng nghe sự kiện cập nhật phó nhóm
-    socket.current.on("groupUpdatedToggleDeputy", ({ conversationId }) => {
-      if (conversationId === conversation._id) {
-        fetchMessages(); // Làm mới tin nhắn để hiển thị thông báo hệ thống
-      }
-    });
-
-    // Lấy danh sách bạn bè
-    const fetchFriends = async () => {
-      try {
-        const friends = await getListFriend(currentUser._id);
-        setFriendList(friends);
-      } catch (error) {
-        console.error("Lỗi khi lấy danh sách bạn bè:", error);
-        alert("Không thể lấy danh sách bạn bè. Vui lòng thử lại.");
-      }
-    };
-    fetchFriends();
-
-    return () => {
-      // Không ngắt kết nối socket ở đây để giữ kết nối toàn ứng dụng
+      return () => {
+        // Không ngắt kết nối socket ở đây để giữ kết nối toàn ứng dụng
         socket.current.off(`receiveMessage-${conversation._id}`);
         socket.current.off(`messageSeen-${conversation._id}`);
         socket.current.off("refreshMessages");
         socket.current.off("groupUpdatedToggleDeputy");
-    };
-  }
-  }, [conversation._id,currentUser._id]);
+      };
+    }
+  }, [conversation._id, currentUser._id]);
 
   useEffect(() => {
     if (conversation.isDissolved === true) {
@@ -289,7 +291,6 @@ const [isLoading, setIsLoading] = useState(false); // Thêm trạng thái isLoad
     }
   }, [conversation._id, currentUser]);
 
-
   const handleEditGroup = () => {
     navigation.navigate("InfoChat", {
       conversation,
@@ -298,178 +299,189 @@ const [isLoading, setIsLoading] = useState(false); // Thêm trạng thái isLoad
     });
   };
 
-  
-
   // Gửi tin nhắn
   const onSend = useCallback(
-  async (newMessages = []) => {
-    if (isLoading || !isGroupActive) return;
+    async (newMessages = []) => {
+      if (isLoading || !isGroupActive) return;
 
-    setIsLoading(true);
-    const message = newMessages[0];
+      setIsLoading(true);
+      const message = newMessages[0];
       let messageData = [];
-    try {
-      
-// Kiểm tra trạng thái bạn bè cho cuộc trò chuyện 1-1
-      if (!conversation.isGroup) {
-        const receiverId = conversation.members.find(
-          (id) => id !== currentUser._id
-        );
-        
-        if (!receiverId) {
-          Alert.alert("Lỗi", "Không tìm thấy người nhận trong cuộc trò chuyện.");
-          setIsLoading(false);
-          return;
-        }
-       
-      }
-
-      if (message.text && message.text.trim() !== "") {
-        messageData.push({
-          conversationId: conversation._id,
-          senderId: currentUser._id,
-          messageType: "text",
-          text: message.text,
-          imageUrl: "",
-          videoUrl: "",
-          fileUrl: "",
-          fileName: "",
-          iconCode: "",
-          replyTo: replyingMessage ? replyingMessage._id : null,
-        });
-      }
-
-      if (previews.length > 0) {
-        try {
-          const files = previews.map((preview) => ({
-            uri: preview.uri,
-            name: preview.name,
-            type: preview.type,
-          }));
-
-          const responseData = await uploadFiles(
-            files,
-            conversation._id,
-            currentUser._id
+      try {
+        // Kiểm tra trạng thái bạn bè cho cuộc trò chuyện 1-1
+        if (!conversation.isGroup) {
+          const receiverId = conversation.members.find(
+            (id) => id !== currentUser._id
           );
 
-          if (responseData && responseData.success) {
-            if (responseData.imageUrls && responseData.imageUrls.length > 0) {
-              responseData.imageUrls.forEach((url) => {
-                messageData.push({
-                  conversationId: conversation._id,
-                  senderId: currentUser._id,
-                  messageType: "image",
-                  text: "",
-                  imageUrl: url,
-                  videoUrl: "",
-                  fileUrl: "",
-                  fileName: "",
-                  iconCode: "",
-                  replyTo: replyingMessage ? replyingMessage._id : null,
-                });
-              });
-            }
-
-            if (responseData.videoUrls && responseData.videoUrls.length > 0) {
-              responseData.videoUrls.forEach((url, index) => {
-                const videoPreview = previews.find((p) =>
-                  p.type.includes("video")
-                );
-                messageData.push({
-                  conversationId: conversation._id,
-                  senderId: currentUser._id,
-                  messageType: "video",
-                  text: "",
-                  imageUrl: "",
-                  videoUrl: url,
-                  fileUrl: "",
-                  fileName: videoPreview?.name || `video_${index}`,
-                  iconCode: "",
-                  replyTo: replyingMessage ? replyingMessage._id : null,
-                });
-              });
-            }
-
-            if (responseData.fileUrls && responseData.fileUrls.length > 0) {
-              responseData.fileUrls.forEach((url, index) => {
-                const filePreview = previews.find(
-                  (p) =>
-                    p.type.includes("application") || p.type.includes("text")
-                );
-                if (!filePreview) {
-                  console.warn("No matching file preview found for index:", index);
-                  return;
-                }
-                messageData.push({
-                  conversationId: conversation._id,
-                  senderId: currentUser._id,
-                  messageType: "file",
-                  text: `📄 ${filePreview.name}`,
-                  imageUrl: "",
-                  videoUrl: "",
-                  fileUrl: url,
-                  fileName: filePreview.name,
-                  iconCode: "",
-                  replyTo: replyingMessage ? replyingMessage._id : null,
-                });
-              });
-            }
-          } else {
-            console.error("Upload failed with response:", responseData);
-            alert(responseData?.message || "Lỗi khi tải lên files.");
+          if (!receiverId) {
+            Alert.alert(
+              "Lỗi",
+              "Không tìm thấy người nhận trong cuộc trò chuyện."
+            );
             setIsLoading(false);
             return;
           }
-        } catch (error) {
-          console.error("Lỗi khi gửi tin nhắn media:", error);
-          let errorMessage = "Không thể gửi tin nhắn.";
-          if (error.response?.data) {
-            if (typeof error.response.data === "string") {
-              if (error.response.data.includes("File type not allowed")) {
-                errorMessage =
-                  "Loại file không được phép. Chỉ hỗ trợ PDF, DOC, DOCX, TXT, ZIP, XLS, XLSX.";
-              } else {
-                errorMessage = "Lỗi server không xác định. Vui lòng thử lại.";
+        }
+
+        if (message.text && message.text.trim() !== "") {
+          messageData.push({
+            conversationId: conversation._id,
+            senderId: currentUser._id,
+            messageType: "text",
+            text: message.text,
+            imageUrl: "",
+            videoUrl: "",
+            fileUrl: "",
+            fileName: "",
+            iconCode: "",
+            replyTo: replyingMessage ? replyingMessage._id : null,
+          });
+        }
+
+        if (previews.length > 0) {
+          try {
+            const files = previews.map((preview) => ({
+              uri: preview.uri,
+              name: preview.name,
+              type: preview.type,
+            }));
+
+            const responseData = await uploadFiles(
+              files,
+              conversation._id,
+              currentUser._id
+            );
+
+            if (responseData && responseData.success) {
+              if (responseData.imageUrls && responseData.imageUrls.length > 0) {
+                responseData.imageUrls.forEach((url) => {
+                  messageData.push({
+                    conversationId: conversation._id,
+                    senderId: currentUser._id,
+                    messageType: "image",
+                    text: "",
+                    imageUrl: url,
+                    videoUrl: "",
+                    fileUrl: "",
+                    fileName: "",
+                    iconCode: "",
+                    replyTo: replyingMessage ? replyingMessage._id : null,
+                  });
+                });
+              }
+
+              if (responseData.videoUrls && responseData.videoUrls.length > 0) {
+                responseData.videoUrls.forEach((url, index) => {
+                  const videoPreview = previews.find((p) =>
+                    p.type.includes("video")
+                  );
+                  messageData.push({
+                    conversationId: conversation._id,
+                    senderId: currentUser._id,
+                    messageType: "video",
+                    text: "",
+                    imageUrl: "",
+                    videoUrl: url,
+                    fileUrl: "",
+                    fileName: videoPreview?.name || `video_${index}`,
+                    iconCode: "",
+                    replyTo: replyingMessage ? replyingMessage._id : null,
+                  });
+                });
+              }
+
+              if (responseData.fileUrls && responseData.fileUrls.length > 0) {
+                responseData.fileUrls.forEach((url, index) => {
+                  const filePreview = previews.find(
+                    (p) =>
+                      p.type.includes("application") || p.type.includes("text")
+                  );
+                  if (!filePreview) {
+                    console.warn(
+                      "No matching file preview found for index:",
+                      index
+                    );
+                    return;
+                  }
+                  messageData.push({
+                    conversationId: conversation._id,
+                    senderId: currentUser._id,
+                    messageType: "file",
+                    text: `📄 ${filePreview.name}`,
+                    imageUrl: "",
+                    videoUrl: "",
+                    fileUrl: url,
+                    fileName: filePreview.name,
+                    iconCode: "",
+                    replyTo: replyingMessage ? replyingMessage._id : null,
+                  });
+                });
               }
             } else {
-              errorMessage = error.response.data.message || error.message;
+              console.error("Upload failed with response:", responseData);
+              alert(responseData?.message || "Lỗi khi tải lên files.");
+              setIsLoading(false);
+              return;
             }
-          } else {
-            errorMessage = error.message || "Lỗi kết nối server.";
+          } catch (error) {
+            console.error("Lỗi khi gửi tin nhắn media:", error);
+            let errorMessage = "Không thể gửi tin nhắn.";
+            if (error.response?.data) {
+              if (typeof error.response.data === "string") {
+                if (error.response.data.includes("File type not allowed")) {
+                  errorMessage =
+                    "Loại file không được phép. Chỉ hỗ trợ PDF, DOC, DOCX, TXT, ZIP, XLS, XLSX.";
+                } else {
+                  errorMessage = "Lỗi server không xác định. Vui lòng thử lại.";
+                }
+              } else {
+                errorMessage = error.response.data.message || error.message;
+              }
+            } else {
+              errorMessage = error.message || "Lỗi kết nối server.";
+            }
+            alert(errorMessage);
+            setIsLoading(false);
+            return;
           }
-          alert(errorMessage);
+        }
+
+        if (messageData.length === 0) {
           setIsLoading(false);
           return;
         }
-      }
 
-      if (messageData.length === 0) {
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        messageData.forEach((data) => {
-          socket.current.emit("sendMessage", data);
-        });
-        setReplyingMessage(null);
-        setPreviews([]);
-        setText("");
+        try {
+          messageData.forEach((data) => {
+            socket.current.emit("sendMessage", data);
+          });
+          setReplyingMessage(null);
+          setPreviews([]);
+          setText("");
+        } catch (error) {
+          console.error("Error sending message:", error);
+          alert("Không thể gửi tin nhắn. Vui lòng thử lại.");
+        } finally {
+          setIsLoading(false);
+        }
       } catch (error) {
-        console.error("Error sending message:", error);
-        alert("Không thể gửi tin nhắn. Vui lòng thử lại.");
-      } finally {
+        console.error("Unexpected error in onSend:", error);
+        alert("Đã xảy ra lỗi không mong muốn. Vui lòng thử lại.");
         setIsLoading(false);
       }
-    } catch (error) {
-      console.error("Unexpected error in onSend:", error);
-      alert("Đã xảy ra lỗi không mong muốn. Vui lòng thử lại.");
-      setIsLoading(false);
-    }
-  },
-  [conversation._id, currentUser._id, previews, replyingMessage, isLoading, conversation.isGroup, conversation.members, isGroupActive]
-);
+    },
+    [
+      conversation._id,
+      currentUser._id,
+      previews,
+      replyingMessage,
+      isLoading,
+      conversation.isGroup,
+      conversation.members,
+      isGroupActive,
+    ]
+  );
 
   // Xử lý chọn ảnh
   const handleImagePick = async () => {
@@ -505,9 +517,9 @@ const [isLoading, setIsLoading] = useState(false); // Thêm trạng thái isLoad
     } catch (error) {
       console.error("Error in handleImagePick:", error);
       alert("Lỗi khi chọn ảnh: " + error.message);
-    }finally {
-    setIsLoading(false); // Reset loading state
-  }
+    } finally {
+      setIsLoading(false); // Reset loading state
+    }
   };
 
   // Xử lý chọn video
@@ -560,9 +572,9 @@ const [isLoading, setIsLoading] = useState(false); // Thêm trạng thái isLoad
     } catch (error) {
       console.error("Error in handleVideoPick:", error);
       alert("Lỗi khi chọn video: " + error.message);
-    }finally {
-    setIsLoading(false); // Reset loading state
-  }
+    } finally {
+      setIsLoading(false); // Reset loading state
+    }
   };
 
   // Xử lý chọn file
@@ -651,9 +663,9 @@ const [isLoading, setIsLoading] = useState(false); // Thêm trạng thái isLoad
     } catch (error) {
       console.error("Error picking document:", error);
       alert(`Lỗi khi chọn tài liệu: ${error.message}`);
-    }finally {
-    setIsLoading(false); // Reset loading state
-  }
+    } finally {
+      setIsLoading(false); // Reset loading state
+    }
   };
 
   // Render preview item
@@ -683,20 +695,20 @@ const [isLoading, setIsLoading] = useState(false); // Thêm trạng thái isLoad
     </View>
   );
 
-  const renderGroupStatus = () => {
-    if (conversation.isDissolved) {
-      setIsGroupActive(false);
+  // const renderGroupStatus = () => {
+  //   if (conversation.isDissolved) {
+  //     setIsGroupActive(false);
 
-      return (
-        <View style={styles.dissolvedNotification}>
-          <Text style={styles.dissolvedText}>
-            Nhóm này đã bị giải tán. Bạn không thể gửi tin nhắn hoặc ảnh.
-          </Text>
-        </View>
-      );
-    }
-    return null;
-  };
+  //     return (
+  //       <View style={styles.dissolvedNotification}>
+  //         <Text style={styles.dissolvedText}>
+  //           Nhóm này đã bị giải tán. Bạn không thể gửi tin nhắn hoặc ảnh.
+  //         </Text>
+  //       </View>
+  //     );
+  //   }
+  //   return null;
+  // };
 
   // Render tin nhắn ảnh
   const renderMessageImage = (props) => {
@@ -1616,14 +1628,14 @@ const [isLoading, setIsLoading] = useState(false); // Thêm trạng thái isLoad
                 <TouchableOpacity
                   onPress={handleImagePick}
                   style={styles.actionButton}
-                 disabled={isLoading || !isGroupActive} // Vô hiệu hóa nếu nhóm không hoạt động
+                  disabled={isLoading || !isGroupActive} // Vô hiệu hóa nếu nhóm không hoạt động
                 >
                   <MaterialIcons name="image" size={24} color="#007AFF" />
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={handleVideoPick}
                   style={styles.actionButton}
-                 disabled={isLoading || !isGroupActive} // Vô hiệu hóa nếu nhóm không hoạt động
+                  disabled={isLoading || !isGroupActive} // Vô hiệu hóa nếu nhóm không hoạt động
                 >
                   <MaterialIcons name="videocam" size={24} color="#007AFF" />
                 </TouchableOpacity>
@@ -1649,40 +1661,41 @@ const [isLoading, setIsLoading] = useState(false); // Thêm trạng thái isLoad
             ) : null
           }
           renderSend={(props) => (
-  <TouchableOpacity
-    style={styles.sendButton}
-    disabled={
-      isLoading ||
-      !(text.trim().length > 0 || previews.length > 0) ||
-      !isGroupActive
-    }
-    onPress={() => {
-      if (text.trim().length > 0 || previews.length > 0) {
-        const message = {
-          _id: Math.random().toString(36).substring(7),
-          text: text.trim(),
-          createdAt: new Date(),
-          user: { _id: currentUser._id },
-        };
-        props.onSend([message], true);
-      }
-    }}
-  >
-    {isLoading ? (
-      <ActivityIndicator size="small" color="#7B61FF" />
-    ) : (
-      <Ionicons
-        name="send"
-        size={30}
-        color={
-          (text.trim().length > 0 || previews.length > 0) && isGroupActive
-            ? "#7B61FF"
-            : "#ccc"
-        }
-      />
-    )}
-  </TouchableOpacity>
-)}
+            <TouchableOpacity
+              style={styles.sendButton}
+              disabled={
+                isLoading ||
+                !(text.trim().length > 0 || previews.length > 0) ||
+                !isGroupActive
+              }
+              onPress={() => {
+                if (text.trim().length > 0 || previews.length > 0) {
+                  const message = {
+                    _id: Math.random().toString(36).substring(7),
+                    text: text.trim(),
+                    createdAt: new Date(),
+                    user: { _id: currentUser._id },
+                  };
+                  props.onSend([message], true);
+                }
+              }}
+            >
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#7B61FF" />
+              ) : (
+                <Ionicons
+                  name="send"
+                  size={30}
+                  color={
+                    (text.trim().length > 0 || previews.length > 0) &&
+                    isGroupActive
+                      ? "#7B61FF"
+                      : "#ccc"
+                  }
+                />
+              )}
+            </TouchableOpacity>
+          )}
           shouldUpdateMessage={(props, nextProps) =>
             props.currentMessage._id === highlightedMessageId ||
             nextProps.currentMessage._id === highlightedMessageId
