@@ -1141,26 +1141,44 @@ export default function ChatApp() {
   };
   //Check lời mời kết bạn
   useEffect(() => {
-    const checkFriendRequestStatus = () => {
-      if (!user || !searchResult || !user._id || !searchResult._id) return;
-
+    if (!user || !searchResult || user._id === searchResult._id) return;
+  
+    let lastStatus = null;
+  
+    const checkFriendStatus = () => {
       socket.emit(
         "check_friend_status",
         { senderId: user._id, receiverId: searchResult._id },
         (response) => {
-          if (response?.status === "pending") {
-            setIsFriendRequestSent(true);
-          } else {
-            setIsFriendRequestSent(false);
-          }
-        }
-      );
-    };
+          const currentStatus = response?.status;
+        
+          // So sánh trạng thái trước đó và hiện tại để tránh set lại không cần thiết
+          if (currentStatus !== lastStatus) {
+            lastStatus = currentStatus;
+            switch (currentStatus) {
+              case "accepted":
+                setIsFriendRequestSent(false);
+                break;
+                case "pending":
+                  setIsFriendRequestSent(true);
+                  break;
+                  case "rejected":
+                  case "cancelled":
+                  default:
+                    setIsFriendRequestSent(false);
+                    break;
+                  }
+                }
+              }
+            );
+          };
+  
+          const interval = setInterval(checkFriendStatus, 2000);
+          checkFriendStatus(); // Gọi lần đầu
 
-    //
+          return () => clearInterval(interval);
+        }, [searchResult?._id, user?._id]);
 
-    checkFriendRequestStatus();
-  }, [searchResult?._id, user?._id]);
 
   // Tìm kiếm user theo sđt
   const handleSearchUser = () => {

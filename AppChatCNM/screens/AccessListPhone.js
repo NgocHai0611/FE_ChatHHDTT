@@ -215,115 +215,127 @@ const AccessListPhone = ({ route }) => {
   }, [currentUser, fetchFriendList, fetchIncomingRequests]);
 
   useEffect(() => {
-    const search = async () => {
-      const query = searchQuery.trim();
+  const search = async () => {
+    const query = searchQuery.trim();
 
-      if (!query) {
+    if (!query) {
+      setSearchedUser(null);
+      setFriendStatus(null);
+      setIncomingRequest(null);
+      setFriends(friendList);
+      setIsPolling(true);
+      return;
+    }
+
+    if (/^\d+$/.test(query)) {
+      if (query.length < 10) {
         setSearchedUser(null);
         setFriendStatus(null);
         setIncomingRequest(null);
-        setFriends(friendList);
         setIsPolling(true);
         return;
       }
 
-      if (/^\d+$/.test(query)) {
-        if (query.length < 10) {
-          setSearchedUser(null);
-          setFriendStatus(null);
-          setIncomingRequest(null);
-          setIsPolling(true);
-          return;
-        }
-        try {
-          const result = await getFriendByPhone(query);
-          setIsPolling(true);
-          if (result && currentUser && currentUser._id) {
-            setSearchedUser(result);
-            const isAlreadyFriend = friendList.some(
-              (friend) => friend._id === result._id
-            );
-            if (isAlreadyFriend) {
-              setFriendStatus("accepted");
-              setIncomingRequest(null);
-            } else {
-              try {
-                const statusResponse = await checkFriendStatus(
-                  currentUser._id,
-                  result._id
-                );
-                setFriendStatus(statusResponse?.status || "none");
-                if (
-                  statusResponse?.status === "pending" &&
-                  statusResponse?.requestId
-                ) {
-                  setSearchedUser((prevUser) => ({
-                    ...prevUser,
-                    requestId: statusResponse.requestId,
-                  }));
-                } else {
-                  setSearchedUser((prevUser) => ({
-                    ...prevUser,
-                    requestId: null,
-                  }));
-                }
-                const incomingRequestFound = incomingRequestsList.find(
-                  (req) => req.senderId?._id === result._id
-                );
-                if (incomingRequestFound) {
-                  setIncomingRequest(incomingRequestFound);
-                  setFriendStatus("pending");
-                } else {
-                  setIncomingRequest(null);
-                }
-              } catch (statusError) {
-                console.error(
-                  "Error in checkFriendStatus:",
-                  statusError.response?.data || statusError.message
-                );
+      try {
+        const result = await getFriendByPhone(query);
+        setIsPolling(true);
+
+        if (result && currentUser && currentUser._id) {
+          setSearchedUser(result);
+
+          const isAlreadyFriend = friendList.some(
+            (friend) => friend._id === result._id
+          );
+
+          if (isAlreadyFriend) {
+            setFriendStatus("accepted");
+            setIncomingRequest(null);
+          } else {
+            try {
+              const statusResponse = await checkFriendStatus(
+                currentUser._id,
+                result._id
+              );
+
+              const status = statusResponse?.status || "none";
+              setFriendStatus(status);
+
+              // Gắn requestId nếu pending
+              if (status === "pending" && statusResponse?.requestId) {
+                setSearchedUser((prevUser) => ({
+                  ...prevUser,
+                  requestId: statusResponse.requestId,
+                }));
+              } else {
+                setSearchedUser((prevUser) => ({
+                  ...prevUser,
+                  requestId: null,
+                }));
+              }
+
+              // Nếu bị từ chối, reset UI
+              if (status === "rejected" || status === "cancelled") {
                 setFriendStatus("none");
                 setIncomingRequest(null);
-                Alert.alert("Lỗi", "Không thể kiểm tra trạng thái bạn bè.");
               }
+
+              // Kiểm tra có phải là lời mời đến hay không
+              const incomingRequestFound = incomingRequestsList.find(
+                (req) => req.senderId?._id === result._id
+              );
+
+              if (incomingRequestFound) {
+                setIncomingRequest(incomingRequestFound);
+                setFriendStatus("pending");
+              } else if (status !== "pending") {
+                setIncomingRequest(null);
+              }
+            } catch (statusError) {
+              console.error("Error in checkFriendStatus:", statusError);
+              setFriendStatus("none");
+              setIncomingRequest(null);
+              Alert.alert("Lỗi", "Không thể kiểm tra trạng thái bạn bè.");
             }
-          } else {
-            setSearchedUser(null);
-            setFriendStatus(null);
-            setIncomingRequest(null);
-            Alert.alert(
-              "Thông báo",
-              "Không tìm thấy người dùng với số điện thoại này."
-            );
-            setIsPolling(false);
           }
-        } catch (error) {
+        } else {
           setSearchedUser(null);
           setFriendStatus(null);
           setIncomingRequest(null);
+          Alert.alert(
+            "Thông báo",
+            "Không tìm thấy người dùng với số điện thoại này."
+          );
           setIsPolling(false);
-          if (error.response?.status === 404) {
-            Alert.alert(
-              "Thông báo",
-              "Không tìm thấy người dùng với số điện thoại này."
-            );
-          } else {
-            Alert.alert("Lỗi", "Đã xảy ra lỗi khi tìm kiếm. Vui lòng thử lại.");
-          }
         }
-      } else {
-        const filteredFriends = friendList.filter((friend) =>
-          friend.username.toLowerCase().includes(query.toLowerCase())
-        );
+      } catch (error) {
         setSearchedUser(null);
         setFriendStatus(null);
         setIncomingRequest(null);
-        setFriends(filteredFriends);
-        setIsPolling(true);
+        setIsPolling(false);
+        if (error.response?.status === 404) {
+          Alert.alert(
+            "Thông báo",
+            "Không tìm thấy người dùng với số điện thoại này."
+          );
+        } else {
+          Alert.alert("Lỗi", "Đã xảy ra lỗi khi tìm kiếm. Vui lòng thử lại.");
+        }
       }
-    };
+    } else {
+      const filteredFriends = friendList.filter((friend) =>
+        friend.username.toLowerCase().includes(query.toLowerCase())
+      );
+      setSearchedUser(null);
+      setFriendStatus(null);
+      setIncomingRequest(null);
+      setFriends(filteredFriends);
+      setIsPolling(true);
+    }
+  };
 
-    search();
-  }, [searchQuery, currentUser, friendList, incomingRequestsList]);
+  search();
+}, [searchQuery, currentUser, friendList, incomingRequestsList]);
+
 
   const handleGoBack = () => {
     navigation.goBack();
