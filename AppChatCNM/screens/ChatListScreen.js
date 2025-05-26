@@ -78,6 +78,7 @@ export default function ChatListScreen({ navigation, route }) {
           ...prevUser,
           username: updatedUser.username,
           avatar: updatedUser.avatar,
+          phone: updatedUser.phone,
         }));
         await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
       } catch (error) {

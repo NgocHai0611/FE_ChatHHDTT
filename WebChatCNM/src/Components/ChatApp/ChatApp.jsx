@@ -140,7 +140,7 @@ export default function ChatApp() {
   const [messageToForward, setMessageToForward] = useState(null); // Set khi ấn "Chuyển tiếp"
   const [selectedChatsToForward, setSelectedChatsToForward] = useState([]);
   const [openOptionsMemberId, setOpenOptionsMemberId] = useState(null);
-  const [hasNewFriendRequest, setHasNewFriendRequest] = useState(false);
+  // const [hasNewFriendRequest, setHasNewFriendRequest] = useState(false);
   const [showEditGroupModal, setShowEditGroupModal] = useState(false);
 
   const [groupImageFile, setGroupImageFile] = useState(null);
@@ -1284,21 +1284,50 @@ export default function ChatApp() {
 
   // Gọi hàm loadFriendRequests khi component được render
   useEffect(() => {
+    if (!user?._id || !socket) return;
+    // Gọi lần đầu khi mount
     loadFriendRequests();
-  }, []);
+
+    // Lắng nghe lời mời kết bạn mới
+    socket.on("new_friend_request", ({ receiverId }) => {
+        if (receiverId === user._id) {
+          loadFriendRequests(); // Tải lại danh sách khi có lời mời mới
+          toast.info("Bạn có lời mời kết bạn mới!");
+        }
+    });
+
+    // Kiểm tra định kỳ mỗi 2 giây
+    const interval = setInterval(() => {
+      socket.emit("get_friend_requests", { userId: user._id }, (response) => {
+        if (response?.success && response.friendRequests.length !== friendRequests.length) {
+          setFriendRequests(response.friendRequests); // Chỉ cập nhật nếu số lượng thay đổi
+          console.log("Cập nhật danh sách lời mời:", response.friendRequests);
+        }
+      });
+    }, 2000);
+    // Cleanup
+    return () => {
+      clearInterval(interval);
+      socket.off("new_friend_request");
+    };
+  }, [user?._id, socket, friendRequests.length]);
+  
 
   const loadFriendRequests = () => {
-    if (!user || !user._id) return;
+    if (!user || !user._id || !socket) return;
 
     socket.emit("get_friend_requests", { userId: user._id }, (response) => {
       if (response?.success) {
-        setFriendRequests(response.friendRequests); // Lưu danh sách vào state
-        console.log("Danh sách lời mời kết bạn:", response.friendRequests);
+        setFriendRequests((prev) => {
+          // Chỉ cập nhật nếu danh sách khác
+          if (JSON.stringify(prev) !== JSON.stringify(response.friendRequests)) {
+            console.log("Danh sách lời mời kết bạn:", response.friendRequests);
+            return response.friendRequests;
+          }
+          return prev;
+        });
       } else {
-        console.error(
-          "Lỗi khi tải danh sách lời mời kết bạn:",
-          response?.message
-        );
+        console.error("Lỗi khi tải danh sách lời mời kết bạn:", response?.message);
       }
     });
   };
@@ -1354,7 +1383,7 @@ export default function ChatApp() {
     if (tab === "Lời mời kết bạn") {
       setSelectedChat(null);
       loadFriendRequests();
-      setHasNewFriendRequest(false);
+      // setHasNewFriendRequest(false);
     } else if (tab === "Danh sách bạn bè") {
       loadFriends(); // Gọi API danh sách bạn bè
     } else {
@@ -1385,7 +1414,7 @@ export default function ChatApp() {
 
         loadFriends();
         loadFriendRequests(); // Tải lại danh sách lời mời kết bạn
-        setHasNewFriendRequest(false);
+        // setHasNewFriendRequest(false);
         toast.success("Lời mời kết bạn đã được chấp nhận!");
       }
     );
@@ -1433,8 +1462,9 @@ export default function ChatApp() {
             prevRequests.filter((request) => request._id !== requestId)
           );
 
+          loadFriendRequests(); // Tải lại danh sách lời mời
           // Hiển thị toast thông báo thành công
-          setHasNewFriendRequest(false);
+          // setHasNewFriendRequest(false);
           toast.success(response.message || "Đã từ chối lời mời kết bạn.");
 
           // Tải lại danh sách lời mời (nếu cần)
@@ -2202,8 +2232,9 @@ export default function ChatApp() {
       // Nếu mình là người nhận
       if (request.receiverId === user._id) {
         await loadFriendRequests(); // load danh sách mới từ server
-        setHasNewFriendRequest(true); // bật badge sau khi chắc chắn danh sách đã có dữ liệu
+        // setHasNewFriendRequest(true); // bật badge sau khi chắc chắn danh sách đã có dữ liệu
 
+        loadFriendRequests(); // Tải lại danh sách
         toast.info("Bạn có lời mời kết bạn mới!");
       }
     });
@@ -2211,7 +2242,24 @@ export default function ChatApp() {
     return () => {
       socket.off("new_friend_request");
     };
-  }, [socket, user._id, sidebarView]);
+  }, [socket, user._id]);
+
+  useEffect(() => {
+    if (!user?._id || !socket) return;
+    // Gọi lần đầu khi mount
+    loadFriendRequests();
+
+    // Kiểm tra định kỳ mỗi 2 giây
+    const interval = setInterval(() => {
+      socket.emit("get_friend_requests", { userId: user._id }, (response) => {
+        if (response?.success && response.friendRequests.length !== friendRequests.length) {
+          setFriendRequests(response.friendRequests);
+          console.log("Cập nhật danh sách lời mời:", response.friendRequests);
+        }
+      });
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [user?._id, socket, friendRequests.length]);
 
   useEffect(() => {
     if (!socket || !user?._id) return;
@@ -2744,7 +2792,7 @@ export default function ChatApp() {
               <FaUserPlus className="icon-contacts" />
               <span>Lời mời kết bạn</span>
 
-              {hasNewFriendRequest && (
+              {friendRequests.length > 0 && (
                 <span className="badge">{friendRequests.length}</span>
               )}
             </div>
@@ -2875,7 +2923,7 @@ export default function ChatApp() {
           <FaComments className="icon chat-icon" title="Chat" />
           <span className="chat-icon-text">Chats</span>
 
-          {hasNewFriendRequest && (
+          {friendRequests.length > 0 && (
             <span className="badge-1">{friendRequests.length}</span>
           )}
         </div>
