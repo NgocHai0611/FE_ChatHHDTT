@@ -466,8 +466,6 @@ const [isLoading, setIsLoading] = useState(false); // Thêm trạng thái isLoad
   [conversation._id, currentUser._id, previews, replyingMessage, isLoading, conversation.isGroup, conversation.members, isGroupActive]
 );
 
-
-  
   // Xử lý chọn ảnh
   const handleImagePick = async () => {
     try {
@@ -1493,27 +1491,29 @@ const [isLoading, setIsLoading] = useState(false); // Thêm trạng thái isLoad
             </Text>
             <Text style={styles.online}>Online</Text>
           </View>
-          <View style={styles.iconContainer}>
-            <MaterialIcons
-              name="call"
-              size={24}
-              color="black"
-              style={styles.icon}
-            />
-            <MaterialIcons
-              name="videocam"
-              size={24}
-              color="black"
-              style={styles.icon}
-            />
-            <MaterialIcons
-              name="info-outline"
-              size={24}
-              color="black"
-              style={styles.icon}
-              onPress={handleEditGroup}
-            />
-          </View>
+          {isGroupActive ? (
+            <View style={styles.iconContainer}>
+              <MaterialIcons
+                name="call"
+                size={24}
+                color="black"
+                style={styles.icon}
+              />
+              <MaterialIcons
+                name="videocam"
+                size={24}
+                color="black"
+                style={styles.icon}
+              />
+              <MaterialIcons
+                name="info-outline"
+                size={24}
+                color="black"
+                style={styles.icon}
+                onPress={handleEditGroup}
+              />
+            </View>
+          ) : null}
         </View>
 
         {replyingMessage && (
