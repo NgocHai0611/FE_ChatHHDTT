@@ -10,6 +10,7 @@ import {
   SafeAreaView,
   Alert,
   Modal,
+  RefreshControl,
 } from "react-native";
 import { MaterialIcons, FontAwesome } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -26,8 +27,10 @@ import {
   rejectFriendRequest,
   getFriendRequests,
   cancelFriendRequest,
+  initializeSocket,
+  disconnectSocket,
+  fetchUpdatedFriendData,
 } from "../services/apiServices";
-
 import { NETWORK } from "@env";
 
 const ContactItem = ({
@@ -61,7 +64,7 @@ const ContactItem = ({
           <View style={styles.friendStatus}>
             <Text style={styles.friendText}>Bạn bè</Text>
           </View>
-        ) : requestInfo?.senderId?._id === item._id ? ( // Kiểm tra nếu có thông tin yêu cầu đến và người gửi là item hiện tại
+        ) : requestInfo?.senderId?._id === item._id ? (
           <View style={styles.actionButtonsContainer}>
             <TouchableOpacity
               style={[styles.actionButton, styles.acceptButton]}
@@ -80,12 +83,11 @@ const ContactItem = ({
               <Text style={styles.actionText}>Từ chối</Text>
             </TouchableOpacity>
           </View>
-        ) : isFriend === "pending" ? ( // Trường hợp bạn đã gửi yêu cầu (theo logic hiện tại của API checkFriendStatus)
+        ) : isFriend === "pending" ? (
           <View style={styles.actionButtonsContainer}>
             <View style={styles.sentRequestStatus}>
               <Text style={styles.sentRequestText}>Đã gửi</Text>
             </View>
-
             <TouchableOpacity
               style={[styles.actionButton, styles.cancelButton]}
               onPress={() => onCancelFriendRequest(item._id)}
@@ -103,7 +105,6 @@ const ContactItem = ({
             <Text style={styles.actionText}>Kết bạn</Text>
           </TouchableOpacity>
         )}
-
         {isFriend === "accepted" && (
           <TouchableOpacity
             style={styles.unFriendButton}
@@ -126,9 +127,10 @@ const AccessListPhone = ({ route }) => {
   const [friendStatus, setFriendStatus] = useState(null);
   const [friendList, setFriendList] = useState([]);
   const [friends, setFriends] = useState([]);
-  const [incomingRequest, setIncomingRequest] = useState(null); // State để lưu thông tin yêu cầu đến
+  const [incomingRequest, setIncomingRequest] = useState(null);
   const [incomingRequestsList, setIncomingRequestsList] = useState([]);
   const [isRequestModalVisible, setIsRequestModalVisible] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchFriendList = useCallback(async () => {
     if (currentUser && currentUser._id) {
@@ -138,14 +140,10 @@ const AccessListPhone = ({ route }) => {
         setFriends(fetchedFriends);
       } catch (error) {
         console.error("Lỗi khi lấy danh sách bạn bè:", error);
-        Alert.alert("Lỗi", "Không thể tải danh sách bạn bè.");
+        throw error;
       }
     }
   }, [currentUser]);
-
-  useEffect(() => {
-    fetchFriendList();
-  }, [fetchFriendList]);
 
   const fetchIncomingRequests = useCallback(async () => {
     if (currentUser?._id) {
@@ -154,14 +152,66 @@ const AccessListPhone = ({ route }) => {
         setIncomingRequestsList(requests);
       } catch (error) {
         console.error("Lỗi khi lấy danh sách yêu cầu kết bạn:", error);
-        Alert.alert("Lỗi", "Không thể tải danh sách yêu cầu kết bạn.");
+        throw error;
       }
     }
   }, [currentUser]);
 
+  // Polling for friend data
   useEffect(() => {
+    const pollFriendData = async () => {
+      if (currentUser?._id) {
+        try {
+          const { friends, requests } = await fetchUpdatedFriendData(currentUser._id);
+          setFriendList(friends);
+          setFriends(friends);
+          setIncomingRequestsList(requests);
+        } catch (error) {
+          console.error("Error polling friend data:", error);
+        }
+      }
+    };
+
+    const interval = setInterval(pollFriendData, 2000); // Poll every 2 seconds
+
+    // Initial fetch
+    pollFriendData();
+
+    // Cleanup interval on unmount
+    return () => clearInterval(interval);
+  }, [currentUser]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([fetchFriendList(), fetchIncomingRequests()]);
+    } catch (error) {
+      Alert.alert("Lỗi", "Không thể tải lại dữ liệu. Vui lòng thử lại.");
+    } finally {
+      setRefreshing(false);
+    }
+  }, [fetchFriendList, fetchIncomingRequests]);
+
+  useEffect(() => {
+    fetchFriendList();
     fetchIncomingRequests();
-  }, [fetchIncomingRequests]);
+
+    const socket = initializeSocket(currentUser?._id, (request) => {
+      setIncomingRequestsList((prev) => {
+        if (request.status === "accepted" || request.status === "rejected" || request.status === "cancelled") {
+          return prev.filter((req) => req._id !== request._id);
+        }
+        return [...prev.filter((req) => req._id !== request._id), request];
+      });
+      if (request.status === "accepted") {
+        fetchFriendList();
+      }
+    });
+
+    return () => {
+      disconnectSocket();
+    };
+  }, [currentUser, fetchFriendList, fetchIncomingRequests]);
 
   useEffect(() => {
     const search = async () => {
@@ -176,7 +226,6 @@ const AccessListPhone = ({ route }) => {
       }
 
       if (/^\d+$/.test(query)) {
-        // Chỉ gọi API nếu số điện thoại có ít nhất 10 chữ số
         if (query.length < 10) {
           setSearchedUser(null);
           setFriendStatus(null);
@@ -184,10 +233,7 @@ const AccessListPhone = ({ route }) => {
           return;
         }
         try {
-          // console.log("Calling getFriendByPhone with phone:", query);
           const result = await getFriendByPhone(query);
-          // console.log("getFriendByPhone result:", result);
-
           if (result && currentUser && currentUser._id) {
             setSearchedUser(result);
             const isAlreadyFriend = friendList.some(
@@ -198,16 +244,10 @@ const AccessListPhone = ({ route }) => {
               setIncomingRequest(null);
             } else {
               try {
-                // console.log(
-                //   "Calling checkFriendStatus with:",
-                //   currentUser._id,
-                //   result._id
-                // );
                 const statusResponse = await checkFriendStatus(
                   currentUser._id,
                   result._id
                 );
-                // console.log("checkFriendStatus result:", statusResponse);
                 setFriendStatus(statusResponse?.status || "none");
                 if (
                   statusResponse?.status === "pending" &&
@@ -252,7 +292,6 @@ const AccessListPhone = ({ route }) => {
             );
           }
         } catch (error) {
-          //console.error("Error in getFriendByPhone:", error.response?.data || error.message);
           setSearchedUser(null);
           setFriendStatus(null);
           setIncomingRequest(null);
@@ -342,10 +381,10 @@ const AccessListPhone = ({ route }) => {
                   prevList.filter((friend) => friend._id !== friendToRemove._id)
                 );
                 if (searchedUser && searchedUser._id === friendToRemove._id) {
-                  setSearchedUser(null); // Reset searchedUser sau khi hủy kết bạn
+                  setSearchedUser(null);
                   setFriendStatus(null);
                   setIncomingRequest(null);
-                  setSearchQuery(""); // Có thể reset luôn searchQuery để hiển thị lại toàn bộ danh sách bạn bè
+                  setSearchQuery("");
                 }
                 Alert.alert(
                   "Thành công",
@@ -382,12 +421,11 @@ const AccessListPhone = ({ route }) => {
                   currentUser._id,
                   userToAdd._id
                 );
-                // console.log("Response from addFriend:", response);
                 Alert.alert(
                   "Thành công",
                   `Đã gửi lời mời kết bạn đến ${userToAdd.username}`
                 );
-                setFriendStatus("pending"); // Cập nhật trạng thái thành 'pending' sau khi gửi yêu cầu
+                setFriendStatus("pending");
               } else {
                 Alert.alert(
                   "Lỗi",
@@ -407,15 +445,17 @@ const AccessListPhone = ({ route }) => {
   const handleAcceptFriend = async (requestId, senderId) => {
     try {
       if (requestId && currentUser && currentUser._id && senderId) {
-        await acceptFriendRequest(requestId, currentUser._id); // API accept cần requestId và receiverId (là bạn)
+        const request = incomingRequestsList.find(
+          (req) => req._id === requestId && req.senderId?._id === senderId
+        );
+        const senderUsername = request?.senderId?.username || "người dùng";
+        await acceptFriendRequest(requestId);
         Alert.alert(
           "Thành công",
-          `Đã chấp nhận lời mời kết bạn từ ${
-            searchedUser?.username || senderId
-          }`
+          `Đã chấp nhận lời mời kết bạn từ ${senderUsername}`
         );
-        fetchFriendList();
-        fetchIncomingRequests(); // Cập nhật lại danh sách yêu cầu
+        await fetchFriendList();
+        await fetchIncomingRequests();
         setSearchedUser(null);
         setFriendStatus("accepted");
         setIncomingRequest(null);
@@ -434,9 +474,9 @@ const AccessListPhone = ({ route }) => {
         await rejectFriendRequest(requestId);
         Alert.alert(
           "Thành công",
-          `Đã từ chối lời mời kết bạn từ ${searchedUser?.username}`
+          `Đã từ chối lời mời kết bạn`
         );
-        fetchIncomingRequests(); // Cập nhật lại danh sách yêu cầu
+        await fetchIncomingRequests();
         setSearchedUser(null);
         setFriendStatus(null);
         setIncomingRequest(null);
@@ -448,7 +488,7 @@ const AccessListPhone = ({ route }) => {
       Alert.alert("Lỗi", "Đã xảy ra lỗi khi từ chối yêu cầu kết bạn.");
     }
   };
-  // Trong component AccessListPhone
+
   const handleCancelFriendRequest = async (receiverId) => {
     Alert.alert("Xác nhận", "Bạn có chắc chắn muốn hủy lời mời kết bạn này?", [
       { text: "Không", style: "cancel" },
@@ -457,7 +497,6 @@ const AccessListPhone = ({ route }) => {
         onPress: async () => {
           try {
             if (receiverId && currentUser?._id) {
-              // Đảm bảo bạn truyền cả receiverId và senderId (currentUser._id)
               await cancelFriendRequest(receiverId, currentUser._id);
               Alert.alert("Thành công", "Đã hủy yêu cầu kết bạn.");
               setFriendStatus("none");
@@ -526,39 +565,43 @@ const AccessListPhone = ({ route }) => {
       <View style={styles.modalOverlay}>
         <View style={styles.modalContainer}>
           <Text style={styles.modalTitle}>Lời mời kết bạn</Text>
-          <FlatList
-            data={incomingRequestsList}
-            keyExtractor={(item) => item._id}
-            renderItem={({ item }) => (
-              <View style={styles.requestItem}>
-                <View style={styles.requestInfo}>
-                  <Image
-                    source={{ uri: item.senderId?.avatar }}
-                    style={styles.requestAvatar}
-                  />
-                  <Text style={styles.requestName}>
-                    {item.senderId?.username}
-                  </Text>
+          {incomingRequestsList.length === 0 ? (
+            <Text style={styles.noRequestsText}>Không có lời mời kết bạn nào.</Text>
+          ) : (
+            <FlatList
+              data={incomingRequestsList}
+              keyExtractor={(item) => item._id}
+              renderItem={({ item }) => (
+                <View style={styles.requestItem}>
+                  <View style={styles.requestInfo}>
+                    <Image
+                      source={{ uri: item.senderId?.avatar }}
+                      style={styles.requestAvatar}
+                    />
+                    <Text style={styles.requestName}>
+                      {item.senderId?.username}
+                    </Text>
+                  </View>
+                  <View style={styles.requestActions}>
+                    <TouchableOpacity
+                      style={[styles.actionButtonModal, styles.acceptButton]}
+                      onPress={() =>
+                        handleAcceptFriend(item._id, item.senderId?._id)
+                      }
+                    >
+                      <Text style={styles.actionText}>Chấp nhận</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.actionButtonModal, styles.rejectButton]}
+                      onPress={() => handleRejectFriend(item._id)}
+                    >
+                      <Text style={styles.actionText}>Từ chối</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-                <View style={styles.requestActions}>
-                  <TouchableOpacity
-                    style={[styles.actionButtonModal, styles.acceptButton]}
-                    onPress={() =>
-                      handleAcceptFriend(item._id, item.senderId?._id)
-                    }
-                  >
-                    <Text style={styles.actionText}>Chấp nhận</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.actionButtonModal, styles.rejectButton]}
-                    onPress={() => handleRejectFriend(item._id)}
-                  >
-                    <Text style={styles.actionText}>Từ chối</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-          />
+              )}
+            />
+          )}
           <TouchableOpacity
             style={styles.closeButton}
             onPress={closeRequestModal}
@@ -569,6 +612,7 @@ const AccessListPhone = ({ route }) => {
       </View>
     </Modal>
   );
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -586,7 +630,16 @@ const AccessListPhone = ({ route }) => {
           style={styles.iconAddFriend}
           onPress={openRequestModal}
         >
-          <MaterialIcons name="person-add" size={30} color="gray" />
+          <View style={styles.iconWrapper}>
+            <MaterialIcons name="person-add" size={30} color="gray" />
+            {incomingRequestsList.length > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationText}>
+                  {incomingRequestsList.length}
+                </Text>
+              </View>
+            )}
+          </View>
         </TouchableOpacity>
         <TextInput
           style={styles.searchInput}
@@ -599,7 +652,6 @@ const AccessListPhone = ({ route }) => {
 
       {renderSearchResult()}
 
-      {/* Chỉ hiển thị danh sách bạn bè nếu không có tìm kiếm hoặc không có kết quả tìm kiếm bằng số điện thoại */}
       {(!searchQuery.trim() ||
         (!searchedUser && !searchQuery.match(/^\d+$/))) && (
         <FlatList
@@ -607,6 +659,9 @@ const AccessListPhone = ({ route }) => {
           renderItem={renderItem}
           keyExtractor={(item) => item._id}
           showsVerticalScrollIndicator={true}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
         />
       )}
 
@@ -653,8 +708,33 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     padding: 15,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  iconAddFriend: {
+    marginRight: 10,
+  },
+  iconWrapper: {
+    position: "relative",
+  },
+  notificationBadge: {
+    position: "absolute",
+    top: -5,
+    right: -5,
+    backgroundColor: "#ff3b30",
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  notificationText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "bold",
   },
   searchInput: {
+    flex: 1,
     backgroundColor: "#fff",
     padding: 15,
     borderRadius: 12,
@@ -732,8 +812,8 @@ const styles = StyleSheet.create({
   actionButtonModal: {
     backgroundColor: "#2196F3",
     borderRadius: 8,
-    paddingVertical: 3, // Giảm padding nút
-    paddingHorizontal: 5, // Giảm padding nút
+    paddingVertical: 3,
+    paddingHorizontal: 5,
     marginLeft: 5,
   },
   actionText: {
@@ -776,7 +856,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 8, // Giảm padding dọc
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: "#eee",
   },
@@ -785,13 +865,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   requestAvatar: {
-    width: 30, // Giảm kích thước avatar
+    width: 30,
     height: 30,
     borderRadius: 15,
     marginRight: 8,
   },
   requestName: {
-    fontSize: 10, // Giảm kích thước font
+    fontSize: 10,
     fontWeight: "500",
   },
   requestActions: {
@@ -810,7 +890,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   sentRequestStatus: {
-    backgroundColor: "#A9A9A9", // Màu xám nhạt
+    backgroundColor: "#A9A9A9",
     borderRadius: 10,
     paddingVertical: 5,
     paddingHorizontal: 10,
@@ -822,9 +902,14 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   cancelButton: {
-    backgroundColor: "#FF8C00", // Màu cam
+    backgroundColor: "#FF8C00",
     marginLeft: 5,
   },
+  noRequestsText: {
+    fontSize: 16,
+    color: "#757575",
+    textAlign: "center",
+    marginVertical: 20,
+  },
 });
-
 export default AccessListPhone;

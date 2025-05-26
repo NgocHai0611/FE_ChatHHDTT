@@ -1,5 +1,112 @@
 // src/services/apiService.ts
 import api from "./api"; // Giả sử bạn đã cấu hình axios trong file api.ts hoặc api.js
+import { io } from "socket.io-client";
+
+// Địa chỉ server Socket.IO (thay đổi nếu cần)
+const SOCKET_URL = "https://bechatcnm-production.up.railway.app";
+
+// Khởi tạo kết nối Socket.IO
+let socket = null;
+
+export const initializeSocket = (userId, onFriendRequestReceived) => {
+  if (!socket) {
+    socket = io(SOCKET_URL, {
+      transports: ["websocket"],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+    });
+
+    socket.on("connect", () => {
+      console.log("Connected to Socket.IO server:", socket.id);
+      // Tham gia phòng của userId
+      socket.emit("join_room", userId);
+    });
+
+    socket.on("new_friend_request", async (request) => {
+      console.log("New friend request received:", request);
+      try {
+        // Lấy thông tin người gửi
+        const sender = await getUserById(request.senderId);
+        const populatedRequest = {
+          ...request,
+          senderId: {
+            _id: request.senderId,
+            username: sender.username,
+            avatar: sender.avatar,
+          },
+        };
+        if (onFriendRequestReceived) {
+          onFriendRequestReceived(populatedRequest);
+        }
+      } catch (error) {
+        console.error("Error populating sender info:", error);
+        if (onFriendRequestReceived) {
+          onFriendRequestReceived(request); // Fallback to original request if error
+        }
+      }
+    });
+
+    socket.on("friend_request_accepted", async (request) => {
+      if (onFriendRequestReceived) {
+        onFriendRequestReceived(request);
+      }
+    });
+
+    socket.on("friend_request_rejected", (data) => {
+      if (onFriendRequestReceived) {
+        onFriendRequestReceived(data);
+      }
+    });
+
+    socket.on("friend_request_cancelled", (data) => {
+      if (onFriendRequestReceived) {
+        onFriendRequestReceived(data);
+      }
+    });
+
+    socket.on("disconnect", () => {
+      console.log("Disconnected from Socket.IO server");
+    });
+  }
+  return socket;
+};
+
+export const disconnectSocket = () => {
+  if (socket) {
+    socket.disconnect();
+    socket = null;
+    console.log("Socket.IO disconnected");
+  }
+};
+
+// Fetch updated user data
+export const fetchUpdatedUser = async (userId) => {
+  try {
+    const response = await api.get(`/users/get/${userId}`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching updated user:", error);
+    throw error;
+  }
+};
+
+// Fetch updated friend list and requests
+export const fetchUpdatedFriendData = async (userId) => {
+  try {
+    const [friends, requests] = await Promise.all([
+      api.get(`/friends/getfriend/${userId}`),
+      api.get(`/friends/friend-requests/${userId}`),
+    ]);
+    return {
+      friends: friends.data,
+      requests: requests.data,
+    };
+  } catch (error) {
+    console.error("Error fetching updated friend data:", error);
+    throw error;
+  }
+};
 
 //Hiển thị danh sách cuộc trò chuyện
 export const getConversations = async (userId) => {
@@ -13,7 +120,7 @@ export const getMessages = async (conversationId) => {
     return response.data;
   } catch (error) {
     console.error("Error fetching messages:", error);
-    throw error; // Propagate error to caller
+    throw error;
   }
 };
 
@@ -61,10 +168,10 @@ export const sendMessages = async (
 
   try {
     const response = await api.post("/messages/create", messageData);
-    return response.data; // Trả về dữ liệu tin nhắn đã được gửi thành công
+    return response.data;
   } catch (error) {
     console.error("Error sending message:", error);
-    throw error; // Propagate error to caller
+    throw error;
   }
 };
 
@@ -75,7 +182,7 @@ export const getListFriend = async (userId) => {
     return response.data;
   } catch (error) {
     console.error("Error fetching messages:", error);
-    throw error; // Propagate error to caller
+    throw error;
   }
 };
 
@@ -87,7 +194,6 @@ export const getFriendByPhone = async (phone) => {
     });
     return response.data;
   } catch (error) {
-    //console.error("Lỗi khi tìm kiếm bạn bè:", error);
     throw error;
   }
 };
@@ -132,13 +238,13 @@ export const unfriend = async (userId, friendId) => {
       friendId,
     });
     console.log("Hủy kết bạn thành công:", response.data);
-    return response.data; // Trả về dữ liệu phản hồi từ API
+    return response.data;
   } catch (error) {
     console.error(
       "Lỗi khi hủy kết bạn:",
       error.response?.data || error.message
     );
-    throw error; // Ném lỗi để component gọi hàm có thể xử lý
+    throw error;
   }
 };
 
@@ -172,6 +278,7 @@ export const addFriend = async (senderId, receiverId) => {
     throw error;
   }
 };
+
 // Từ chối yêu cầu kết bạn
 export const rejectFriendRequest = async (requestId) => {
   try {
@@ -191,7 +298,6 @@ export const rejectFriendRequest = async (requestId) => {
 
 // Hủy yêu cầu kết bạn (người gửi hủy)
 export const cancelFriendRequest = async (receiverId, senderId) => {
-  // Chắc chắn có senderId ở đây
   try {
     const response = await api.post("/friends/cancel-request", {
       senderId,
@@ -207,6 +313,7 @@ export const cancelFriendRequest = async (receiverId, senderId) => {
     throw error;
   }
 };
+
 // Lấy danh sách yêu cầu kết bạn
 export const getFriendRequests = async (userId) => {
   try {
@@ -219,12 +326,10 @@ export const getFriendRequests = async (userId) => {
 };
 
 // Chấp nhận yêu cầu kết bạn
-export const acceptFriendRequest = async (requestId, senderId, receiverId) => {
+export const acceptFriendRequest = async (requestId) => {
   try {
     const response = await api.post("/friends/accept-request", {
       requestId,
-      senderId,
-      receiverId,
     });
     console.log("Chấp nhận yêu cầu kết bạn thành công:", response.data);
     return response.data;
@@ -249,6 +354,7 @@ export const recallMessage = async (messageId, conversationId) => {
     throw error;
   }
 };
+
 // Xóa tin nhắn ở phía người tôi
 export const deleteMessageForUser = async (
   messageId,

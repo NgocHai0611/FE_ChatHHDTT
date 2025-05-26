@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -13,10 +13,11 @@ import {
   Pressable,
   Alert,
   Platform,
+  RefreshControl,
 } from "react-native";
 import { MaterialIcons, FontAwesome } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getConversations, getUserById } from "../services/apiServices";
+import { getConversations, getUserById, getFriendRequests, initializeSocket, disconnectSocket } from "../services/apiServices";
 import { io } from "socket.io-client";
 import dayjs from "dayjs";
 import { SwipeListView } from "react-native-swipe-list-view";
@@ -24,11 +25,12 @@ import axios from "axios";
 import ModalAddUserToGroup from "./ModelAddUserGroup";
 import { useFocusEffect } from "@react-navigation/native";
 
-export default function ChatListScreen({ navigation }) {
+export default function ChatListScreen({ navigation, route }) {
   const [hoveredId, setHoveredId] = useState(null);
   const [user, setUser] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [searchText, setSearchText] = useState("");
+  const [pendingFriendRequests, setPendingFriendRequests] = useState(0);
   const socket = io("https://bechatcnm-production.up.railway.app", {
     transports: ["websocket"],
   });
@@ -37,90 +39,151 @@ export default function ChatListScreen({ navigation }) {
   const [pinnedMessage, setPinnedMessage] = useState(null);
   const [isModalVisible, setModalVisible] = useState(false);
   const [refreshFlag, setRefreshFlag] = useState(true);
-  const [modalAction, setModalAction] = useState("hide"); // "delete" hoặc "hide"
-  // Fetch thông tin user khi đăng nhập
+  const [modalAction, setModalAction] = useState("hide");
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Kiểm tra và cập nhật user từ route.params
   useEffect(() => {
     const fetchUserData = async () => {
       try {
-        const userData = await AsyncStorage.getItem("user");
-        if (userData) {
-          const parsedUser = JSON.parse(userData);
-          const updatedUser = await getUserById(parsedUser._id);
-          setUser(updatedUser);
-          await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
+        // Kiểm tra nếu có updatedUser từ route.params (từ EditProfileScreen)
+        if (route.params?.updatedUser) {
+          setUser(route.params.updatedUser);
+          await AsyncStorage.setItem("user", JSON.stringify(route.params.updatedUser));
+        } else {
+          // Nếu không có updatedUser, lấy từ AsyncStorage
+          const userData = await AsyncStorage.getItem("user");
+          if (userData) {
+            const parsedUser = JSON.parse(userData);
+            const updatedUser = await getUserById(parsedUser._id);
+            setUser(updatedUser);
+            await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
+          }
         }
       } catch (error) {
-        // console.log("Error retrieving user data", error);
+        console.error("Error retrieving user data", error);
       }
     };
     fetchUserData();
-  }, []);
+  }, [route.params?.updatedUser]);
+
+  // Polling for current user's data (avatar and username) every 2 seconds
+  useEffect(() => {
+    if (!user?._id) return;
+
+    const pollUserData = async () => {
+      try {
+        const updatedUser = await getUserById(user._id);
+        setUser((prevUser) => ({
+          ...prevUser,
+          username: updatedUser.username,
+          avatar: updatedUser.avatar,
+        }));
+        await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
+      } catch (error) {
+        console.error("Error polling user data:", error);
+      }
+    };
+
+    const interval = setInterval(pollUserData, 2000); // Poll every 2 seconds
+
+    // Initial fetch
+    pollUserData();
+
+    // Cleanup interval on unmount
+    return () => clearInterval(interval);
+  }, [user?._id]);
+
+  // Fetch friend requests
+  const fetchFriendRequests = useCallback(async () => {
+    if (user?._id) {
+      try {
+        const requests = await getFriendRequests(user._id);
+        setPendingFriendRequests(requests.length);
+      } catch (error) {
+        console.error("Error fetching friend requests:", error);
+        throw error;
+      }
+    }
+  }, [user]);
 
   // Fetch conversations
-  const fetchConversations = async () => {
+  const fetchConversations = useCallback(async () => {
     if (user) {
       try {
         const data = await getConversations(user._id);
-
-        // Lọc bỏ các conversation mà người dùng đã xóa (có trong deleteBy)
         const filteredData = data.filter(
-          (conv) =>
-            !conv.deleteBy?.some((id) => id.toString() === user._id.toString())
+          (conv) => !conv.deleteBy?.some((id) => id.toString() === user._id.toString())
         );
-
         setConversations(filteredData);
-        // console.log("Fetched Conversations:", filteredData);
       } catch (error) {
-        // console.log("Error fetching conversations:", error);
+        console.error("Error fetching conversations:", error);
+        throw error;
       }
     }
-  };
+  }, [user]);
 
-  // Call các cuộc trò chuyện when user changes
+  // Handle pull-to-refresh
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([fetchConversations(), fetchFriendRequests()]);
+    } catch (error) {
+      Alert.alert("Lỗi", "Không thể tải lại dữ liệu. Vui lòng thử lại.");
+    } finally {
+      setRefreshing(false);
+    }
+  }, [fetchConversations, fetchFriendRequests]);
+
+  // Fetch data when user changes or screen is focused
   useEffect(() => {
     if (user) {
       fetchConversations();
+      fetchFriendRequests();
     }
-  }, [user, isModalVisible]);
+  }, [user, fetchConversations, fetchFriendRequests]);
 
   useFocusEffect(
-    React.useCallback(() => {
+    useCallback(() => {
       if (user) {
         fetchConversations();
+        fetchFriendRequests();
       }
-    }, [user])
+    }, [user, fetchConversations, fetchFriendRequests])
   );
 
-  // Cập nhật useEffect để xử lý sự kiện chatDeleted
+  // Socket.IO setup
   useEffect(() => {
-    socket.on("conversationUpdated", () => {
-      if (user) fetchConversations();
-    });
+    if (user?._id) {
+      const socketInstance = initializeSocket(user._id, (request) => {
+        setPendingFriendRequests((prev) => prev + 1);
+      });
 
-    socket.on("chatDeleted", ({ conversationId }) => {
-      setConversations((prevConversations) =>
-        prevConversations.filter((conv) => conv._id !== conversationId)
-      );
-      // console.log("Chat deleted or hidden on client:", conversationId);
-    });
+      socket.on("conversationUpdated", () => {
+        if (user) fetchConversations();
+      });
 
-    return () => {
-      socket.off("conversationUpdated");
-      socket.off("chatDeleted");
-      socket.disconnect();
-    };
-  }, [user]);
+      socket.on("chatDeleted", ({ conversationId }) => {
+        setConversations((prevConversations) =>
+          prevConversations.filter((conv) => conv._id !== conversationId)
+        );
+      });
+
+      return () => {
+        socket.off("conversationUpdated");
+        socket.off("chatDeleted");
+        disconnectSocket();
+      };
+    }
+  }, [user, fetchConversations]);
 
   const filteredConversations = useMemo(() => {
     return conversations
       .filter((c) => {
-        // Kiểm tra nếu cuộc trò chuyện có tin nhắn cuối cùng
-        const hasLatestMessage =
-          c.latestmessage !== undefined && c.latestmessage !== null;
+        const hasLatestMessage = c.latestmessage !== undefined && c.latestmessage !== null;
         const hasValidMembers = c.members && c.members.length > 0;
         const isLastMessageRecalled = c.isLastMessageRecalled || false;
 
-        // Điều kiện để hiển thị cuộc trò chuyện:
         const shouldShowConversation =
           hasValidMembers &&
           ((hasLatestMessage &&
@@ -132,17 +195,11 @@ export default function ChatListScreen({ navigation }) {
               .toLowerCase()
               .includes(searchText.toLowerCase()));
 
-        // Thêm điều kiện lọc để loại bỏ các cuộc trò chuyện bị ẩn hoặc xóa
         const isNotHiddenOrDeleted = !c.deleteBy?.includes(user._id);
         return shouldShowConversation && isNotHiddenOrDeleted;
       })
-      .sort((a, b) => {
-        // Sắp xếp theo lastMessageTime, từ mới nhất đến cũ nhất
-        return new Date(b.lastMessageTime) - new Date(a.lastMessageTime);
-      });
+      .sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
   }, [conversations, searchText]);
-
-  // console.log("Filtered Conversations:", filteredConversations);
 
   if (!user) {
     return (
@@ -182,27 +239,23 @@ export default function ChatListScreen({ navigation }) {
       const data = await response.json();
       const pinnedMessage = data.find((msg) => msg.isPinned === true);
       setPinnedMessage(pinnedMessage);
-      return data; // data sẽ là mảng messages
+      return data;
     } catch (error) {
-      // console.error("Lỗi khi lấy messages:", error);
+      console.error("Lỗi khi lấy messages:", error);
       return [];
     }
   };
 
   const handleConversationClick = async (conversation, otherMember) => {
     try {
-      // 1. Gọi API lấy danh sách tin nhắn
       const messages = await fetchMessagesByConversationId(conversation._id);
-
       let createGroupData = null;
 
-      // 2. Gọi API lấy chi tiết cuộc trò chuyện (xem có phải group không)
       const res1 = await axios.get(
         `https://bechatcnm-production.up.railway.app/conversations/get/${conversation._id}`
       );
       const fullConversation = res1.data;
 
-      // 3. Nếu là group chat thì lấy thông tin người tạo nhóm
       if (fullConversation.createGroup?.userId) {
         const res2 = await axios.get(
           `https://bechatcnm-production.up.railway.app/users/get/${fullConversation.createGroup.userId}`
@@ -217,7 +270,6 @@ export default function ChatListScreen({ navigation }) {
         };
       }
 
-      // 4. Cập nhật trạng thái đã xem
       socket.emit("markAsSeen", {
         conversationId: conversation._id,
         userId: user._id,
@@ -230,7 +282,6 @@ export default function ChatListScreen({ navigation }) {
         });
       }
 
-      // 5. Điều hướng đến màn hình ChatScreen
       navigation.navigate("ChatScreen", {
         conversation: {
           ...conversation,
@@ -259,13 +310,8 @@ export default function ChatListScreen({ navigation }) {
 
   const handleLogout = async () => {
     try {
-      // Xóa dữ liệu trong AsyncStorage
       await AsyncStorage.removeItem("user");
-
-      // Ngắt kết nối socket
       socket.disconnect();
-
-      // Reset toàn bộ trạng thái điều hướng và chuyển đến màn hình Login
       navigation.reset({
         index: 0,
         routes: [{ name: "Login" }],
@@ -278,38 +324,28 @@ export default function ChatListScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Phần Header */}
       <View style={styles.header}>
         <View style={styles.userInfo}>
           <Image source={{ uri: user.avatar }} style={styles.headerAvatar} />
           <Text style={styles.username}>{user.username}</Text>
         </View>
-
         <View>
           <Text style={styles.title}>Chats</Text>
         </View>
       </View>
 
-      {/* Phần body */}
       <View style={styles.inputContainer}>
         <TouchableOpacity style={styles.iconAddFriend}>
           <MaterialIcons
             name="group-add"
             size={24}
             color="black"
-            visible={isModalVisible}
-            typeAction="create"
             onPress={() => setModalVisible(true)}
           />
         </TouchableOpacity>
         <View style={styles.iconSearch}>
           <TouchableOpacity style={styles.iconSearchTouch}>
-            <FontAwesome
-              name="search"
-              size={20}
-              color="gray"
-              style={styles.icon}
-            />
+            <FontAwesome name="search" size={20} color="gray" style={styles.icon} />
             <TextInput
               placeholder="Search"
               style={styles.input}
@@ -321,40 +357,32 @@ export default function ChatListScreen({ navigation }) {
         </View>
       </View>
 
-      {/* Phần hiển thị danh sách cuộc trò chuyện */}
       <SwipeListView
         data={filteredConversations}
         keyExtractor={(item) => item._id}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
         renderItem={({ item }) => {
-          // Kiểm tra loại cuộc trò chuyện là nhóm hay cá nhân bằng item.isGroup
           const isGroupChat = item.isGroup;
-
-          // Tìm thành viên khác nếu không phải nhóm
           const otherMember = !isGroupChat
             ? item.members.find((member) => member._id !== user._id)
             : null;
 
-          // Định nghĩa avatar cho nhóm hoặc cá nhân
           const avatarSource = isGroupChat
             ? {
                 uri:
                   item.groupAvatar ||
-                  "https://file.hstatic.net/200000503583/file/tao-dang-chup-anh-nhom-lay-loi__5__34b470841bb840e3b2ce25cbe02533ec.jpg", // Fallback cho avatar nhóm
+                  "https://file.hstatic.net/200000503583/file/tao-dang-chup-anh-nhom-lay-loi__5__34b470841bb840e3b2ce25cbe02533ec.jpg",
               }
             : {
                 uri:
                   otherMember?.avatar ||
-                  "https://res.cloudinary.com/dkmwjkajj/image/upload/v1744086751/rdlye9nsldaprn40ozmd.jpg", // Fallback cho avatar cá nhân
+                  "https://res.cloudinary.com/dkmwjkajj/image/upload/v1744086751/rdlye9nsldaprn40ozmd.jpg",
               };
 
-          // Thời gian của tin nhắn cuối cùng
           const lastMessageTime = formatMessageTime(item.lastMessageTime);
-
-          // Kiểm tra xem tin nhắn cuối cùng có phải từ người dùng hiện tại không
-          const isLastMessageFromCurrentUser =
-            item.lastMessageSenderId === user._id;
-
-          // Số tin nhắn chưa đọc
+          const isLastMessageFromCurrentUser = item.lastMessageSenderId === user._id;
           const unreadCountObject = item.unreadCounts.find(
             (uc) => uc.userId === user._id
           );
@@ -362,17 +390,13 @@ export default function ChatListScreen({ navigation }) {
 
           return (
             <TouchableOpacity
-              style={[
-                styles.chatItem,
-                hoveredId === item._id && styles.chatItemHover,
-              ]}
+              style={[styles.chatItem, hoveredId === item._id && styles.chatItemHover]}
               onPressIn={() => setHoveredId(item._id)}
               onPressOut={() => setHoveredId(null)}
               onPress={() => handleConversationClick(item, otherMember)}
             >
               <View style={styles.avatarContainer}>
                 <Image source={avatarSource} style={styles.chatAvatar} />
-                {/* Nếu không phải nhóm và người này đang online, hiển thị vòng tròn xanh */}
                 {!isGroupChat && item.isOnline && (
                   <View style={styles.onlineIndicator} />
                 )}
@@ -382,7 +406,6 @@ export default function ChatListScreen({ navigation }) {
                   <Text style={styles.name}>
                     {isGroupChat ? item.name : otherMember?.username}
                   </Text>
-
                   <Text style={styles.lastMessage}>
                     {isLastMessageFromCurrentUser
                       ? `Bạn: ${item.latestmessage}`
@@ -402,14 +425,12 @@ export default function ChatListScreen({ navigation }) {
         renderHiddenItem={({ item }) => (
           <View style={styles.rowBack}>
             <View style={{ flex: 1 }}></View>
-            {/* Nút Ẩn */}
             <TouchableOpacity
               style={[styles.backRightBtn, styles.backRightBtnHide]}
               onPress={() => handleDeleteChat(item._id)}
             >
               <Text style={styles.backTextWhite}>Ẩn</Text>
             </TouchableOpacity>
-            {/* Nút Xóa */}
             <TouchableOpacity
               style={[styles.backRightBtn, styles.backRightBtnRight]}
               onPress={() => handleDeleteChatWithMe(item._id)}
@@ -419,10 +440,9 @@ export default function ChatListScreen({ navigation }) {
           </View>
         )}
         leftOpenValue={0}
-        rightOpenValue={-150} // Tăng giá trị để chứa cả hai nút
+        rightOpenValue={-150}
       />
 
-      {/* Modal xóa */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -446,9 +466,7 @@ export default function ChatListScreen({ navigation }) {
               <Pressable
                 style={[
                   styles.button,
-                  modalAction === "hide"
-                    ? styles.buttonHide
-                    : styles.buttonDelete,
+                  modalAction === "hide" ? styles.buttonHide : styles.buttonDelete,
                 ]}
                 onPress={() => {
                   if (selectedConversationId) {
@@ -468,20 +486,16 @@ export default function ChatListScreen({ navigation }) {
                   setSelectedConversationId(null);
                 }}
               >
-                <Text style={styles.textStyle}>
-                  {modalAction === "hide" ? "Ẩn" : "Xóa"}
-                </Text>
+                <Text style={styles.textStyle}>{modalAction === "hide" ? "Ẩn" : "Xóa"}</Text>
               </Pressable>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* Phần menu footer */}
       <View style={styles.footer}>
         <TouchableOpacity style={styles.iconFooter}>
           <MaterialIcons name="chat" size={30} color="#b73bff" />
-
           <ModalAddUserToGroup
             idUser={user._id}
             visible={isModalVisible}
@@ -500,9 +514,17 @@ export default function ChatListScreen({ navigation }) {
           style={styles.iconFooter}
           onPress={() => {
             navigation.navigate("PhoneContact", { currentUser: user });
+            setPendingFriendRequests(0); // Reset badge when navigating to Contacts
           }}
         >
-          <MaterialIcons name="contacts" size={30} color="gray" />
+          <View style={styles.iconWrapper}>
+            <MaterialIcons name="contacts" size={30} color="gray" />
+            {pendingFriendRequests > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationText}>{pendingFriendRequests}</Text>
+              </View>
+            )}
+          </View>
           <Text style={styles.textFooter}>Contacts</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.iconFooter}>
@@ -679,6 +701,25 @@ const styles = StyleSheet.create({
   iconFooter: {
     alignItems: "center",
   },
+  iconWrapper: {
+    position: "relative",
+  },
+  notificationBadge: {
+    position: "absolute",
+    top: -5,
+    right: -5,
+    backgroundColor: "#ff3b30",
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  notificationText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "bold",
+  },
   messageTime: {
     fontSize: 12,
     color: "#888",
@@ -748,10 +789,10 @@ const styles = StyleSheet.create({
     width: 75,
   },
   backRightBtnHide: {
-    backgroundColor: "#FFA500", // Màu cam cho nút Ẩn
+    backgroundColor: "#FFA500",
   },
   backRightBtnRight: {
-    backgroundColor: "#FF0000", // Màu đỏ cho nút Xóa
+    backgroundColor: "#FF0000",
   },
   backTextWhite: {
     color: "#FFF",
