@@ -79,6 +79,8 @@ export const disconnectSocket = () => {
     console.log("Socket.IO disconnected");
   }
 };
+export const getSocket = () => socket;
+
 
 // Fetch updated user data
 export const fetchUpdatedUser = async (userId) => {

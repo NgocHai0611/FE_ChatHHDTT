@@ -31,6 +31,8 @@ import {
   getListFriend,
   createConversation,
   getConversations,
+  initializeSocket,
+  getSocket,
   
 } from "../services/apiServices";
 import { useFocusEffect } from "@react-navigation/native";
@@ -62,11 +64,10 @@ const [isLoading, setIsLoading] = useState(false); // Thêm trạng thái isLoad
   
 // Kết nối socket và xử lý các sự kiện
   useEffect(() => {
-    socket.current = io("https://bechatcnm-production.up.railway.app", {
-      transports: ["websocket"],
-      secure: true,
-      timeout: 10000, // timeout sau 10 giây
-    });
+    if (currentUser?._id && conversation?._id) {
+      socket.current = initializeSocket(currentUser._id, (request) => {
+        // Xử lý yêu cầu kết bạn nếu cần
+      });
 
     socket.current.on("connect", () => {
       socket.current.emit("join_room", currentUser._id);
@@ -183,10 +184,13 @@ const [isLoading, setIsLoading] = useState(false); // Thêm trạng thái isLoad
     fetchFriends();
 
     return () => {
-      if (socket.current) {
-        socket.current.disconnect();
-      }
+      // Không ngắt kết nối socket ở đây để giữ kết nối toàn ứng dụng
+        socket.current.off(`receiveMessage-${conversation._id}`);
+        socket.current.off(`messageSeen-${conversation._id}`);
+        socket.current.off("refreshMessages");
+        socket.current.off("groupUpdatedToggleDeputy");
     };
+  }
   }, [conversation._id,currentUser._id]);
 
   useEffect(() => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback,useRef } from "react";
 import {
   View,
   Text,
@@ -17,23 +17,23 @@ import {
 } from "react-native";
 import { MaterialIcons, FontAwesome } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getConversations, getUserById, getFriendRequests, initializeSocket, disconnectSocket } from "../services/apiServices";
+import { getConversations, getUserById, getFriendRequests, initializeSocket, disconnectSocket,getSocket } from "../services/apiServices";
 import { io } from "socket.io-client";
 import dayjs from "dayjs";
 import { SwipeListView } from "react-native-swipe-list-view";
 import axios from "axios";
 import ModalAddUserToGroup from "./ModelAddUserGroup";
 import { useFocusEffect } from "@react-navigation/native";
-
+ 
 export default function ChatListScreen({ navigation, route }) {
   const [hoveredId, setHoveredId] = useState(null);
   const [user, setUser] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [searchText, setSearchText] = useState("");
   const [pendingFriendRequests, setPendingFriendRequests] = useState(0);
-  const socket = io("https://bechatcnm-production.up.railway.app", {
-    transports: ["websocket"],
-  });
+  // const socket = io("https://bechatcnm-production.up.railway.app", {
+  //   transports: ["websocket"],
+  // });
   const [isDeleteModalVisible, setDeleteModalVisible] = useState(false);
   const [selectedConversationId, setSelectedConversationId] = useState(null);
   const [pinnedMessage, setPinnedMessage] = useState(null);
@@ -41,7 +41,7 @@ export default function ChatListScreen({ navigation, route }) {
   const [refreshFlag, setRefreshFlag] = useState(true);
   const [modalAction, setModalAction] = useState("hide");
   const [refreshing, setRefreshing] = useState(false);
-
+const socketRef = useRef(null);
   // Kiểm tra và cập nhật user từ route.params
   useEffect(() => {
     const fetchUserData = async () => {
@@ -85,7 +85,7 @@ export default function ChatListScreen({ navigation, route }) {
       }
     };
 
-    const interval = setInterval(pollUserData, 2000); // Poll every 2 seconds
+    const interval = setInterval(pollUserData, 5000); // Poll every 2 seconds
 
     // Initial fetch
     pollUserData();
@@ -155,24 +155,29 @@ export default function ChatListScreen({ navigation, route }) {
   // Socket.IO setup
   useEffect(() => {
     if (user?._id) {
-      const socketInstance = initializeSocket(user._id, (request) => {
+      socketRef.current = initializeSocket(user._id, (request) => {
         setPendingFriendRequests((prev) => prev + 1);
       });
 
-      socket.on("conversationUpdated", () => {
+      socketRef.current.on("conversationUpdated", () => {
         if (user) fetchConversations();
       });
 
-      socket.on("chatDeleted", ({ conversationId }) => {
+      socketRef.current.on("chatDeleted", ({ conversationId }) => {
         setConversations((prevConversations) =>
           prevConversations.filter((conv) => conv._id !== conversationId)
         );
       });
 
+      socketRef.current.on("connect_error", (err) => {
+        Alert.alert("Lỗi kết nối", "Không thể kết nối đến server Socket.IO.");
+      });
+
       return () => {
-        socket.off("conversationUpdated");
-        socket.off("chatDeleted");
-        disconnectSocket();
+       socketRef.current.off("conversationUpdated");
+        socketRef.current.off("chatDeleted");
+        socketRef.current.off("connect_error");
+        // disconnectSocket();
       };
     }
   }, [user, fetchConversations]);
@@ -269,17 +274,22 @@ export default function ChatListScreen({ navigation, route }) {
           lastMessageId: fullConversation.createGroup.lastMessageId,
         };
       }
+      const socket = getSocket();
 
-      socket.emit("markAsSeen", {
-        conversationId: conversation._id,
-        userId: user._id,
-      });
-
-      if (conversation.lastMessageSenderId !== user._id) {
-        socket.emit("messageSeen", {
-          messageId: conversation.lastMessageId,
+      if (socket) {
+        socket.emit("markAsSeen", {
+          conversationId: conversation._id,
           userId: user._id,
         });
+
+        if (conversation.lastMessageSenderId !== user._id) {
+          socket.emit("messageSeen", {
+            messageId: conversation.lastMessageId,
+            userId: user._id,
+          });
+        }
+      } else {
+        console.warn("Socket is not initialized");
       }
 
       navigation.navigate("ChatScreen", {
@@ -293,6 +303,7 @@ export default function ChatListScreen({ navigation, route }) {
       });
     } catch (error) {
       console.error("Lỗi khi chọn đoạn chat:", error);
+      Alert.alert("Lỗi", "Không thể mở cuộc trò chuyện. Vui lòng thử lại.");
     }
   };
 
@@ -311,7 +322,7 @@ export default function ChatListScreen({ navigation, route }) {
   const handleLogout = async () => {
     try {
       await AsyncStorage.removeItem("user");
-      socket.disconnect();
+      disconnectSocket();
       navigation.reset({
         index: 0,
         routes: [{ name: "Login" }],
@@ -469,7 +480,8 @@ export default function ChatListScreen({ navigation, route }) {
                   modalAction === "hide" ? styles.buttonHide : styles.buttonDelete,
                 ]}
                 onPress={() => {
-                  if (selectedConversationId) {
+                  const socket = getSocket();
+                  if (socket && selectedConversationId) {
                     if (modalAction === "hide") {
                       socket.emit("deleteChat", {
                         conversationId: selectedConversationId,
