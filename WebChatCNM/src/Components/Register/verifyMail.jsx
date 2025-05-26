@@ -9,7 +9,7 @@ const VerifyEmail = () => {
   useEffect(() => {
     const verifyEmail = async () => {
       try {
-        const baseURL = `${window.location.protocol}//${window.location.hostname}:${window.location.port}/v1/auth`;
+        const baseURL = `https://bechatcnm-production.up.railway.app/v1/auth`;
         const response = await fetch(`${baseURL}/verify/${token}`);
         const data = await response.json();
 
