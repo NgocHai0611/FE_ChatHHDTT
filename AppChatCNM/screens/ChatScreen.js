@@ -69,6 +69,7 @@ const [isLoading, setIsLoading] = useState(false); // Thêm trạng thái isLoad
     });
 
     socket.current.on("connect", () => {
+      socket.current.emit("join_room", currentUser._id);
       socket.current.emit("markAsSeen", {
         conversationId: conversation._id,
         userId: currentUser._id,
@@ -186,7 +187,7 @@ const [isLoading, setIsLoading] = useState(false); // Thêm trạng thái isLoad
         socket.current.disconnect();
       }
     };
-  }, [conversation._id]);
+  }, [conversation._id,currentUser._id]);
 
   useEffect(() => {
     if (conversation.isDissolved === true) {
@@ -305,18 +306,18 @@ const [isLoading, setIsLoading] = useState(false); // Thêm trạng thái isLoad
       let messageData = [];
     try {
       
-
+// Kiểm tra trạng thái bạn bè cho cuộc trò chuyện 1-1
       if (!conversation.isGroup) {
         const receiverId = conversation.members.find(
           (id) => id !== currentUser._id
         );
-        console.log("Receiver ID:", receiverId, "Members:", conversation.members);
+        
         if (!receiverId) {
           Alert.alert("Lỗi", "Không tìm thấy người nhận trong cuộc trò chuyện.");
           setIsLoading(false);
           return;
         }
-        // Bỏ kiểm tra trạng thái bạn bè vì server đã xử lý
+       
       }
 
       if (message.text && message.text.trim() !== "") {

@@ -76,8 +76,9 @@ export default function ModalEditGroupInfo({ group, visible, onClose }) {
             "Content-Type": "multipart/form-data",
           },
         }
-      );
 
+      );
+      setIsLoading(false);
       Alert.alert("Thành công", "Thông tin nhóm đã được cập nhật.");
       setTimeout(() => {
         setIsLoading(false);
