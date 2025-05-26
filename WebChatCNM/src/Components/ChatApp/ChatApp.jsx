@@ -51,10 +51,7 @@ import axios from "axios";
 import { useLocation } from "react-router-dom";
 import { set } from "mongoose";
 // import { image } from "../../../../../BE_ChatHHDTT/config/cloudConfig";
-// Test
-const socket = io("https://bechatcnm-production.up.railway.app", {
-  transports: ["websocket"],
-});
+const socket = io("http://localhost:8004", { transports: ["websocket"] });
 
 Modal.setAppElement("#root");
 
@@ -156,7 +153,7 @@ export default function ChatApp() {
     try {
       // Bước 1: Lấy danh sách conversation
       const res = await axios.get(
-        `https://bechatcnm-production.up.railway.app/conversations/${user._id}`
+        `http://localhost:8004/conversations/${user._id}`
       );
       let conversations = res.data;
       const conversationbyId = res.data;
@@ -187,7 +184,7 @@ export default function ChatApp() {
             memberIds.map(async (memberId) => {
               try {
                 const res = await axios.get(
-                  `https://bechatcnm-production.up.railway.app/users/get/${memberId}`
+                  `http://localhost:8004/users/get/${memberId}`
                 );
                 return res.data; // { _id, username, avatar }
               } catch (err) {
@@ -204,7 +201,7 @@ export default function ChatApp() {
           //   (conv.leftMembers || []).map(async (member) => {
           //     try {
           //       const res = await axios.get(
-          //         `https://bechatcnm-production.up.railway.app/users/get/${member.userId}`
+          //         `http://localhost:8004/users/get/${member.userId}`
           //       );
           //       return {
           //         userId: member.userId,
@@ -244,7 +241,7 @@ export default function ChatApp() {
           // 🟢 Đây là conversation giữa 2 người
           const otherUserId = conv.members.find((_id) => _id !== user._id);
           const userRes = await axios.get(
-            `https://bechatcnm-production.up.railway.app/users/get/${otherUserId}`
+            `http://localhost:8004/users/get/${otherUserId}`
           );
           const otherUser = userRes.data;
 
@@ -387,7 +384,7 @@ export default function ChatApp() {
   const fetchMessagesByConversationId = async (conversationId) => {
     try {
       const response = await fetch(
-        `https://bechatcnm-production.up.railway.app/messages/get/${conversationId}`
+        `http://localhost:8004/messages/get/${conversationId}`
       );
       const data = await response.json();
       const pinnedMessage = data.find((msg) => msg.isPinned === true);
@@ -409,14 +406,14 @@ export default function ChatApp() {
 
     try {
       const res1 = await axios.get(
-        `https://bechatcnm-production.up.railway.app/conversations/get/${chat.conversationId}`
+        `http://localhost:8004/conversations/get/${chat.conversationId}`
       );
       const conversation = res1.data;
 
       // Kiểm tra nếu có trường createGroup (nghĩa là group chat)
       if (conversation.createGroup?.userId) {
         const res2 = await axios.get(
-          `https://bechatcnm-production.up.railway.app/users/get/${conversation.createGroup.userId}`
+          `http://localhost:8004/users/get/${conversation.createGroup.userId}`
         );
         const userAdd = res2.data;
 
@@ -471,14 +468,6 @@ export default function ChatApp() {
   // Hàm bật/tắt menu
   const toggleMenu = () => {
     setShowMenu((prev) => !prev);
-    // setShowModal(true);
-    // setIsUpdating(true); // Mark as updating when modal opens
-  };
-
-  const openProfileModal = () => {
-    setShowMenu(false); // Đóng dropdown menu
-    setShowModal(true); // Mở modal thông tin tài khoản
-    setIsUpdating(true); // Đánh dấu đang cập nhật
   };
 
   // Đóng menu khi click ra ngoài
@@ -515,14 +504,11 @@ export default function ChatApp() {
 
   const handleLogout = async () => {
     try {
-      const response = await fetch(
-        `https://bechatcnm-production.up.railway.app/v1/auth/logout`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: user._id }),
-        }
-      );
+      const response = await fetch(`http://localhost:8004/v1/auth/logout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: user._id }),
+      });
 
       if (response.ok) {
         console.log("Đã đăng xuất thành công!");
@@ -590,14 +576,11 @@ export default function ChatApp() {
     /* Xử lý pin tin nhắn */
   }
   const handlePinMessage = async (messageId, isPinned) => {
-    await fetch(
-      `https://bechatcnm-production.up.railway.app/messages/pin/${messageId}`,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isPinned }),
-      }
-    );
+    await fetch(`http://localhost:8004/messages/pin/${messageId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isPinned }),
+    });
     // Gửi tín hiệu tới socket để cập nhật tin nhắn bên người nhận
     socket.emit("messageUpdated", {
       conversationId: selectedChat.conversationId,
@@ -610,14 +593,11 @@ export default function ChatApp() {
     /* Xử lý xóa tin nhắn phía tôi */
   }
   const handleDeleteMessageFrom = async (messageId) => {
-    await fetch(
-      `https://bechatcnm-production.up.railway.app/messages/deletefrom/${messageId}`,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user._id }),
-      }
-    );
+    await fetch(`http://localhost:8004/messages/deletefrom/${messageId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: user._id }),
+    });
     handleSelectChat(selectedChat);
     setMenuMessageId(null);
   };
@@ -628,7 +608,7 @@ export default function ChatApp() {
   const handleRecallMessage = async (messageId) => {
     try {
       const response = await fetch(
-        `https://bechatcnm-production.up.railway.app/messages/recall/${messageId}`,
+        `http://localhost:8004/messages/recall/${messageId}`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -696,7 +676,7 @@ export default function ChatApp() {
   }
   const handleLeaveGroup = async (conversationId) => {
     const res = await axios.get(
-      `https://bechatcnm-production.up.railway.app/conversations/get/${conversationId}`
+      `http://localhost:8004/conversations/get/${conversationId}`
     );
     if (!res) return;
     const group = res.data;
@@ -767,7 +747,7 @@ export default function ChatApp() {
         updatedMembers.map(async (id) => {
           try {
             const res = await axios.get(
-              `https://bechatcnm-production.up.railway.app/users/get/${id}`
+              `http://localhost:8004/users/get/${id}`
             );
             return res.data;
           } catch (err) {
@@ -828,7 +808,7 @@ export default function ChatApp() {
         try {
           // Gọi API để lấy lại thông tin cuộc trò chuyện mới nhất
           const res = await axios.get(
-            `https://bechatcnm-production.up.railway.app/conversations/get/${conversationId}`
+            `http://localhost:8004/conversations/get/${conversationId}`
           );
           const conversation = res.data;
 
@@ -900,10 +880,10 @@ export default function ChatApp() {
           newMembers.map(async (member) => {
             try {
               const userRes = await axios.get(
-                `https://bechatcnm-production.up.railway.app/users/get/${member.userId}`
+                `http://localhost:8004/users/get/${member.userId}`
               );
               const addByRes = await axios.get(
-                `https://bechatcnm-production.up.railway.app/users/get/${member.addBy}`
+                `http://localhost:8004/users/get/${member.addBy}`
               );
               return {
                 ...member,
@@ -923,7 +903,7 @@ export default function ChatApp() {
         // Gọi lại handleSelectChat để cập nhật lại thông tin cuộc trò chuyện
         try {
           const res = await axios.get(
-            `https://bechatcnm-production.up.railway.app/conversations/get/${conversationId}`
+            `http://localhost:8004/conversations/get/${conversationId}`
           );
           const conversation = res.data;
 
@@ -1054,13 +1034,10 @@ export default function ChatApp() {
     }
 
     try {
-      const response = await fetch(
-        "https://bechatcnm-production.up.railway.app/messages/upload",
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
+      const response = await fetch("http://localhost:8004/messages/upload", {
+        method: "POST",
+        body: formData,
+      });
 
       if (!response.ok)
         throw new Error(`HTTP error! Status: ${response.status}`);
@@ -1135,9 +1112,9 @@ export default function ChatApp() {
   };
 
   const closeModal = () => {
-    setShowModal(false);
-    setIsUpdating(false); // Reset isUpdating when modal closes
-    setAvatarPreview(null); // Reset avatarPreview to allow fetching
+    setIsOpen(false);
+    setMediaUrl("");
+    setMediaType("");
   };
   //Check lời mời kết bạn
   useEffect(() => {
@@ -1156,8 +1133,6 @@ export default function ChatApp() {
         }
       );
     };
-
-    //
 
     checkFriendRequestStatus();
   }, [searchResult?._id, user?._id]);
@@ -1182,59 +1157,6 @@ export default function ChatApp() {
     loadFriends();
   };
 
-  const [isUpdating, setIsUpdating] = useState(false);
-
-  // Refresh user information for chat-avatar every 2 seconds, except when updating profile
-  useEffect(() => {
-    if (!user?._id) return;
-
-    let lastFetchTime = 0;
-    const minInterval = 2000; // Minimum interval of 2 seconds between fetches
-
-    const fetchUserInfo = async () => {
-      const now = Date.now();
-      if (now - lastFetchTime < minInterval) return; // Prevent fetching too quickly
-      lastFetchTime = now;
-
-      // Skip fetching if user is updating profile (modal open or avatar uploaded)
-      if (isUpdating || avatarPreview) return;
-
-      try {
-        const response = await axios.get(
-          `https://bechatcnm-production.up.railway.app/users/get/${user._id}`
-        );
-        const updatedUser = response.data;
-
-        // Compare fields to detect changes
-        const hasChanges = 
-          updatedUser.username !== user.username ||
-          updatedUser.phone !== user.phone ||
-          updatedUser.avatar !== user.avatar ||
-          (showModal && updatedUser.email && updatedUser.email !== user.email) ||
-          (showModal && updatedUser.password && updatedUser.password !== user.password);
-
-        if (hasChanges) {
-          setUser((prev) => ({
-            ...prev,
-            username: updatedUser.username,
-            phone: updatedUser.phone,
-            avatar: updatedUser.avatar,
-            email: updatedUser.email,
-            ...(showModal && updatedUser.password && { password: updatedUser.password }),
-          }));
-          localStorage.setItem("user", JSON.stringify(updatedUser));
-        }
-      } catch (error) {
-        console.error("Error refreshing user info:", error);
-      }
-    };
-
-    fetchUserInfo(); // Initial fetch
-    const interval = setInterval(fetchUserInfo, 2000); // Check every 2 seconds
-
-    return () => clearInterval(interval); // Cleanup on unmount
-  }, [user?._id, showModal, user.username, user.phone, user.avatar, user.email, user.password, avatarPreview, isUpdating]);
-  
   //Gửi lời mời kết bạn
   const handleSendFriendRequest = (receiverId) => {
     if (!user?._id || !receiverId) return;
@@ -1489,7 +1411,7 @@ export default function ChatApp() {
     try {
       if (isGroup) {
         const res = await fetch(
-          `https://bechatcnm-production.up.railway.app/conversations/get/${receiverId}`
+          `http://localhost:8004/conversations/get/${receiverId}`
         );
         const groupInfo = await res.json();
         console.log("groupInfo", groupInfo);
@@ -1515,7 +1437,7 @@ export default function ChatApp() {
 
       // ✅ Trường hợp chat 1-1
       const response = await fetch(
-        `https://bechatcnm-production.up.railway.app/conversations/${user._id}/search`
+        `http://localhost:8004/conversations/${user._id}/search`
       );
       const conversations = await response.json();
 
@@ -1528,7 +1450,7 @@ export default function ChatApp() {
 
       // 💡 Chỉ gọi API user nếu là chat 1-1
       const userReceiver = await fetch(
-        `https://bechatcnm-production.up.railway.app/users/get/${receiverId}`
+        `http://localhost:8004/users/get/${receiverId}`
       );
       const data = await userReceiver.json();
 
@@ -1544,7 +1466,7 @@ export default function ChatApp() {
 
       // Nếu chưa có, tạo mới cuộc trò chuyện
       const createResponse = await fetch(
-        "https://bechatcnm-production.up.railway.app/conversations/create",
+        "http://localhost:8004/conversations/create",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1604,7 +1526,6 @@ export default function ChatApp() {
 
   const handleUpdate = async () => {
     try {
-      setIsUpdating(true);
       const formData = new FormData();
       formData.append("username", updatedUser.username);
       formData.append("phone", updatedUser.phone);
@@ -1614,7 +1535,7 @@ export default function ChatApp() {
       }
 
       const response = await axios.put(
-        `https://bechatcnm-production.up.railway.app/users/update/${user._id}`,
+        `http://localhost:8004/users/update/${user._id}`,
         formData,
         {
           headers: {
@@ -1624,7 +1545,7 @@ export default function ChatApp() {
       );
 
       localStorage.setItem("user", JSON.stringify(response.data));
-      setUser(response.data);
+
       // Sau khi cập nhật thành công, cập nhật lại user với thông tin mới
       setUpdatedUser({
         username: response.data.username,
@@ -1632,12 +1553,9 @@ export default function ChatApp() {
         password: "",
         avatar: response.data.avatar,
       });
-      setAvatarPreview(null);
-      setIsUpdating(false);
       toast.success("Cập nhật thông tin thành công!");
       setShowModal(false);
     } catch (error) {
-      setIsUpdating(false);
       // Bắt lỗi trả về từ server (đã kiểm tra regex, định dạng...)
       if (error.response && error.response.data && error.response.data.error) {
         toast.error(error.response.data.error); // Hiển thị nội dung lỗi từ backend
@@ -1714,7 +1632,7 @@ export default function ChatApp() {
   const handleSearchByPhone = async () => {
     try {
       const response = await fetch(
-        `https://bechatcnm-production.up.railway.app/friends/search?phone=${phoneSearchTerm}`
+        `http://localhost:8004/friends/search?phone=${phoneSearchTerm}`
       );
       const res = await response.json();
 
@@ -1769,7 +1687,7 @@ export default function ChatApp() {
     try {
       setCreatingGroup(true);
       const res = await axios.post(
-        "https://bechatcnm-production.up.railway.app/conversations/createwithimage",
+        "http://localhost:8004/conversations/createwithimage",
         formData,
         {
           headers: {
@@ -1840,7 +1758,7 @@ export default function ChatApp() {
     try {
       setCreatingGroup(true);
       const res = await axios.post(
-        "https://bechatcnm-production.up.railway.app/conversations/createwithimage",
+        "http://localhost:8004/conversations/createwithimage",
         formData,
         {
           headers: {
@@ -1907,7 +1825,7 @@ export default function ChatApp() {
       } else {
         try {
           const createResponse = await fetch(
-            "https://bechatcnm-production.up.railway.app/conversations/create",
+            "http://localhost:8004/conversations/create",
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -2034,7 +1952,7 @@ export default function ChatApp() {
           try {
             // Bước 1: Lấy danh sách conversation
             const res = await axios.get(
-              `https://bechatcnm-production.up.railway.app/conversations/get/${conversationId}`
+              `http://localhost:8004/conversations/get/${conversationId}`
             );
             const conversation = res.data;
             console.log("conversation", conversation);
@@ -2078,7 +1996,7 @@ export default function ChatApp() {
         if (conversationId === selectedChat?.conversationId) {
           try {
             const res = await axios.get(
-              `https://bechatcnm-production.up.railway.app/conversations/get/${conversationId}`
+              `http://localhost:8004/conversations/get/${conversationId}`
             );
             const updatedChat = res.data;
             console.log("updatedChat", updatedChat);
@@ -2151,7 +2069,7 @@ export default function ChatApp() {
       if (conversationId === selectedChat?.conversationId) {
         try {
           const res = await axios.get(
-            `https://bechatcnm-production.up.railway.app/conversations/get/${conversationId}`
+            `http://localhost:8004/conversations/get/${conversationId}`
           );
           const updatedChat = res.data;
 
@@ -2271,7 +2189,7 @@ export default function ChatApp() {
 
     try {
       const res = await axios.put(
-        `https://bechatcnm-production.up.railway.app/conversations/group/${selectedChat.conversationId}`,
+        `http://localhost:8004/conversations/group/${selectedChat.conversationId}`,
         formData
       );
       console.log("Cập nhật nhóm thành công:", res.data);
@@ -2664,41 +2582,13 @@ export default function ChatApp() {
                     </div>
                   }
 
-                  {menuChatId === chat.conversationId && (
-                    <div
-                      className="chat-popup-menu"
-                      style={{ top: menuPosition.y, left: menuPosition.x }}
-                      onClick={(e) => e.stopPropagation()}
-                    >
+                  {menuChatId === chat.conversationId &&
+                    (console.log("chat", chat) || (
                       <div
-                        style={{
-                          color: "red",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          cursor: "pointer",
-                        }}
-                        onClick={() => handleDeleteChat(chat.conversationId)}
+                        className="chat-popup-menu"
+                        style={{ top: menuPosition.y, left: menuPosition.x }}
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        <FiEyeOff size={18} color="red" />
-                        Ẩn đoạn chat
-                      </div>
-                      <div
-                        style={{
-                          color: "red",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          cursor: "pointer",
-                        }}
-                        onClick={() =>
-                          handleDeleteChatWithMe(chat.conversationId)
-                        }
-                      >
-                        <FiTrash2 size={18} color="red" />
-                        Xóa đoạn chat
-                      </div>
-                      {chat.isGroup && (
                         <div
                           style={{
                             color: "red",
@@ -2707,14 +2597,45 @@ export default function ChatApp() {
                             gap: "8px",
                             cursor: "pointer",
                           }}
-                          onClick={() => handleLeaveGroup(chat.conversationId)}
+                          onClick={() => handleDeleteChat(chat.conversationId)}
                         >
-                          <FiLogOut size={18} color="red" />
-                          Rời khỏi nhóm
+                          <FiEyeOff size={18} color="red" />
+                          Ẩn đoạn chat
                         </div>
-                      )}
-                    </div>
-                  )}
+                        <div
+                          style={{
+                            color: "red",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            cursor: "pointer",
+                          }}
+                          onClick={() =>
+                            handleDeleteChatWithMe(chat.conversationId)
+                          }
+                        >
+                          <FiTrash2 size={18} color="red" />
+                          Xóa đoạn chat
+                        </div>
+                        {chat.isGroup && !chat.isDissolved && (
+                          <div
+                            style={{
+                              color: "red",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                              cursor: "pointer",
+                            }}
+                            onClick={() =>
+                              handleLeaveGroup(chat.conversationId)
+                            }
+                          >
+                            <FiLogOut size={18} color="red" />
+                            Rời khỏi nhóm
+                          </div>
+                        )}
+                      </div>
+                    ))}
                 </div>
               ))}
           </div>
@@ -2753,10 +2674,10 @@ export default function ChatApp() {
       </div>
       <div className="icon-container-left">
         {/* Avatar nhấn vào để mở modal */}
-        {user && (
-          <div className="icon-item" onClick={() => { setShowModal(true); setIsUpdating(true); }}>
+        {updatedUser && (
+          <div className="icon-item" onClick={() => setShowModal(true)}>
             <img
-              src={user.avatar || "/default-avatar.png"}
+              src={`${updatedUser.avatar}?t=${Date.now()}`}
               alt="Avatar"
               className="chat-avatar"
             />
@@ -2769,7 +2690,7 @@ export default function ChatApp() {
             onClick={(e) => {
               if (e.target === e.currentTarget) {
                 // Kiểm tra xem có click vào overlay (ngoài modal)
-                closeModal();
+                setShowModal(false); // Đóng modal
               }
             }}
           >
