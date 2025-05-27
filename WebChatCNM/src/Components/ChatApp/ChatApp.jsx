@@ -51,6 +51,7 @@ import axios from "axios";
 import { useLocation } from "react-router-dom";
 import { set } from "mongoose";
 // import { image } from "../../../../../BE_ChatHHDTT/config/cloudConfig";
+// Test
 const socket = io("https://bechatcnm-production.up.railway.app", {
   transports: ["websocket"],
 });
@@ -470,6 +471,14 @@ export default function ChatApp() {
   // Hàm bật/tắt menu
   const toggleMenu = () => {
     setShowMenu((prev) => !prev);
+    // setShowModal(true);
+    // setIsUpdating(true); // Mark as updating when modal opens
+  };
+
+  const openProfileModal = () => {
+    setShowMenu(false); // Đóng dropdown menu
+    setShowModal(true); // Mở modal thông tin tài khoản
+    setIsUpdating(true); // Đánh dấu đang cập nhật
   };
 
   // Đóng menu khi click ra ngoài
@@ -1126,23 +1135,23 @@ export default function ChatApp() {
   };
 
   const closeModal = () => {
-    setIsOpen(false);
-    setMediaUrl("");
-    setMediaType("");
+    setShowModal(false);
+    setIsUpdating(false); // Reset isUpdating when modal closes
+    setAvatarPreview(null); // Reset avatarPreview to allow fetching
   };
   //Check lời mời kết bạn
   useEffect(() => {
     if (!user || !searchResult || user._id === searchResult._id) return;
-
+  
     let lastStatus = null;
-
+  
     const checkFriendStatus = () => {
       socket.emit(
         "check_friend_status",
         { senderId: user._id, receiverId: searchResult._id },
         (response) => {
           const currentStatus = response?.status;
-
+        
           // So sánh trạng thái trước đó và hiện tại để tránh set lại không cần thiết
           if (currentStatus !== lastStatus) {
             lastStatus = currentStatus;
@@ -1150,25 +1159,26 @@ export default function ChatApp() {
               case "accepted":
                 setIsFriendRequestSent(false);
                 break;
-              case "pending":
-                setIsFriendRequestSent(true);
-                break;
-              case "rejected":
-              case "cancelled":
-              default:
-                setIsFriendRequestSent(false);
-                break;
-            }
-          }
-        }
-      );
-    };
+                case "pending":
+                  setIsFriendRequestSent(true);
+                  break;
+                  case "rejected":
+                  case "cancelled":
+                  default:
+                    setIsFriendRequestSent(false);
+                    break;
+                  }
+                }
+              }
+            );
+          };
+  
+          const interval = setInterval(checkFriendStatus, 2000);
+          checkFriendStatus(); // Gọi lần đầu
 
-    const interval = setInterval(checkFriendStatus, 2000);
-    checkFriendStatus(); // Gọi lần đầu
+          return () => clearInterval(interval);
+        }, [searchResult?._id, user?._id]);
 
-    return () => clearInterval(interval);
-  }, [searchResult?._id, user?._id]);
 
   // Tìm kiếm user theo sđt
   const handleSearchUser = () => {
@@ -1192,71 +1202,128 @@ export default function ChatApp() {
 
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // Refresh user information for chat-avatar every 2 seconds, except when updating profile
+  const loadFriends = async () => {
+    if (!user || !user._id || !socket) return null;
+  
+    try {
+      const response = await new Promise((resolve) => {
+        socket.emit("get_friends_list", { userId: user._id }, (res) => {
+          resolve(res);
+        });
+      });
+    
+      if (response?.success) {
+        return response.friends; // Trả về danh sách bạn bè
+      } else {
+        console.error("Lỗi khi tải danh sách bạn bè:", response?.message);
+        return null;
+      }
+    } catch (error) {
+      console.error("Lỗi khi tải danh sách bạn bè:", error);
+      return null;
+    }
+  };
+
   useEffect(() => {
-    if (!user?._id) return;
-
+    if (!user?._id || !socket) return;
+  
     let lastFetchTime = 0;
-    const minInterval = 2000; // Minimum interval of 2 seconds between fetches
+    const minInterval = 2000; // 2 giây
+    let previousFriends = null;
 
-    const fetchUserInfo = async () => {
+    const fetchFriends = async () => {
       const now = Date.now();
-      if (now - lastFetchTime < minInterval) return; // Prevent fetching too quickly
+      if (now - lastFetchTime < minInterval) return;
       lastFetchTime = now;
-
-      // Skip fetching if user is updating profile (modal open or avatar uploaded)
-      if (isUpdating || avatarPreview) return;
-
-      try {
-        const response = await axios.get(
-          `https://bechatcnm-production.up.railway.app/users/get/${user._id}`
-        );
-        const updatedUser = response.data;
-
-        // Compare fields to detect changes
-        const hasChanges =
-          updatedUser.username !== user.username ||
-          updatedUser.phone !== user.phone ||
-          updatedUser.avatar !== user.avatar ||
-          (showModal &&
-            updatedUser.email &&
-            updatedUser.email !== user.email) ||
-          (showModal &&
-            updatedUser.password &&
-            updatedUser.password !== user.password);
-
-        if (hasChanges) {
-          setUser((prev) => ({
-            ...prev,
-            username: updatedUser.username,
-            phone: updatedUser.phone,
-            avatar: updatedUser.avatar,
-            email: updatedUser.email,
-            ...(showModal &&
-              updatedUser.password && { password: updatedUser.password }),
-          }));
-          localStorage.setItem("user", JSON.stringify(updatedUser));
-        }
-      } catch (error) {
-        console.error("Error refreshing user info:", error);
+      
+      const newFriends = await loadFriends();
+      if (!newFriends) return;
+      
+      // So sánh dữ liệu mới với dữ liệu cũ
+      const newFriendsJson = JSON.stringify(
+        newFriends.map((f) => ({ _id: f._id, username: f.username, avatar: f.avatar }))
+      );
+      const previousFriendsJson = JSON.stringify(
+        previousFriends?.map((f) => ({ _id: f._id, username: f.username, avatar: f.avatar }))
+      );
+    
+      if (newFriendsJson !== previousFriendsJson) {
+        setFriends(newFriends);
+        previousFriends = newFriends;
+        console.log("Cập nhật danh sách bạn bè:", newFriends);
       }
     };
+  
+    // Gọi lần đầu
+    fetchFriends();
 
-    fetchUserInfo(); // Initial fetch
-    const interval = setInterval(fetchUserInfo, 2000); // Check every 2 seconds
+    // Thiết lập interval
+    const interval = setInterval(fetchFriends, 2000);
+  
+    // Cleanup
+    return () => clearInterval(interval);
+  }, [user?._id, socket]);
 
-    return () => clearInterval(interval); // Cleanup on unmount
-  }, [
-    user?._id,
-    showModal,
-    user.username,
-    user.phone,
-    user.avatar,
-    user.email,
-    user.password,
-    avatarPreview,
-    isUpdating,
-  ]);
+  // User Management
+  const loadUserInfo = async () => {
+    if (!user?._id) return null;
+  
+    try {
+      const response = await axios.get(
+        `https://bechatcnm-production.up.railway.app/users/get/${user._id}`
+      );
+      return response.data;
+    } catch (error) {
+      console.error("Lỗi khi tải thông tin người dùng:", error);
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    if (!user?._id) return;
+    let lastFetchTime = 0;
+    const minInterval = 2000; // 2 giây
+    
+    const fetchUserInfo = async () => {
+      const now = Date.now();
+      if (now - lastFetchTime < minInterval) return;
+      lastFetchTime = now;
+    
+      // Bỏ qua nếu đang cập nhật thông tin hoặc có ảnh đại diện đang xem trước
+      if (isUpdating || avatarPreview) return;
+      const updatedUser = await loadUserInfo();
+      if (!updatedUser) return;
+    
+      // So sánh các trường để phát hiện thay đổi
+      const hasChanges =
+      updatedUser.username !== user.username ||
+      updatedUser.phone !== user.phone ||
+      updatedUser.avatar !== user.avatar ||
+      (showModal && updatedUser.email && updatedUser.email !== user.email) ||
+      (showModal && updatedUser.password && updatedUser.password !== user.password);
+    
+      if (hasChanges) {
+        setUser((prev) => ({
+          ...prev,
+          username: updatedUser.username,
+          phone: updatedUser.phone,
+          avatar: updatedUser.avatar,
+          email: updatedUser.email,
+          ...(showModal && updatedUser.password && { password: updatedUser.password }),
+        }));
+        localStorage.setItem("user", JSON.stringify(updatedUser));
+        console.log("Cập nhật thông tin người dùng:", updatedUser);
+      }
+    };
+  
+    // Gọi lần đầu
+    fetchUserInfo();
+  
+    // Thiết lập interval
+    const interval = setInterval(fetchUserInfo, 2000);
+    // Cleanup
+    return () => clearInterval(interval);
+  }, [user?._id, user.username, user.phone, user.avatar, user.email, user.password, showModal, isUpdating, avatarPreview]);
 
   //Gửi lời mời kết bạn
   const handleSendFriendRequest = (receiverId) => {
@@ -1313,19 +1380,16 @@ export default function ChatApp() {
 
     // Lắng nghe lời mời kết bạn mới
     socket.on("new_friend_request", ({ receiverId }) => {
-      if (receiverId === user._id) {
-        loadFriendRequests(); // Tải lại danh sách khi có lời mời mới
-        toast.info("Bạn có lời mời kết bạn mới!");
-      }
+        if (receiverId === user._id) {
+          loadFriendRequests(); // Tải lại danh sách khi có lời mời mới
+          toast.info("Bạn có lời mời kết bạn mới!");
+        }
     });
 
     // Kiểm tra định kỳ mỗi 2 giây
     const interval = setInterval(() => {
       socket.emit("get_friend_requests", { userId: user._id }, (response) => {
-        if (
-          response?.success &&
-          response.friendRequests.length !== friendRequests.length
-        ) {
+        if (response?.success && response.friendRequests.length !== friendRequests.length) {
           setFriendRequests(response.friendRequests); // Chỉ cập nhật nếu số lượng thay đổi
           console.log("Cập nhật danh sách lời mời:", response.friendRequests);
         }
@@ -1337,6 +1401,7 @@ export default function ChatApp() {
       socket.off("new_friend_request");
     };
   }, [user?._id, socket, friendRequests.length]);
+  
 
   const loadFriendRequests = () => {
     if (!user || !user._id || !socket) return;
@@ -1345,22 +1410,18 @@ export default function ChatApp() {
       if (response?.success) {
         setFriendRequests((prev) => {
           // Chỉ cập nhật nếu danh sách khác
-          if (
-            JSON.stringify(prev) !== JSON.stringify(response.friendRequests)
-          ) {
+          if (JSON.stringify(prev) !== JSON.stringify(response.friendRequests)) {
             console.log("Danh sách lời mời kết bạn:", response.friendRequests);
             return response.friendRequests;
           }
           return prev;
         });
       } else {
-        console.error(
-          "Lỗi khi tải danh sách lời mời kết bạn:",
-          response?.message
-        );
+        console.error("Lỗi khi tải danh sách lời mời kết bạn:", response?.message);
       }
     });
   };
+
 
   // useEffect để load danh sách bạn bè khi component mount hoặc user._id thay đổi
   useEffect(() => {
@@ -1498,6 +1559,7 @@ export default function ChatApp() {
   useEffect(() => {
     if (!socket) return;
     socket.on("friend_request_rejected", ({ receiverId, senderId }) => {
+    
       // Mình là người gửi → bị từ chối
       if (senderId === user._id) {
         // Chỉ đặt lại isFriendRequestSent nếu searchResult liên quan
@@ -1523,7 +1585,7 @@ export default function ChatApp() {
         loadFriendRequests();
       }
     });
-
+  
     return () => {
       socket.off("friend_request_rejected");
     };
@@ -1662,6 +1724,7 @@ export default function ChatApp() {
 
   const handleUpdate = async () => {
     try {
+      setIsUpdating(true);
       const formData = new FormData();
       formData.append("username", updatedUser.username);
       formData.append("phone", updatedUser.phone);
@@ -1681,7 +1744,7 @@ export default function ChatApp() {
       );
 
       localStorage.setItem("user", JSON.stringify(response.data));
-
+      setUser(response.data);
       // Sau khi cập nhật thành công, cập nhật lại user với thông tin mới
       setUpdatedUser({
         username: response.data.username,
@@ -1689,9 +1752,12 @@ export default function ChatApp() {
         password: "",
         avatar: response.data.avatar,
       });
+      setAvatarPreview(null);
+      setIsUpdating(false);
       toast.success("Cập nhật thông tin thành công!");
       setShowModal(false);
     } catch (error) {
+      setIsUpdating(false);
       // Bắt lỗi trả về từ server (đã kiểm tra regex, định dạng...)
       if (error.response && error.response.data && error.response.data.error) {
         toast.error(error.response.data.error); // Hiển thị nội dung lỗi từ backend
@@ -2276,10 +2342,7 @@ export default function ChatApp() {
     // Kiểm tra định kỳ mỗi 2 giây
     const interval = setInterval(() => {
       socket.emit("get_friend_requests", { userId: user._id }, (response) => {
-        if (
-          response?.success &&
-          response.friendRequests.length !== friendRequests.length
-        ) {
+        if (response?.success && response.friendRequests.length !== friendRequests.length) {
           setFriendRequests(response.friendRequests);
           console.log("Cập nhật danh sách lời mời:", response.friendRequests);
         }
@@ -2739,60 +2802,57 @@ export default function ChatApp() {
                     </div>
                   }
 
-                  {menuChatId === chat.conversationId &&
-                    (console.log("chat", chat) || (
+                  {menuChatId === chat.conversationId && (
+                    <div
+                      className="chat-popup-menu"
+                      style={{ top: menuPosition.y, left: menuPosition.x }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <div
-                        className="chat-popup-menu"
-                        style={{ top: menuPosition.y, left: menuPosition.x }}
-                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          color: "red",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          cursor: "pointer",
+                        }}
+                        onClick={() => handleDeleteChat(chat.conversationId)}
                       >
-                        <div
-                          style={{
-                            color: "red",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "8px",
-                            cursor: "pointer",
-                          }}
-                          onClick={() => handleDeleteChat(chat.conversationId)}
-                        >
-                          <FiEyeOff size={18} color="red" />
-                          Ẩn đoạn chat
-                        </div>
-                        <div
-                          style={{
-                            color: "red",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "8px",
-                            cursor: "pointer",
-                          }}
-                          onClick={() =>
-                            handleDeleteChatWithMe(chat.conversationId)
-                          }
-                        >
-                          <FiTrash2 size={18} color="red" />
-                          Xóa đoạn chat
-                        </div>
-                        {chat.isGroup && !chat.isDissolved && (
-                          <div
-                            style={{
-                              color: "red",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "8px",
-                              cursor: "pointer",
-                            }}
-                            onClick={() =>
-                              handleLeaveGroup(chat.conversationId)
-                            }
-                          >
-                            <FiLogOut size={18} color="red" />
-                            Rời khỏi nhóm
-                          </div>
-                        )}
+                        <FiEyeOff size={18} color="red" />
+                        Ẩn đoạn chat
                       </div>
-                    ))}
+                      <div
+                        style={{
+                          color: "red",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          cursor: "pointer",
+                        }}
+                        onClick={() =>
+                          handleDeleteChatWithMe(chat.conversationId)
+                        }
+                      >
+                        <FiTrash2 size={18} color="red" />
+                        Xóa đoạn chat
+                      </div>
+                      {chat.isGroup && (
+                        <div
+                          style={{
+                            color: "red",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            cursor: "pointer",
+                          }}
+                          onClick={() => handleLeaveGroup(chat.conversationId)}
+                        >
+                          <FiLogOut size={18} color="red" />
+                          Rời khỏi nhóm
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
           </div>
@@ -2831,10 +2891,10 @@ export default function ChatApp() {
       </div>
       <div className="icon-container-left">
         {/* Avatar nhấn vào để mở modal */}
-        {updatedUser && (
-          <div className="icon-item" onClick={() => setShowModal(true)}>
+        {user && (
+          <div className="icon-item" onClick={() => { setShowModal(true); setIsUpdating(true); }}>
             <img
-              src={`${updatedUser.avatar}?t=${Date.now()}`}
+              src={user.avatar || "/default-avatar.png"}
               alt="Avatar"
               className="chat-avatar"
             />
@@ -2847,7 +2907,7 @@ export default function ChatApp() {
             onClick={(e) => {
               if (e.target === e.currentTarget) {
                 // Kiểm tra xem có click vào overlay (ngoài modal)
-                setShowModal(false); // Đóng modal
+                closeModal();
               }
             }}
           >
