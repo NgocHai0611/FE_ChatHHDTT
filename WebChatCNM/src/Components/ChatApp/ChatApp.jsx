@@ -136,6 +136,9 @@ export default function ChatApp() {
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false); // Tạo nhóm chat với bạn bè chọn
 
+  const [memberFriendRequestStatus, setMemberFriendRequestStatus] = useState(
+    {}
+  );
   const [showForwardModal, setShowForwardModal] = useState(false);
   const [messageToForward, setMessageToForward] = useState(null); // Set khi ấn "Chuyển tiếp"
   const [selectedChatsToForward, setSelectedChatsToForward] = useState([]);
@@ -467,6 +470,44 @@ export default function ChatApp() {
     setSelectedTitle2("Chào mừng bạn đến với ứng dụng chat! ");
     setSelectedHeader("");
   };
+
+  const checkMemberFriendStatus = (memberId) => {
+    if (!user || !memberId || user._id === memberId) return;
+
+    socket.emit(
+      "check_friend_status",
+      { senderId: user._id, receiverId: memberId },
+      (response) => {
+        const currentStatus = response?.status;
+        setMemberFriendRequestStatus((prev) => {
+          if (prev[memberId] !== currentStatus) {
+            return { ...prev, [memberId]: currentStatus };
+          }
+          return prev;
+        });
+      }
+    );
+  };
+
+  useEffect(() => {
+    if (!showMembersList || !selectedChat?.members) return;
+    const members = selectedChat.members || [];
+    members.forEach((member) => {
+      if (member._id !== user._id) {
+        checkMemberFriendStatus(member._id);
+      }
+    });
+
+    // Thiết lập interval để kiểm tra định kỳ (tùy chọn)
+    const interval = setInterval(() => {
+      members.forEach((member) => {
+        if (member._id !== user._id) {
+          checkMemberFriendStatus(member._id);
+        }
+      });
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [showMembersList, selectedChat?.members, user._id]);
 
   // Hàm bật/tắt menu
   const toggleMenu = () => {
@@ -1138,20 +1179,22 @@ export default function ChatApp() {
     setShowModal(false);
     setIsUpdating(false); // Reset isUpdating when modal closes
     setAvatarPreview(null); // Reset avatarPreview to allow fetching
+    console.log("Modal closed, isUpdating reset to false");
+    setIsOpen(false);
   };
   //Check lời mời kết bạn
   useEffect(() => {
     if (!user || !searchResult || user._id === searchResult._id) return;
-  
+
     let lastStatus = null;
-  
+
     const checkFriendStatus = () => {
       socket.emit(
         "check_friend_status",
         { senderId: user._id, receiverId: searchResult._id },
         (response) => {
           const currentStatus = response?.status;
-        
+
           // So sánh trạng thái trước đó và hiện tại để tránh set lại không cần thiết
           if (currentStatus !== lastStatus) {
             lastStatus = currentStatus;
@@ -1159,26 +1202,25 @@ export default function ChatApp() {
               case "accepted":
                 setIsFriendRequestSent(false);
                 break;
-                case "pending":
-                  setIsFriendRequestSent(true);
-                  break;
-                  case "rejected":
-                  case "cancelled":
-                  default:
-                    setIsFriendRequestSent(false);
-                    break;
-                  }
-                }
-              }
-            );
-          };
-  
-          const interval = setInterval(checkFriendStatus, 2000);
-          checkFriendStatus(); // Gọi lần đầu
+              case "pending":
+                setIsFriendRequestSent(true);
+                break;
+              case "rejected":
+              case "cancelled":
+              default:
+                setIsFriendRequestSent(false);
+                break;
+            }
+          }
+        }
+      );
+    };
 
-          return () => clearInterval(interval);
-        }, [searchResult?._id, user?._id]);
+    const interval = setInterval(checkFriendStatus, 2000);
+    checkFriendStatus(); // Gọi lần đầu
 
+    return () => clearInterval(interval);
+  }, [searchResult?._id, user?._id]);
 
   // Tìm kiếm user theo sđt
   const handleSearchUser = () => {
@@ -1204,14 +1246,14 @@ export default function ChatApp() {
 
   const loadFriends = async () => {
     if (!user || !user._id || !socket) return null;
-  
+
     try {
       const response = await new Promise((resolve) => {
         socket.emit("get_friends_list", { userId: user._id }, (res) => {
           resolve(res);
         });
       });
-    
+
       if (response?.success) {
         return response.friends; // Trả về danh sách bạn bè
       } else {
@@ -1226,7 +1268,7 @@ export default function ChatApp() {
 
   useEffect(() => {
     if (!user?._id || !socket) return;
-  
+
     let lastFetchTime = 0;
     const minInterval = 2000; // 2 giây
     let previousFriends = null;
@@ -1235,31 +1277,39 @@ export default function ChatApp() {
       const now = Date.now();
       if (now - lastFetchTime < minInterval) return;
       lastFetchTime = now;
-      
+
       const newFriends = await loadFriends();
       if (!newFriends) return;
-      
+
       // So sánh dữ liệu mới với dữ liệu cũ
       const newFriendsJson = JSON.stringify(
-        newFriends.map((f) => ({ _id: f._id, username: f.username, avatar: f.avatar }))
+        newFriends.map((f) => ({
+          _id: f._id,
+          username: f.username,
+          avatar: f.avatar,
+        }))
       );
       const previousFriendsJson = JSON.stringify(
-        previousFriends?.map((f) => ({ _id: f._id, username: f.username, avatar: f.avatar }))
+        previousFriends?.map((f) => ({
+          _id: f._id,
+          username: f.username,
+          avatar: f.avatar,
+        }))
       );
-    
+
       if (newFriendsJson !== previousFriendsJson) {
         setFriends(newFriends);
         previousFriends = newFriends;
         console.log("Cập nhật danh sách bạn bè:", newFriends);
       }
     };
-  
+
     // Gọi lần đầu
     fetchFriends();
 
     // Thiết lập interval
     const interval = setInterval(fetchFriends, 2000);
-  
+
     // Cleanup
     return () => clearInterval(interval);
   }, [user?._id, socket]);
@@ -1267,7 +1317,7 @@ export default function ChatApp() {
   // User Management
   const loadUserInfo = async () => {
     if (!user?._id) return null;
-  
+
     try {
       const response = await axios.get(
         `https://bechatcnm-production.up.railway.app/users/get/${user._id}`
@@ -1283,25 +1333,27 @@ export default function ChatApp() {
     if (!user?._id) return;
     let lastFetchTime = 0;
     const minInterval = 2000; // 2 giây
-    
+
     const fetchUserInfo = async () => {
       const now = Date.now();
       if (now - lastFetchTime < minInterval) return;
       lastFetchTime = now;
-    
+
       // Bỏ qua nếu đang cập nhật thông tin hoặc có ảnh đại diện đang xem trước
       if (isUpdating || avatarPreview) return;
       const updatedUser = await loadUserInfo();
       if (!updatedUser) return;
-    
+
       // So sánh các trường để phát hiện thay đổi
       const hasChanges =
-      updatedUser.username !== user.username ||
-      updatedUser.phone !== user.phone ||
-      updatedUser.avatar !== user.avatar ||
-      (showModal && updatedUser.email && updatedUser.email !== user.email) ||
-      (showModal && updatedUser.password && updatedUser.password !== user.password);
-    
+        updatedUser.username !== user.username ||
+        updatedUser.phone !== user.phone ||
+        updatedUser.avatar !== user.avatar ||
+        (showModal && updatedUser.email && updatedUser.email !== user.email) ||
+        (showModal &&
+          updatedUser.password &&
+          updatedUser.password !== user.password);
+
       if (hasChanges) {
         setUser((prev) => ({
           ...prev,
@@ -1309,21 +1361,32 @@ export default function ChatApp() {
           phone: updatedUser.phone,
           avatar: updatedUser.avatar,
           email: updatedUser.email,
-          ...(showModal && updatedUser.password && { password: updatedUser.password }),
+          ...(showModal &&
+            updatedUser.password && { password: updatedUser.password }),
         }));
         localStorage.setItem("user", JSON.stringify(updatedUser));
         console.log("Cập nhật thông tin người dùng:", updatedUser);
       }
     };
-  
+
     // Gọi lần đầu
     fetchUserInfo();
-  
+
     // Thiết lập interval
     const interval = setInterval(fetchUserInfo, 2000);
     // Cleanup
     return () => clearInterval(interval);
-  }, [user?._id, user.username, user.phone, user.avatar, user.email, user.password, showModal, isUpdating, avatarPreview]);
+  }, [
+    user?._id,
+    user.username,
+    user.phone,
+    user.avatar,
+    user.email,
+    user.password,
+    showModal,
+    isUpdating,
+    avatarPreview,
+  ]);
 
   //Gửi lời mời kết bạn
   const handleSendFriendRequest = (receiverId) => {
@@ -1335,6 +1398,10 @@ export default function ChatApp() {
       (response) => {
         if (response?.success) {
           setIsFriendRequestSent(true);
+          setMemberFriendRequestStatus((prev) => ({
+            ...prev,
+            [receiverId]: "pending",
+          }));
           setFriendRequests((prev) => [
             ...prev,
             { senderId: user._id, receiverId },
@@ -1358,6 +1425,11 @@ export default function ChatApp() {
         if (response?.success) {
           setIsFriendRequestSent(false); // Reset trạng thái gửi lời mời
 
+          setMemberFriendRequestStatus((prev) => ({
+            ...prev,
+            [friendId]: null,
+          }));
+
           setFriendRequests((prev) =>
             prev.filter(
               (req) => req.receiverId !== friendId && req._id !== friendId
@@ -1380,16 +1452,19 @@ export default function ChatApp() {
 
     // Lắng nghe lời mời kết bạn mới
     socket.on("new_friend_request", ({ receiverId }) => {
-        if (receiverId === user._id) {
-          loadFriendRequests(); // Tải lại danh sách khi có lời mời mới
-          toast.info("Bạn có lời mời kết bạn mới!");
-        }
+      if (receiverId === user._id) {
+        loadFriendRequests(); // Tải lại danh sách khi có lời mời mới
+        toast.info("Bạn có lời mời kết bạn mới!");
+      }
     });
 
     // Kiểm tra định kỳ mỗi 2 giây
     const interval = setInterval(() => {
       socket.emit("get_friend_requests", { userId: user._id }, (response) => {
-        if (response?.success && response.friendRequests.length !== friendRequests.length) {
+        if (
+          response?.success &&
+          response.friendRequests.length !== friendRequests.length
+        ) {
           setFriendRequests(response.friendRequests); // Chỉ cập nhật nếu số lượng thay đổi
           console.log("Cập nhật danh sách lời mời:", response.friendRequests);
         }
@@ -1401,7 +1476,6 @@ export default function ChatApp() {
       socket.off("new_friend_request");
     };
   }, [user?._id, socket, friendRequests.length]);
-  
 
   const loadFriendRequests = () => {
     if (!user || !user._id || !socket) return;
@@ -1410,18 +1484,22 @@ export default function ChatApp() {
       if (response?.success) {
         setFriendRequests((prev) => {
           // Chỉ cập nhật nếu danh sách khác
-          if (JSON.stringify(prev) !== JSON.stringify(response.friendRequests)) {
+          if (
+            JSON.stringify(prev) !== JSON.stringify(response.friendRequests)
+          ) {
             console.log("Danh sách lời mời kết bạn:", response.friendRequests);
             return response.friendRequests;
           }
           return prev;
         });
       } else {
-        console.error("Lỗi khi tải danh sách lời mời kết bạn:", response?.message);
+        console.error(
+          "Lỗi khi tải danh sách lời mời kết bạn:",
+          response?.message
+        );
       }
     });
   };
-
 
   // useEffect để load danh sách bạn bè khi component mount hoặc user._id thay đổi
   useEffect(() => {
@@ -1559,7 +1637,6 @@ export default function ChatApp() {
   useEffect(() => {
     if (!socket) return;
     socket.on("friend_request_rejected", ({ receiverId, senderId }) => {
-    
       // Mình là người gửi → bị từ chối
       if (senderId === user._id) {
         // Chỉ đặt lại isFriendRequestSent nếu searchResult liên quan
@@ -1585,7 +1662,7 @@ export default function ChatApp() {
         loadFriendRequests();
       }
     });
-  
+
     return () => {
       socket.off("friend_request_rejected");
     };
@@ -2342,7 +2419,10 @@ export default function ChatApp() {
     // Kiểm tra định kỳ mỗi 2 giây
     const interval = setInterval(() => {
       socket.emit("get_friend_requests", { userId: user._id }, (response) => {
-        if (response?.success && response.friendRequests.length !== friendRequests.length) {
+        if (
+          response?.success &&
+          response.friendRequests.length !== friendRequests.length
+        ) {
           setFriendRequests(response.friendRequests);
           console.log("Cập nhật danh sách lời mời:", response.friendRequests);
         }
@@ -2892,7 +2972,13 @@ export default function ChatApp() {
       <div className="icon-container-left">
         {/* Avatar nhấn vào để mở modal */}
         {user && (
-          <div className="icon-item" onClick={() => { setShowModal(true); setIsUpdating(true); }}>
+          <div
+            className="icon-item"
+            onClick={() => {
+              setShowModal(true);
+              setIsUpdating(true);
+            }}
+          >
             <img
               src={user.avatar || "/default-avatar.png"}
               alt="Avatar"
@@ -3557,15 +3643,14 @@ export default function ChatApp() {
                                 const membersToDisplay = isCurrentUserIncluded
                                   ? members
                                   : [...members, user];
+
                                 return membersToDisplay.map((member, index) => {
                                   const isFriend = friends.some(
                                     (f) => f._id === member._id
                                   );
-                                  const isRequestSent = friendRequests.some(
-                                    (req) =>
-                                      req.receiverId === member._id ||
-                                      req._id === member._id
-                                  );
+                                  const isRequestSent =
+                                    memberFriendRequestStatus[member._id] ===
+                                    "pending";
 
                                   const isCurrentUser = member._id === user._id;
                                   const isLeader =
@@ -3648,31 +3733,28 @@ export default function ChatApp() {
                                       </span>
 
                                       {/* Nút kết bạn */}
-                                      {!isCurrentUser &&
-                                        !isFriend &&
-                                        (isRequestSent ? (
-                                          <span
-                                            onClick={() =>
-                                              handleCancelFriendRequest(
-                                                member._id
-                                              )
-                                            }
-                                            className="cancel-btn"
-                                          >
-                                            Thu hồi
-                                          </span>
-                                        ) : (
-                                          <span
-                                            onClick={() =>
-                                              handleSendFriendRequest(
-                                                member._id
-                                              )
-                                            }
-                                            className="add-friend"
-                                          >
-                                            Kết bạn
-                                          </span>
-                                        ))}
+                                      {!isCurrentUser && !isFriend && (
+                                        <span
+                                          onClick={() =>
+                                            isRequestSent
+                                              ? handleCancelFriendRequest(
+                                                  member._id
+                                                )
+                                              : handleSendFriendRequest(
+                                                  member._id
+                                                )
+                                          }
+                                          className={
+                                            isRequestSent
+                                              ? "cancel-btn"
+                                              : "add-friend"
+                                          }
+                                        >
+                                          {isRequestSent
+                                            ? "Thu hồi"
+                                            : "Kết bạn"}
+                                        </span>
+                                      )}
 
                                       {/* Icon 3 chấm - Chỉ hiện nếu là trưởng nhóm và member khác chính mình */}
                                       {(isCurrentUserLeader ||
@@ -4311,17 +4393,28 @@ export default function ChatApp() {
                                       const lowerName =
                                         msg.fileName.toLowerCase();
 
-                                      // Các định dạng có thể xem trước
-                                      const previewableExtensions =
-                                        /\.(pdf|docx?|xlsx?|pptx?|txt)$/i;
+                                      // File dùng Office Viewer
+                                      const officeExtensions =
+                                        /\.(docx?|xlsx?|pptx?)$/i;
 
-                                      // Các định dạng không thể xem trước (chỉ mở tab mới)
+                                      // File dùng Google Docs Viewer
+                                      const googleDocsExtensions =
+                                        /\.(pdf|txt)$/i;
+
+                                      // File không thể xem trước
                                       const nonPreviewableExtensions =
-                                        /\.(zip|rar)$/i;
+                                        /\.(zip|rar|exe|7z)$/i;
 
-                                      if (
-                                        previewableExtensions.test(lowerName)
+                                      if (officeExtensions.test(lowerName)) {
+                                        // Dùng Office Viewer
+                                        const viewerUrl = `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(
+                                          msg.fileUrl
+                                        )}`;
+                                        openModal(viewerUrl, "file", msg);
+                                      } else if (
+                                        googleDocsExtensions.test(lowerName)
                                       ) {
+                                        // Dùng Google Docs Viewer
                                         const viewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(
                                           msg.fileUrl
                                         )}&embedded=true`;
@@ -4329,8 +4422,10 @@ export default function ChatApp() {
                                       } else if (
                                         nonPreviewableExtensions.test(lowerName)
                                       ) {
+                                        // Không xem được → Mở tab mới
                                         window.open(msg.fileUrl, "_blank");
                                       } else {
+                                        // Mặc định
                                         window.open(msg.fileUrl, "_blank");
                                       }
                                     }}
