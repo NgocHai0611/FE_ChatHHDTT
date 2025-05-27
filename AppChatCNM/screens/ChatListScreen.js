@@ -17,7 +17,13 @@ import {
 } from "react-native";
 import { MaterialIcons, FontAwesome } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getConversations, getUserById, getFriendRequests, initializeSocket, disconnectSocket } from "../services/apiServices";
+import {
+  getConversations,
+  getUserById,
+  getFriendRequests,
+  initializeSocket,
+  disconnectSocket,
+} from "../services/apiServices";
 import { io } from "socket.io-client";
 import dayjs from "dayjs";
 import { SwipeListView } from "react-native-swipe-list-view";
@@ -31,9 +37,9 @@ export default function ChatListScreen({ navigation, route }) {
   const [conversations, setConversations] = useState([]);
   const [searchText, setSearchText] = useState("");
   const [pendingFriendRequests, setPendingFriendRequests] = useState(0);
-  const socket = io("https://bechatcnm-production.up.railway.app", {
-    transports: ["websocket"],
-  });
+  // const socket = io("https://bechatcnm-production.up.railway.app", {
+  //   transports: ["websocket"],
+  // });
   const [isDeleteModalVisible, setDeleteModalVisible] = useState(false);
   const [selectedConversationId, setSelectedConversationId] = useState(null);
   const [pinnedMessage, setPinnedMessage] = useState(null);
@@ -49,7 +55,10 @@ export default function ChatListScreen({ navigation, route }) {
         // Kiểm tra nếu có updatedUser từ route.params (từ EditProfileScreen)
         if (route.params?.updatedUser) {
           setUser(route.params.updatedUser);
-          await AsyncStorage.setItem("user", JSON.stringify(route.params.updatedUser));
+          await AsyncStorage.setItem(
+            "user",
+            JSON.stringify(route.params.updatedUser)
+          );
         } else {
           // Nếu không có updatedUser, lấy từ AsyncStorage
           const userData = await AsyncStorage.getItem("user");
@@ -114,7 +123,8 @@ export default function ChatListScreen({ navigation, route }) {
       try {
         const data = await getConversations(user._id);
         const filteredData = data.filter(
-          (conv) => !conv.deleteBy?.some((id) => id.toString() === user._id.toString())
+          (conv) =>
+            !conv.deleteBy?.some((id) => id.toString() === user._id.toString())
         );
         setConversations(filteredData);
       } catch (error) {
@@ -181,7 +191,8 @@ export default function ChatListScreen({ navigation, route }) {
   const filteredConversations = useMemo(() => {
     return conversations
       .filter((c) => {
-        const hasLatestMessage = c.latestmessage !== undefined && c.latestmessage !== null;
+        const hasLatestMessage =
+          c.latestmessage !== undefined && c.latestmessage !== null;
         const hasValidMembers = c.members && c.members.length > 0;
         const isLastMessageRecalled = c.isLastMessageRecalled || false;
 
@@ -199,7 +210,9 @@ export default function ChatListScreen({ navigation, route }) {
         const isNotHiddenOrDeleted = !c.deleteBy?.includes(user._id);
         return shouldShowConversation && isNotHiddenOrDeleted;
       })
-      .sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
+      .sort(
+        (a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime)
+      );
   }, [conversations, searchText]);
 
   if (!user) {
@@ -346,7 +359,12 @@ export default function ChatListScreen({ navigation, route }) {
         </TouchableOpacity>
         <View style={styles.iconSearch}>
           <TouchableOpacity style={styles.iconSearchTouch}>
-            <FontAwesome name="search" size={20} color="gray" style={styles.icon} />
+            <FontAwesome
+              name="search"
+              size={20}
+              color="gray"
+              style={styles.icon}
+            />
             <TextInput
               placeholder="Search"
               style={styles.input}
@@ -383,7 +401,8 @@ export default function ChatListScreen({ navigation, route }) {
               };
 
           const lastMessageTime = formatMessageTime(item.lastMessageTime);
-          const isLastMessageFromCurrentUser = item.lastMessageSenderId === user._id;
+          const isLastMessageFromCurrentUser =
+            item.lastMessageSenderId === user._id;
           const unreadCountObject = item.unreadCounts.find(
             (uc) => uc.userId === user._id
           );
@@ -391,7 +410,10 @@ export default function ChatListScreen({ navigation, route }) {
 
           return (
             <TouchableOpacity
-              style={[styles.chatItem, hoveredId === item._id && styles.chatItemHover]}
+              style={[
+                styles.chatItem,
+                hoveredId === item._id && styles.chatItemHover,
+              ]}
               onPressIn={() => setHoveredId(item._id)}
               onPressOut={() => setHoveredId(null)}
               onPress={() => handleConversationClick(item, otherMember)}
@@ -467,7 +489,9 @@ export default function ChatListScreen({ navigation, route }) {
               <Pressable
                 style={[
                   styles.button,
-                  modalAction === "hide" ? styles.buttonHide : styles.buttonDelete,
+                  modalAction === "hide"
+                    ? styles.buttonHide
+                    : styles.buttonDelete,
                 ]}
                 onPress={() => {
                   if (selectedConversationId) {
@@ -487,7 +511,9 @@ export default function ChatListScreen({ navigation, route }) {
                   setSelectedConversationId(null);
                 }}
               >
-                <Text style={styles.textStyle}>{modalAction === "hide" ? "Ẩn" : "Xóa"}</Text>
+                <Text style={styles.textStyle}>
+                  {modalAction === "hide" ? "Ẩn" : "Xóa"}
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -522,7 +548,9 @@ export default function ChatListScreen({ navigation, route }) {
             <MaterialIcons name="contacts" size={30} color="gray" />
             {pendingFriendRequests > 0 && (
               <View style={styles.notificationBadge}>
-                <Text style={styles.notificationText}>{pendingFriendRequests}</Text>
+                <Text style={styles.notificationText}>
+                  {pendingFriendRequests}
+                </Text>
               </View>
             )}
           </View>
