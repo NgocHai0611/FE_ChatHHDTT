@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -23,6 +23,7 @@ import {
   getFriendRequests,
   initializeSocket,
   disconnectSocket,
+  getSocket,
 } from "../services/apiServices";
 import { io } from "socket.io-client";
 import dayjs from "dayjs";
@@ -37,9 +38,6 @@ export default function ChatListScreen({ navigation, route }) {
   const [conversations, setConversations] = useState([]);
   const [searchText, setSearchText] = useState("");
   const [pendingFriendRequests, setPendingFriendRequests] = useState(0);
-  // const socket = io("https://bechatcnm-production.up.railway.app", {
-  //   transports: ["websocket"],
-  // });
   const [isDeleteModalVisible, setDeleteModalVisible] = useState(false);
   const [selectedConversationId, setSelectedConversationId] = useState(null);
   const [pinnedMessage, setPinnedMessage] = useState(null);
@@ -47,12 +45,12 @@ export default function ChatListScreen({ navigation, route }) {
   const [refreshFlag, setRefreshFlag] = useState(true);
   const [modalAction, setModalAction] = useState("hide");
   const [refreshing, setRefreshing] = useState(false);
+  const socketRef = useRef(null);
 
   // Kiểm tra và cập nhật user từ route.params
   useEffect(() => {
     const fetchUserData = async () => {
       try {
-        // Kiểm tra nếu có updatedUser từ route.params (từ EditProfileScreen)
         if (route.params?.updatedUser) {
           setUser(route.params.updatedUser);
           await AsyncStorage.setItem(
@@ -60,7 +58,6 @@ export default function ChatListScreen({ navigation, route }) {
             JSON.stringify(route.params.updatedUser)
           );
         } else {
-          // Nếu không có updatedUser, lấy từ AsyncStorage
           const userData = await AsyncStorage.getItem("user");
           if (userData) {
             const parsedUser = JSON.parse(userData);
@@ -95,12 +92,9 @@ export default function ChatListScreen({ navigation, route }) {
       }
     };
 
-    const interval = setInterval(pollUserData, 2000); // Poll every 2 seconds
-
-    // Initial fetch
+    const interval = setInterval(pollUserData, 2000);
     pollUserData();
 
-    // Cleanup interval on unmount
     return () => clearInterval(interval);
   }, [user?._id]);
 
@@ -166,24 +160,28 @@ export default function ChatListScreen({ navigation, route }) {
   // Socket.IO setup
   useEffect(() => {
     if (user?._id) {
-      const socketInstance = initializeSocket(user._id, (request) => {
+      socketRef.current = initializeSocket(user._id, (request) => {
         setPendingFriendRequests((prev) => prev + 1);
       });
 
-      socket.on("conversationUpdated", () => {
+      socketRef.current.on("conversationUpdated", () => {
         if (user) fetchConversations();
       });
 
-      socket.on("chatDeleted", ({ conversationId }) => {
+      socketRef.current.on("chatDeleted", ({ conversationId }) => {
         setConversations((prevConversations) =>
           prevConversations.filter((conv) => conv._id !== conversationId)
         );
       });
 
+      socketRef.current.on("connect_error", (err) => {
+        Alert.alert("Lỗi kết nối", "Không thể kết nối đến server Socket.IO.");
+      });
+
       return () => {
-        socket.off("conversationUpdated");
-        socket.off("chatDeleted");
-        disconnectSocket();
+        socketRef.current.off("conversationUpdated");
+        socketRef.current.off("chatDeleted");
+        socketRef.current.off("connect_error");
       };
     }
   }, [user, fetchConversations]);
@@ -284,16 +282,21 @@ export default function ChatListScreen({ navigation, route }) {
         };
       }
 
-      socket.emit("markAsSeen", {
-        conversationId: conversation._id,
-        userId: user._id,
-      });
-
-      if (conversation.lastMessageSenderId !== user._id) {
-        socket.emit("messageSeen", {
-          messageId: conversation.lastMessageId,
+      const socket = getSocket();
+      if (socket) {
+        socket.emit("markAsSeen", {
+          conversationId: conversation._id,
           userId: user._id,
         });
+
+        if (conversation.lastMessageSenderId !== user._id) {
+          socket.emit("messageSeen", {
+            messageId: conversation.lastMessageId,
+            userId: user._id,
+          });
+        }
+      } else {
+        console.warn("Socket is not initialized");
       }
 
       navigation.navigate("ChatScreen", {
@@ -307,6 +310,7 @@ export default function ChatListScreen({ navigation, route }) {
       });
     } catch (error) {
       console.error("Lỗi khi chọn đoạn chat:", error);
+      Alert.alert("Lỗi", "Không thể mở cuộc trò chuyện. Vui lòng thử lại.");
     }
   };
 
@@ -325,7 +329,7 @@ export default function ChatListScreen({ navigation, route }) {
   const handleLogout = async () => {
     try {
       await AsyncStorage.removeItem("user");
-      socket.disconnect();
+      disconnectSocket();
       navigation.reset({
         index: 0,
         routes: [{ name: "Login" }],
@@ -415,7 +419,7 @@ export default function ChatListScreen({ navigation, route }) {
                 hoveredId === item._id && styles.chatItemHover,
               ]}
               onPressIn={() => setHoveredId(item._id)}
-              onPressOut={() => setHoveredId(null)}
+              onPressOut={() => setModalVisible(null)}
               onPress={() => handleConversationClick(item, otherMember)}
             >
               <View style={styles.avatarContainer}>
@@ -477,7 +481,7 @@ export default function ChatListScreen({ navigation, route }) {
             <Text style={styles.modalText}>
               {modalAction === "hide"
                 ? "Bạn có chắc muốn ẩn đoạn chat này?"
-                : "Bạn có chắc muốn xóa đoạn chat này?"}
+                : "Bạn có chắc muốn xóa đoạn chat này không?"}
             </Text>
             <View style={styles.modalButtons}>
               <Pressable
@@ -494,7 +498,8 @@ export default function ChatListScreen({ navigation, route }) {
                     : styles.buttonDelete,
                 ]}
                 onPress={() => {
-                  if (selectedConversationId) {
+                  const socket = getSocket();
+                  if (socket && selectedConversationId) {
                     if (modalAction === "hide") {
                       socket.emit("deleteChat", {
                         conversationId: selectedConversationId,
@@ -541,7 +546,7 @@ export default function ChatListScreen({ navigation, route }) {
           style={styles.iconFooter}
           onPress={() => {
             navigation.navigate("PhoneContact", { currentUser: user });
-            setPendingFriendRequests(0); // Reset badge when navigating to Contacts
+            setPendingFriendRequests(0);
           }}
         >
           <View style={styles.iconWrapper}>
@@ -784,8 +789,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-around",
     width: "100%",
-  },
-  button: {
+    },
+    button: {
     borderRadius: 10,
     padding: 10,
     elevation: 2,
