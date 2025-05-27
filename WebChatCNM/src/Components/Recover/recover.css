@@ -143,7 +143,6 @@ button:hover {
   display: block;
   margin-left: 500px;
   margin-bottom: 100px;
-  
 }
 .input-container {
   position: relative;
@@ -183,3 +182,78 @@ button:hover {
   animation: fadeIn 0.5s ease; /* Thêm hiệu ứng mờ dần khi hiển thị */
 }
 
+@media (max-width: 430px) {
+  .recover-container {
+    flex-direction: column;
+    padding: 1rem;
+    height: auto;
+  }
+
+  .recover-left,
+  .recover-right {
+    width: 100%;
+    padding: 1rem;
+    max-width: 100%;
+    text-align: center;
+  }
+
+  .recover-title {
+    font-size: 1.5rem;
+  }
+
+  .recover-subtitle {
+    font-size: 1rem;
+  }
+
+  form {
+    width: 100%;
+    align-items: center;
+  }
+
+  input {
+    font-size: 1rem;
+  }
+
+  button {
+    width: 100%;
+    font-size: 1rem;
+  }
+
+  .recover-register,
+  .or,
+  .social-icons {
+    margin: 1rem auto;
+    justify-content: center;
+    text-align: center;
+    margin-right: 0;
+  }
+
+  .recover-register-link {
+    width: 100%;
+    height: 40px;
+    font-size: 1rem;
+    line-height: 40px;
+  }
+
+  .social-icons .icon {
+    width: 35px;
+    height: 35px;
+  }
+
+  .img {
+    display: none; /* Ẩn hình ảnh nếu không đủ không gian */
+  }
+
+  .error-message {
+    width: 100%;
+    font-size: 13px;
+  }
+
+  .input-container input {
+    padding-right: 2rem;
+  }
+
+  .password-toggle {
+    right: 12px;
+  }
+}
