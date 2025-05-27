@@ -13,7 +13,7 @@ import {
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import io from "socket.io-client";
-import { getConversationById } from "../services/apiServices"; // Thêm import
+
 import ModalAddUserToGroup from "./ModelAddUserGroup";
 import ModalEditGroupInfo from "./EditGroupInfo";
 import Feather from "@expo/vector-icons/Feather";
@@ -28,11 +28,13 @@ import {
   deleteMessageForUser,
   getListFriend,
   createConversation,
+  getConversationById,
   getConversations,
 } from "../services/apiServices";
 import MediaMessagesViewer from "./RenderMessageMedia";
 
 import { Video } from "expo-av";
+import axios from "axios";
 
 export default function InfoChat({ route }) {
   const {
@@ -66,9 +68,11 @@ export default function InfoChat({ route }) {
   const fetchConversation = async () => {
     try {
       const updatedConversation = await getConversationById(
-        initialConversation._ids
+        initialConversation._id
       );
       setConversation(updatedConversation);
+
+      console.log("Memeber trong group : ", updatedConversation.members);
       setMembers(updatedConversation.members);
       setDeputies(updatedConversation.groupDeputies || []);
     } catch (error) {}
@@ -143,21 +147,39 @@ export default function InfoChat({ route }) {
 
     socket.current.on(
       "groupUpdatedToggleDeputy",
-      ({ conversationId, groupDeputies }) => {
-        if (conversationId === conversation._id) {
-          // console.log("Received groupUpdatedToggleDeputy:", { groupDeputies });
-          setDeputies(groupDeputies || []);
-          fetchConversation(); // Làm mới dữ liệu khi nhận sự kiện
+      async ({ conversationId, groupDeputies }) => {
+        console.log("📡 Nhận sự kiện socket:", {
+          conversationId,
+          groupDeputies,
+        });
+        console.log("So sánh với conversation._id:", conversation?._id);
+
+        if (conversationId === conversation?._id) {
+          console.log("✅ Gọi fetchConversation");
+
+          try {
+            const res = await axios.get(
+              `https://bechatcnm-production.up.railway.app/conversations/get/${conversationId}`
+            );
+            const updatedChat = res.data;
+            console.log("✅ updatedChat:", updatedChat);
+
+            setMembers(updatedChat.members);
+            setDeputies(updatedChat.groupDeputies || []);
+          } catch (err) {
+            console.log("❌ Updated fails:", err);
+          }
         }
       }
     );
 
     return () => {
       if (socket.current) {
+        socket.current.off("groupUpdatedToggleDeputy"); // 👈 Tốt hơn disconnect ở đây
         socket.current.disconnect();
       }
     };
-  }, [conversation._id]);
+  }, [conversation?._id]);
 
   const handleGoBack = () => {
     navigation.navigate("ChatScreen", {
@@ -407,6 +429,7 @@ export default function InfoChat({ route }) {
             keyExtractor={(item) => item._id}
             renderItem={renderMember}
             contentContainerStyle={{ paddingBottom: 20 }}
+            extraData={{ members }}
           />
 
           <TouchableOpacity
